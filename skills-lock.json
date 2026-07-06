@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "changesets": {
+      "source": "clerk/cli",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/changesets/SKILL.md",
+      "computedHash": "37ef918a9d4bc9be7dc2e59b7fa6b2dc00e5827c35f5d46117c8f64ede1a39a3"
+    },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
