@@ -1,0 +1,39 @@
+{
+  "name": "@interlace/core",
+  "version": "0.0.0",
+  "description": "Shared definitions and logic with no rendering opinions.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist/**"
+  ],
+  "keywords": [
+    "interlace",
+    "interactive-video",
+    "edtech",
+    "lms"
+  ],
+  "author": {
+    "name": "Joshua Farayola",
+    "email": "farayolajoshua@gmail.com"
+  },
+  "license": "ISC",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "tsup": "^8.5.1"
+  },
+  "dependencies": {
+    "@repo/typescript-config": "workspace:^"
+  }
+}

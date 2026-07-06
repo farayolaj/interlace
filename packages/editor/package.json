@@ -1,0 +1,40 @@
+{
+  "name": "@interlace/editor",
+  "version": "0.0.0",
+  "description": "Interlace content authoring and editing tools.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist/**"
+  ],
+  "keywords": [
+    "interlace",
+    "interactive-video",
+    "editor",
+    "edtech",
+    "lms"
+  ],
+  "author": {
+    "name": "Joshua Farayola",
+    "email": "farayolajoshua@gmail.com"
+  },
+  "license": "ISC",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  },
+  "dependencies": {
+    "@repo/eslint-config": "workspace:^",
+    "@repo/typescript-config": "workspace:^"
+  }
+}
