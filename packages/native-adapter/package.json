@@ -2,6 +2,7 @@
   "name": "@interlace/native-adapter",
   "version": "0.0.0",
   "description": "Reference VideoAdapter implementation for a native HTML <video> element.",
+  "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

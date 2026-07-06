@@ -2,6 +2,7 @@
   "name": "@interlace/core",
   "version": "0.0.0",
   "description": "Shared definitions and logic with no rendering opinions.",
+  "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

@@ -2,6 +2,7 @@
   "name": "@interlace/editor",
   "version": "0.0.0",
   "description": "Interlace content authoring and editing tools.",
+  "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
