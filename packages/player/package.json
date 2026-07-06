@@ -1,7 +1,7 @@
 {
-  "name": "@interlace/core",
+  "name": "@interlace/player",
   "version": "0.0.0",
-  "description": "Shared definitions and logic with no rendering opinions.",
+  "description": "Interlace content player.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
