@@ -24,6 +24,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint \"src/**/*.ts*\"",
+    "test": "vitest run",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "publishConfig": {
@@ -31,7 +32,8 @@
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "tsup": "^8.5.1"
+    "tsup": "^8.5.1",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@repo/typescript-config": "workspace:^"

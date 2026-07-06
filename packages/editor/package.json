@@ -25,16 +25,30 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint \"src/**/*.ts*\"",
+    "test": "vitest run",
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
   },
   "publishConfig": {
     "access": "public"
   },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
+  },
   "devDependencies": {
-    "tsup": "^8.5.1"
+    "@repo/eslint-config": "workspace:^",
+    "@repo/typescript-config": "workspace:^",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^25.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsup": "^8.5.1",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@repo/eslint-config": "workspace:^",
-    "@repo/typescript-config": "workspace:^"
+    "@interlace/core": "workspace:*"
   }
 }
