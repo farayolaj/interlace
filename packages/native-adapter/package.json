@@ -1,0 +1,44 @@
+{
+  "name": "@interlace/native-adapter",
+  "version": "0.0.0",
+  "description": "Reference VideoAdapter implementation for a native HTML <video> element.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist/**"
+  ],
+  "keywords": [
+    "interlace",
+    "interactive-video",
+    "adapter",
+    "edtech",
+    "lms"
+  ],
+  "author": {
+    "name": "Joshua Farayola",
+    "email": "farayolajoshua@gmail.com"
+  },
+  "license": "ISC",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "test": "vitest run",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:^",
+    "@repo/typescript-config": "workspace:^",
+    "jsdom": "^25.0.1",
+    "tsup": "^8.5.1",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "@interlace/core": "workspace:*"
+  }
+}
