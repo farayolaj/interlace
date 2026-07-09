@@ -1,22 +1,20 @@
-/**
- * Content state and data types.
- */
+import { Hook } from "../hook/types";
 
-export type ContentState =
-  | "pending"
-  | "encountered"
-  | "opened"
-  | "completed"
-  | "skipped";
+export enum ContentState {
+  PENDING = "pending",
+  VISIBLE = "visible",
+  OPEN = "open",
+  COMPLETED = "completed",
+  SKIPPED = "skipped",
+}
 
-export interface ContentRecord {
+export interface ContentRecord<TData = any> {
   id: string;
   title: string;
   contentTypeId: string;
-  data: any;
+  data: TData;
   state: ContentState;
   /** Score achieved (only set after completed) */
   resultScore?: number;
-  /** Whether this content is locked in place (completed content cannot be re-interacted) */
-  locked: boolean;
+  hook: Hook;
 }

@@ -1,23 +1,27 @@
 import { ContentType } from "../content-type/types";
 import { EventEmitter } from "../events/event-emitter";
+import { Hook } from "../hook/types";
 import { ContentRecord, ContentState } from "./types";
 
 export interface ContentInstanceEvents {
-  encountered: { contentId: string };
+  visible: { contentId: string };
   opened: { contentId: string };
   completed: { contentId: string; resultScore: number };
-  closed: { contentId: string };
   skipped: { contentId: string };
 }
 
 /**
  * Wraps a ContentRecord and its resolved ContentType, managing lifecycle transitions.
+ * It's essentially a state machine for content, ensuring that state transitions are valid and emitting events when they occur.
+ * This class is used by the InteractiveMediaController to manage content instances during playback.
  */
-export class ContentInstance extends EventEmitter<ContentInstanceEvents> {
-  private record: ContentRecord;
-  private contentType: ContentType;
+export class ContentInstance<
+  TData = any,
+> extends EventEmitter<ContentInstanceEvents> {
+  private record: ContentRecord<TData>;
+  private contentType: ContentType<TData>;
 
-  constructor(record: ContentRecord, contentType: ContentType) {
+  constructor(record: ContentRecord<TData>, contentType: ContentType<TData>) {
     super();
     this.record = record;
     this.contentType = contentType;
@@ -35,95 +39,91 @@ export class ContentInstance extends EventEmitter<ContentInstanceEvents> {
     return this.record.contentTypeId;
   }
 
+  getContentTypeVersion(): number {
+    return this.contentType.getVersion();
+  }
+
   getState(): ContentState {
     return this.record.state;
   }
 
-  getData(): any {
+  getData(): TData {
     return this.record.data;
+  }
+
+  getHook(): Hook {
+    return this.record.hook;
   }
 
   getResultScore(): number | undefined {
     return this.record.resultScore;
   }
 
-  isLocked(): boolean {
-    return this.record.locked;
-  }
-
   isScorable(): boolean {
-    return this.contentType.isScorable;
+    return this.contentType.isScorable();
   }
 
   getTotalScore(): number {
-    if (!this.contentType.isScorable || !this.contentType.getTotalScore) {
+    if (!this.contentType.isScorable() || !this.contentType.getTotalScore) {
       return 0;
     }
     return this.contentType.getTotalScore(this.record.data);
   }
 
   /**
-   * Marks content as encountered (seen during forward playback).
+   * Non-blocking content can be made visible without opening it.
+   * This is typically used for content that has a visual representation (like an anchor) but doesn't require immediate interaction.
    */
-  encounter(): void {
-    if (this.record.state !== "pending") {
-      return; // Already encountered or in another state
+  visible(): void {
+    if (this.record.hook.type === "blocking") {
+      return;
     }
-    this.record.state = "encountered";
-    this.emit("encountered", { contentId: this.record.id });
+
+    if (
+      this.record.state === ContentState.PENDING ||
+      this.record.state === ContentState.SKIPPED
+    ) {
+      this.record.state = ContentState.VISIBLE;
+      this.emit("visible", { contentId: this.record.id });
+    }
   }
 
   /**
    * Opens the content for interaction.
    */
   open(): void {
-    if (this.record.state === "completed" || this.record.locked) {
-      return; // Cannot reopen completed content
+    if (
+      this.record.state === ContentState.PENDING ||
+      this.record.state === ContentState.SKIPPED ||
+      this.record.state === ContentState.VISIBLE
+    ) {
+      this.record.state = ContentState.OPEN;
+      this.emit("opened", { contentId: this.record.id });
     }
-    this.record.state = "opened";
-    this.emit("opened", { contentId: this.record.id });
   }
 
   /**
    * Marks content as completed with a result score.
    */
   complete(resultScore: number): void {
-    if (this.record.locked) {
-      return; // Already completed
-    }
-    this.record.state = "completed";
-    this.record.resultScore = resultScore;
-    this.record.locked = true;
-    this.emit("completed", { contentId: this.record.id, resultScore });
-  }
-
-  /**
-   * Closes opened content without completing it.
-   */
-  close(): void {
-    if (this.record.state === "opened") {
-      this.record.state = "encountered";
-      this.emit("closed", { contentId: this.record.id });
+    if (this.record.state === ContentState.OPEN) {
+      this.record.state = ContentState.COMPLETED;
+      this.record.resultScore = resultScore;
+      this.emit("completed", { contentId: this.record.id, resultScore });
     }
   }
 
   /**
-   * Marks content as skipped (e.g., hook window closed before completion).
+   * Marks content as skipped (closed before completion).
    */
   skip(): void {
-    if (this.record.locked) {
-      return; // Cannot skip completed content
-    }
-    this.record.state = "skipped";
-    this.emit("skipped", { contentId: this.record.id });
-  }
-
-  /**
-   * Resets state for rewind scenarios (only works for skipped content).
-   */
-  resetIfSkipped(): void {
-    if (this.record.state === "skipped") {
-      this.record.state = "pending";
+    if (
+      this.record.state === ContentState.PENDING ||
+      this.record.state === ContentState.OPEN ||
+      this.record.state === ContentState.VISIBLE
+    ) {
+      this.record.state = ContentState.SKIPPED;
+      this.emit("skipped", { contentId: this.record.id });
     }
   }
 }

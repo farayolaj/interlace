@@ -5,11 +5,13 @@ describe("ContentTypeRegistry", () => {
   it("registers and retrieves a content type", () => {
     const registry = new ContentTypeRegistry();
     const contentType = {
-      id: "quiz",
-      version: 1,
-      isScorable: true,
+      getId: () => "quiz",
+      getVersion: () => 1,
+      isScorable: () => true,
       getTotalScore: () => 100,
       getResultScore: () => 75,
+      renderEditor: () => {},
+      renderPlayback: () => {},
     };
 
     registry.register(contentType);
@@ -19,9 +21,11 @@ describe("ContentTypeRegistry", () => {
   it("throws on duplicate registration", () => {
     const registry = new ContentTypeRegistry();
     const contentType = {
-      id: "quiz",
-      version: 1,
-      isScorable: true,
+      getId: () => "quiz",
+      getVersion: () => 1,
+      isScorable: () => true,
+      renderEditor: () => {},
+      renderPlayback: () => {},
     };
 
     registry.register(contentType);
@@ -38,9 +42,11 @@ describe("ContentTypeRegistry", () => {
   it("checks existence with has()", () => {
     const registry = new ContentTypeRegistry();
     const contentType = {
-      id: "quiz",
-      version: 1,
-      isScorable: true,
+      getId: () => "quiz",
+      getVersion: () => 1,
+      isScorable: () => true,
+      renderEditor: () => {},
+      renderPlayback: () => {},
     };
 
     expect(registry.has("quiz")).toBe(false);
@@ -50,8 +56,20 @@ describe("ContentTypeRegistry", () => {
 
   it("returns all registered types", () => {
     const registry = new ContentTypeRegistry();
-    const ct1 = { id: "quiz", version: 1, isScorable: true };
-    const ct2 = { id: "poll", version: 1, isScorable: false };
+    const ct1 = {
+      getId: () => "quiz",
+      getVersion: () => 1,
+      isScorable: () => true,
+      renderEditor: () => {},
+      renderPlayback: () => {},
+    };
+    const ct2 = {
+      getId: () => "poll",
+      getVersion: () => 1,
+      isScorable: () => false,
+      renderEditor: () => {},
+      renderPlayback: () => {},
+    };
 
     registry.register(ct1);
     registry.register(ct2);
