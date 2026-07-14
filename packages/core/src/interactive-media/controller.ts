@@ -1,13 +1,12 @@
 import { ContentInstance } from "../content/content-instance";
-import { ErrorReasonCode } from "../errors/reason-codes";
+import { ContentState } from "../content/types";
+import {
+  ContentErrorReasonCode,
+  ErrorReasonCode,
+} from "../errors/reason-codes";
 import { EventEmitter } from "../events/event-emitter";
 import { Hook, isBlockingHook, isNonBlockingHook } from "../hook/types";
 import { validateHookOverlaps } from "../hook/validation";
-
-export interface InteractiveMediaItem {
-  hook: Hook;
-  content: ContentInstance;
-}
 
 export interface InteractiveMediaControllerEvents {
   progress: {
@@ -27,7 +26,7 @@ export interface InteractiveMediaControllerEvents {
   };
   contentError: {
     contentId: string;
-    reasonCode: string;
+    reasonCode: ContentErrorReasonCode;
     message: string;
   };
   requestPause: Record<string, never>;
@@ -44,7 +43,7 @@ export interface RenderState {
   /** Content IDs that are showing completed tags */
   completedTagIds: string[];
   /** Content that is opened and should render its content */
-  openedContentId?: string;
+  openedContentIds: string[];
 }
 
 /**
@@ -52,18 +51,18 @@ export interface RenderState {
  * Does NOT call the adapter directly; instead emits commands that the player executes.
  */
 export class InteractiveMediaController extends EventEmitter<InteractiveMediaControllerEvents> {
-  private items: InteractiveMediaItem[];
+  private items: ContentInstance[];
   private lastTickTime: number = -1;
   private hasEnded: boolean = false;
   private videoEndsAt: number = 0;
 
-  constructor(items: InteractiveMediaItem[], videoDuration: number) {
+  constructor(items: ContentInstance[], videoDuration: number) {
     super();
     this.items = items;
     this.videoEndsAt = videoDuration;
 
     // Validate hook overlaps at construction time
-    const hooks = items.map((item) => item.hook);
+    const hooks = items.map((item) => item.getHook());
     const violations = validateHookOverlaps(hooks);
     if (violations.length > 0) {
       this.emit("error", {
@@ -87,7 +86,6 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
       return; // No time advance, skip hook checks
     }
 
-    const prevTime = this.lastTickTime;
     this.lastTickTime = currentTime;
 
     // Check for video end
@@ -98,9 +96,7 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
 
     // Check hook triggers based on playback direction
     if (isPlayingForward) {
-      this.checkForwardHooks(currentTime, prevTime);
-    } else {
-      this.checkRewindHooks(currentTime);
+      this.transition(currentTime);
     }
   }
 
@@ -121,14 +117,6 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
         this.emit("requestSeek", { timeInSeconds: earliestBlockingTime });
         return;
       }
-    } else if (targetTime < currentTime) {
-      // Rewind: reset skipped content to pending, reset completed to inert display
-      for (const item of this.items) {
-        if (item.content.getState() === "skipped") {
-          item.content.resetIfSkipped();
-        }
-        // Completed content remains locked; just inert display
-      }
     }
 
     // Proceed with the seek
@@ -141,13 +129,12 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
   handleEnded(): void {
     // Mark any still-active non-blocking content as skipped
     for (const item of this.items) {
-      if (isNonBlockingHook(item.hook)) {
-        const isStillActive = item.hook.end >= this.videoEndsAt;
-        const isNotCompleted = item.content.getState() !== "completed";
-
-        if (isStillActive && isNotCompleted) {
-          item.content.skip();
-        }
+      const hook = item.getHook();
+      if (
+        isNonBlockingHook(hook) &&
+        item.getState() !== ContentState.COMPLETED
+      ) {
+        item.skip();
       }
     }
 
@@ -163,33 +150,32 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
     const state: RenderState = {
       visibleAnchorIds: [],
       completedTagIds: [],
+      openedContentIds: [],
+      activeBlockingContentId: undefined,
     };
 
     for (const item of this.items) {
-      const contentState = item.content.getState();
+      const contentState = item.getState();
+      const hook = item.getHook();
 
-      if (isBlockingHook(item.hook)) {
-        if (contentState === "completed") {
-          state.completedTagIds.push(item.content.getId());
-        }
-      } else {
-        // Non-blocking
-        const isActive =
-          currentTime !== undefined &&
-          currentTime >= item.hook.start &&
-          currentTime < item.hook.end;
-
-        if (isActive) {
-          if (contentState === "encountered" || contentState === "opened") {
-            state.visibleAnchorIds.push(item.content.getId());
+      if (currentTime && this.isInFrame(currentTime, hook)) {
+        if (isBlockingHook(hook)) {
+          if (contentState === ContentState.COMPLETED) {
+            state.completedTagIds.push(item.getId());
+          } else if (contentState === ContentState.OPEN) {
+            state.activeBlockingContentId = item.getId();
           }
-          if (contentState === "opened") {
-            state.openedContentId = item.content.getId();
+        } else {
+          if (contentState === ContentState.VISIBLE) {
+            state.visibleAnchorIds.push(item.getId());
           }
-        }
+          if (contentState === ContentState.OPEN) {
+            state.openedContentIds.push(item.getId());
+          }
 
-        if (contentState === "completed") {
-          state.completedTagIds.push(item.content.getId());
+          if (contentState === ContentState.COMPLETED) {
+            state.completedTagIds.push(item.getId());
+          }
         }
       }
     }
@@ -208,16 +194,17 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
     let earliest: number | undefined;
 
     for (const item of this.items) {
-      if (!isBlockingHook(item.hook)) {
+      const hook = item.getHook();
+      if (!isBlockingHook(hook)) {
         continue;
       }
 
-      const contentState = item.content.getState();
-      if (contentState === "completed" || item.content.isLocked()) {
-        continue; // Skip completed/locked content
+      const contentState = item.getState();
+      if (contentState === "completed") {
+        continue; // Skip completed content
       }
 
-      const timestamp = item.hook.timestamp;
+      const timestamp = hook.timestamp;
       if (timestamp > currentTime && timestamp <= targetTime) {
         if (earliest === undefined || timestamp < earliest) {
           earliest = timestamp;
@@ -231,51 +218,48 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
   /**
    * Check forward hook triggers during forward playback.
    */
-  private checkForwardHooks(currentTime: number, prevTime: number): void {
+  private transition(currentTime: number): void {
     for (const item of this.items) {
-      const hook = item.hook;
-      const content = item.content;
-      const state = content.getState();
+      const hook = item.getHook();
+      const state = item.getState();
 
-      if (isBlockingHook(hook)) {
-        // Blocking hook triggers at exact timestamp
-        if (
-          state === "pending" &&
-          Math.abs(currentTime - hook.timestamp) < 0.016
-        ) {
-          // Within ~1 frame tolerance (60fps)
-          content.encounter();
-          content.open();
-          this.emit("requestPause", {});
-        }
-      } else {
-        // Non-blocking hook
-        // Check if we just entered the time range
-        if (prevTime < hook.start && currentTime >= hook.start) {
-          if (state === "pending") {
-            content.encounter();
+      if (state === ContentState.PENDING || state === ContentState.SKIPPED) {
+        if (this.isInFrame(currentTime, hook)) {
+          // PENDING, SKIPPED -> OPEN
+          if (isBlockingHook(hook)) {
+            item.open();
+            this.emit("requestPause", {});
+          } else {
+            // PENDING, SKIPPED -> VISIBLE (and possibly OPEN if revealBehavior is immediate)
+            item.visible();
             if (hook.revealBehavior === "immediate") {
-              content.open();
+              item.open();
             }
           }
         }
-
-        // Check if we just exited the time range
-        if (prevTime < hook.end && currentTime >= hook.end) {
-          if (state !== "completed" && !content.isLocked()) {
-            content.skip();
-          }
+      } else if (state === ContentState.OPEN) {
+        if (isNonBlockingHook(hook) && !this.isInFrame(currentTime, hook)) {
+          // OPEN -> COMPLETED
+          item.complete(item.getResultScore() ?? 0); // Mark as completed with current score (or 0 if no score available)
+        }
+      } else if (state === ContentState.VISIBLE) {
+        if (isNonBlockingHook(hook) && !this.isInFrame(currentTime, hook)) {
+          // VISIBLE -> SKIPPED
+          item.skip();
         }
       }
     }
   }
 
   /**
-   * Check rewind behavior.
+   * Check if a hook is currently in-frame based on the current time.
    */
-  private checkRewindHooks(currentTime: number): void {
-    // Rewind rules are handled in handleUserSeek, so this is a no-op for now
-    // Could add logic for auto-seeking back if needed
+  private isInFrame(currentTime: number, hook: Hook): boolean {
+    if (isBlockingHook(hook)) {
+      return Math.abs(currentTime - hook.timestamp) < 0.016;
+    } else {
+      return currentTime >= hook.start && currentTime < hook.end;
+    }
   }
 
   /**
@@ -290,15 +274,15 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
     let denominator = 0;
 
     for (const item of this.items) {
-      if (!item.content.isScorable()) {
+      if (!item.isScorable()) {
         continue;
       }
 
-      const total = item.content.getTotalScore();
+      const total = item.getTotalScore();
       denominator += total;
 
-      if (item.content.getState() === "completed") {
-        const score = item.content.getResultScore();
+      if (item.getState() === "completed") {
+        const score = item.getResultScore();
         if (score !== undefined) {
           numerator += score;
         }

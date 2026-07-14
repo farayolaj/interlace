@@ -1,108 +1,110 @@
 import { describe, expect, it } from "vitest";
 import { ContentInstance } from "../content/content-instance";
+import { ContentState } from "../content/types";
+import {
+  fakeContentInstance,
+  fakeContentRecord,
+} from "../fakes/content-instance";
+import { fakeContentType } from "../fakes/content-type";
+import { Hook } from "../hook/types";
 import { InteractiveMediaController } from "./controller";
 
 describe("InteractiveMediaController", () => {
-  const createInstance = (
-    id: string,
+  const createInstance = ({
+    id,
     contentTypeId = "quiz",
-  ): ContentInstance => {
-    const record = {
+    hook,
+  }: {
+    id: string;
+    contentTypeId?: string;
+    hook?: Hook;
+  }): ContentInstance => {
+    const record = fakeContentRecord({
       id,
       title: `Content ${id}`,
       contentTypeId,
       data: {},
-      state: "pending" as const,
-      locked: false,
-    };
+      state: ContentState.PENDING,
+      hook,
+    });
 
-    const contentType = {
-      id: contentTypeId,
-      version: 1,
-      isScorable: true,
+    const contentType = fakeContentType({
+      getId: () => contentTypeId,
+      getVersion: () => 1,
+      isScorable: () => true,
       getTotalScore: () => 100,
       getResultScore: () => 100,
-    };
+      renderEditor: () => {},
+      renderPlayback: () => {},
+    });
 
-    return new ContentInstance(record, contentType);
+    return fakeContentInstance({ record, contentType });
   };
 
   it("triggers blocking hook at timestamp", () => {
-    const instance = createInstance("c1");
-    const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "blocking",
-            timestamp: 10,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-          },
-          content: instance,
-        },
-      ],
-      60,
-    );
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "blocking",
+        timestamp: 10,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
 
     const requestPauseCalls: any[] = [];
     controller.on("requestPause", () => requestPauseCalls.push(true));
 
     controller.tick(5);
-    expect(instance.getState()).toBe("pending");
+    expect(instance.getState()).toBe(ContentState.PENDING);
     expect(requestPauseCalls).toHaveLength(0);
 
     controller.tick(10);
-    expect(instance.getState()).toBe("opened");
+    expect(instance.getState()).toBe(ContentState.OPEN);
     expect(requestPauseCalls).toHaveLength(1);
   });
 
   it("encounters non-blocking hook within time range", () => {
-    const instance = createInstance("c1");
-    const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "non-blocking",
-            start: 10,
-            end: 20,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-            revealBehavior: "click",
-          },
-          content: instance,
-        },
-      ],
-      60,
-    );
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 10,
+        end: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
 
     controller.tick(5);
-    expect(instance.getState()).toBe("pending");
+    expect(instance.getState()).toBe(ContentState.PENDING);
 
     controller.tick(15);
-    expect(instance.getState()).toBe("encountered");
+    expect(instance.getState()).toBe(ContentState.VISIBLE);
   });
 
   it("snaps back on forward seek past unfinished blocking content", () => {
-    const instance1 = createInstance("c1");
-    const instance2 = createInstance("c2");
+    const instance1 = createInstance({
+      id: "c1",
+      hook: {
+        type: "blocking",
+        timestamp: 10,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+      },
+    });
+
+    const instance2 = createInstance({
+      id: "c2",
+      hook: {
+        type: "blocking",
+        timestamp: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+      },
+    });
 
     const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "blocking",
-            timestamp: 10,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-          },
-          content: instance1,
-        },
-        {
-          hook: {
-            type: "blocking",
-            timestamp: 20,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-          },
-          content: instance2,
-        },
-      ],
+      [instance1, instance2],
       60,
     );
 
@@ -118,57 +120,44 @@ describe("InteractiveMediaController", () => {
     expect(seekCalls).toContainEqual(10);
   });
 
-  it("resets skipped content on rewind", () => {
-    const instance = createInstance("c1");
-    const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "non-blocking",
-            start: 10,
-            end: 20,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-            revealBehavior: "click",
-          },
-          content: instance,
-        },
-      ],
-      60,
-    );
+  it("skips content on play past it", () => {
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 10,
+        end: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
 
     controller.tick(15); // Encounter content
-    expect(instance.getState()).toBe("encountered");
+    expect(instance.getState()).toBe(ContentState.VISIBLE);
 
-    instance.skip(); // Manually skip it
-    expect(instance.getState()).toBe("skipped");
-
-    controller.handleUserSeek(5); // Rewind past it
-    expect(instance.getState()).toBe("pending"); // Reset for re-encounter
+    controller.tick(25); // Manually skip it
+    expect(instance.getState()).toBe(ContentState.SKIPPED);
   });
 
   it("marks active non-blocking content as skipped at video end", () => {
-    const instance = createInstance("c1");
-    const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "non-blocking",
-            start: 50,
-            end: 60,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-            revealBehavior: "click",
-          },
-          content: instance,
-        },
-      ],
-      60,
-    );
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 50,
+        end: 60,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
 
     const finishedEvents: any[] = [];
     controller.on("finished", (e) => finishedEvents.push(e));
 
     controller.tick(55); // Encounter
-    expect(instance.getState()).toBe("encountered");
+    expect(instance.getState()).toBe(ContentState.VISIBLE);
 
     controller.tick(60); // Video ends
     expect(instance.getState()).toBe("skipped");
@@ -176,32 +165,29 @@ describe("InteractiveMediaController", () => {
   });
 
   it("returns render state for visible anchors", () => {
-    const instance1 = createInstance("c1");
-    const instance2 = createInstance("c2");
+    const instance1 = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 10,
+        end: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const instance2 = createInstance({
+      id: "c2",
+      hook: {
+        type: "non-blocking",
+        start: 30,
+        end: 40,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
 
     const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "non-blocking",
-            start: 10,
-            end: 20,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-            revealBehavior: "click",
-          },
-          content: instance1,
-        },
-        {
-          hook: {
-            type: "non-blocking",
-            start: 30,
-            end: 40,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-            revealBehavior: "click",
-          },
-          content: instance2,
-        },
-      ],
+      [instance1, instance2],
       60,
     );
 
@@ -217,28 +203,25 @@ describe("InteractiveMediaController", () => {
   });
 
   it("computes aggregated result", () => {
-    const instance1 = createInstance("c1");
-    const instance2 = createInstance("c2");
+    const instance1 = createInstance({
+      id: "c1",
+      hook: {
+        type: "blocking",
+        timestamp: 10,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+      },
+    });
+    const instance2 = createInstance({
+      id: "c2",
+      hook: {
+        type: "blocking",
+        timestamp: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+      },
+    });
 
     const controller = new InteractiveMediaController(
-      [
-        {
-          hook: {
-            type: "blocking",
-            timestamp: 10,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-          },
-          content: instance1,
-        },
-        {
-          hook: {
-            type: "blocking",
-            timestamp: 20,
-            placement: { x: 50, y: 50, width: 20, height: 20 },
-          },
-          content: instance2,
-        },
-      ],
+      [instance1, instance2],
       60,
     );
 

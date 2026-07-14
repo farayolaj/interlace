@@ -1,8 +1,7 @@
 import { ContentTypeRegistry } from "../content-type/types";
 import { ContentInstance } from "../content/content-instance";
-import { ContentRecord } from "../content/types";
+import { ContentRecord, ContentState } from "../content/types";
 import { Hook } from "../hook/types";
-import { InteractiveMediaItem } from "../interactive-media/controller";
 import {
   SerializedContent,
   SerializedHook,
@@ -23,7 +22,7 @@ export function deserialize(
   registry: ContentTypeRegistry,
   options: DeserializationOptions = {},
 ): {
-  items: InteractiveMediaItem[];
+  items: ContentInstance[];
   videoDuration: number;
   videoSrc: string;
   validationErrors: string[];
@@ -44,7 +43,7 @@ export function deserialize(
   }
 
   // Step 2: Deserialize items
-  const items: InteractiveMediaItem[] = [];
+  const items: ContentInstance[] = [];
   const warnings: string[] = [];
 
   for (const serializedItem of doc.items) {
@@ -70,7 +69,7 @@ export function deserialize(
 
     // Handle version migrations
     let data = serializedItem.content.data;
-    if (serializedItem.content.version < contentType.version) {
+    if (serializedItem.content.version < contentType.getVersion()) {
       if (contentType.migrate) {
         try {
           data = contentType.migrate(data, serializedItem.content.version);
@@ -82,27 +81,27 @@ export function deserialize(
         }
       } else {
         warnings.push(
-          `Skipping item ${serializedItem.id}: version mismatch (data v${serializedItem.content.version}, type v${contentType.version}) and no migration available`,
+          `Skipping item ${serializedItem.id}: version mismatch (data v${serializedItem.content.version}, type v${contentType.getVersion()}) and no migration available`,
         );
         continue;
       }
-    } else if (serializedItem.content.version > contentType.version) {
+    } else if (serializedItem.content.version > contentType.getVersion()) {
       warnings.push(
-        `Content ${serializedItem.id} has newer version (${serializedItem.content.version}) than registered type (${contentType.version})`,
+        `Content ${serializedItem.id} has newer version (${serializedItem.content.version}) than registered type (${contentType.getVersion()})`,
       );
     }
 
-    const record: ContentRecord = {
+    const record: ContentRecord<any> = {
       id: serializedItem.id,
       title: serializedItem.title,
       contentTypeId: serializedItem.content.contentTypeId,
       data,
-      state: "pending",
-      locked: false,
+      state: ContentState.PENDING,
+      hook,
     };
 
     const instance = new ContentInstance(record, contentType);
-    items.push({ hook, content: instance });
+    items.push(instance);
   }
 
   return {

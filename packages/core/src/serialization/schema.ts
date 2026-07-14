@@ -32,7 +32,6 @@ export interface SerializedInteractiveMediaItem {
 export interface SerializedInteractiveMediaDocument {
   video: {
     src: string;
-    adapterType?: string;
     duration?: number;
   };
   items: SerializedInteractiveMediaItem[];

@@ -44,12 +44,9 @@ export type {
 } from "./video-adapter/types";
 
 // Interactive media controller
-export { computeAggregatedResult } from "./interactive-media/aggregation";
-export type { AggregatedResult } from "./interactive-media/aggregation";
 export { InteractiveMediaController } from "./interactive-media/controller";
 export type {
   InteractiveMediaControllerEvents,
-  InteractiveMediaItem,
   RenderState,
 } from "./interactive-media/controller";
 

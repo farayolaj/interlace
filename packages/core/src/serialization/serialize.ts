@@ -1,5 +1,5 @@
+import { ContentInstance } from "../content/content-instance";
 import { isBlockingHook, isNonBlockingHook } from "../hook/types";
-import { InteractiveMediaItem } from "../interactive-media/controller";
 import {
   SerializedInteractiveMediaDocument,
   SerializedInteractiveMediaItem,
@@ -9,37 +9,37 @@ import {
  * Serializes InteractiveMediaItems into a document.
  */
 export function serialize(
-  items: InteractiveMediaItem[],
+  items: ContentInstance[],
   videoSrc: string,
   videoDuration: number,
-  adapterType?: string,
 ): SerializedInteractiveMediaDocument {
   const serializedItems: SerializedInteractiveMediaItem[] = items.map(
     (item) => ({
-      id: item.content.getId(),
-      title: item.content.getTitle(),
+      id: item.getId(),
+      title: item.getTitle(),
       hook: (() => {
-        if (isBlockingHook(item.hook)) {
+        const hook = item.getHook();
+        if (isBlockingHook(hook)) {
           return {
             type: "blocking" as const,
-            timestamp: item.hook.timestamp,
-            placement: item.hook.placement,
+            timestamp: hook.timestamp,
+            placement: hook.placement,
           };
-        } else if (isNonBlockingHook(item.hook)) {
+        } else if (isNonBlockingHook(hook)) {
           return {
             type: "non-blocking" as const,
-            start: item.hook.start,
-            end: item.hook.end,
-            placement: item.hook.placement,
-            revealBehavior: item.hook.revealBehavior,
+            start: hook.start,
+            end: hook.end,
+            placement: hook.placement,
+            revealBehavior: hook.revealBehavior,
           };
         }
         throw new Error("Unknown hook type");
       })(),
       content: {
-        contentTypeId: item.content.getContentTypeId(),
-        version: 1, // TODO: Track version from content type
-        data: item.content.getData(),
+        contentTypeId: item.getContentTypeId(),
+        version: item.getContentTypeVersion(),
+        data: item.getState(),
       },
     }),
   );
@@ -47,7 +47,6 @@ export function serialize(
   return {
     video: {
       src: videoSrc,
-      adapterType,
       duration: videoDuration,
     },
     items: serializedItems,
