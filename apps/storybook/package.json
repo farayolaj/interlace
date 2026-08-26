@@ -1,0 +1,30 @@
+{
+  "name": "@interlace/storybook",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf storybook-static"
+  },
+  "dependencies": {
+    "@interlace/core": "workspace:*",
+    "@interlace/editor": "workspace:*",
+    "@interlace/player": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@storybook/addon-a11y": "^8.6.18",
+    "@storybook/addon-essentials": "^8.6.18",
+    "@storybook/addon-interactions": "^8.6.18",
+    "@storybook/react": "^8.6.18",
+    "@storybook/react-vite": "^8.6.18",
+    "@storybook/test": "^8.6.18",
+    "storybook": "^8.6.18",
+    "typescript": "5.9.2",
+    "vite": "^6.3.5"
+  }
+}
