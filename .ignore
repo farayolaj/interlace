@@ -1,0 +1,6 @@
+# Tooling-specific ignore for files OpenCode must still read even though they
+# are git-local. Mirrors .gitignore so editors / search tools do not hide
+# deepwork state from the orchestrator.
+
+!.slim/deepwork/
+!.slim/deepwork/**
