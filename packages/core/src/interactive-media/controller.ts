@@ -234,14 +234,12 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
             }
           }
         }
-      } else if (state === ContentState.OPEN) {
+      } else if (
+        state === ContentState.VISIBLE ||
+        state === ContentState.OPEN
+      ) {
         if (isNonBlockingHook(hook) && !this.isInFrame(currentTime, hook)) {
-          // OPEN -> COMPLETED
-          item.complete(item.getResultScore() ?? 0); // Mark as completed with current score (or 0 if no score available)
-        }
-      } else if (state === ContentState.VISIBLE) {
-        if (isNonBlockingHook(hook) && !this.isInFrame(currentTime, hook)) {
-          // VISIBLE -> SKIPPED
+          // VISIBLE, OPEN -> SKIPPED
           item.skip();
         }
       }
@@ -271,12 +269,13 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
     let denominator = 0;
 
     for (const item of this.items) {
-      if (!item.isScorable()) {
+      const maxScore = item.getMaximumScore();
+
+      if (!maxScore) {
         continue;
       }
 
-      const total = item.getTotalScore();
-      denominator += total;
+      denominator += maxScore;
 
       if (item.getState() === "completed") {
         const score = item.getResultScore();

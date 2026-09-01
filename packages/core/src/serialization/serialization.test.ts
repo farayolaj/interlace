@@ -34,8 +34,7 @@ describe("serialization", () => {
       contentType: fakeContentType({
         getId: () => contentTypeId,
         getVersion: () => 1,
-        isScorable: () => true,
-        getTotalScore: () => 100,
+        getMaximumScore: () => 100,
         renderEditor: () => {},
         renderPlayback: () => {},
       }),
@@ -47,8 +46,7 @@ describe("serialization", () => {
     registry.register({
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
-      getTotalScore: () => 100,
+      getMaximumScore: () => 100,
       renderEditor: () => {},
       renderPlayback: () => {},
     });
@@ -78,8 +76,7 @@ describe("serialization", () => {
     registry.register({
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
-      getTotalScore: () => 100,
+      getMaximumScore: () => 100,
       renderEditor: () => {},
       renderPlayback: () => {},
     });
@@ -148,7 +145,7 @@ describe("serialization", () => {
     registry.register({
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
+      getMaximumScore: () => undefined,
       renderEditor: () => {},
       renderPlayback: () => {},
     });

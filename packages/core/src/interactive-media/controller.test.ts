@@ -31,9 +31,7 @@ describe("InteractiveMediaController", () => {
     const contentType = fakeContentType({
       getId: () => contentTypeId,
       getVersion: () => 1,
-      isScorable: () => true,
-      getTotalScore: () => 100,
-      getResultScore: () => 100,
+      getMaximumScore: () => 100,
       renderEditor: () => {},
       renderPlayback: () => {},
     });

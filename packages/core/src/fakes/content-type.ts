@@ -4,9 +4,7 @@ export function fakeContentType(overrides?: Partial<ContentType>): ContentType {
   return {
     getId: () => "quiz",
     getVersion: () => 1,
-    isScorable: () => true,
-    getTotalScore: () => 100,
-    getResultScore: () => 75,
+    getMaximumScore: () => 100,
     renderEditor: () => {},
     renderPlayback: () => {},
     ...overrides,

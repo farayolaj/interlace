@@ -6,7 +6,7 @@ import { ContentRecord, ContentState } from "./types";
 export interface ContentInstanceEvents {
   visible: { contentId: string };
   opened: { contentId: string };
-  completed: { contentId: string; resultScore: number };
+  completed: { contentId: string; resultScore?: number };
   skipped: { contentId: string };
 }
 
@@ -59,15 +59,8 @@ export class ContentInstance<
     return this.record.resultScore;
   }
 
-  isScorable(): boolean {
-    return this.contentType.isScorable();
-  }
-
-  getTotalScore(): number {
-    if (!this.contentType.isScorable() || !this.contentType.getTotalScore) {
-      return 0;
-    }
-    return this.contentType.getTotalScore(this.record.data);
+  getMaximumScore(): number | undefined {
+    return this.contentType.getMaximumScore(this.record.data);
   }
 
   /**
@@ -105,7 +98,7 @@ export class ContentInstance<
   /**
    * Marks content as completed with a result score.
    */
-  complete(resultScore: number): void {
+  complete(resultScore?: number): void {
     if (this.record.state === ContentState.OPEN) {
       this.record.state = ContentState.COMPLETED;
       this.record.resultScore = resultScore;

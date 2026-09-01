@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ContentTypeRegistry } from "./types";
+import { ContentType, ContentTypeRegistry } from "./types";
 
 describe("ContentTypeRegistry", () => {
   it("registers and retrieves a content type", () => {
@@ -7,12 +7,10 @@ describe("ContentTypeRegistry", () => {
     const contentType = {
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
-      getTotalScore: () => 100,
-      getResultScore: () => 75,
+      getMaximumScore: () => 100,
       renderEditor: () => {},
       renderPlayback: () => {},
-    };
+    } satisfies ContentType;
 
     registry.register(contentType);
     expect(registry.get("quiz")).toBe(contentType);
@@ -23,10 +21,10 @@ describe("ContentTypeRegistry", () => {
     const contentType = {
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
       renderEditor: () => {},
       renderPlayback: () => {},
-    };
+      getMaximumScore: () => 100,
+    } satisfies ContentType;
 
     registry.register(contentType);
     expect(() => registry.register(contentType)).toThrow(
@@ -44,10 +42,10 @@ describe("ContentTypeRegistry", () => {
     const contentType = {
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
       renderEditor: () => {},
       renderPlayback: () => {},
-    };
+      getMaximumScore: () => 100,
+    } satisfies ContentType;
 
     expect(registry.has("quiz")).toBe(false);
     registry.register(contentType);
@@ -59,17 +57,17 @@ describe("ContentTypeRegistry", () => {
     const ct1 = {
       getId: () => "quiz",
       getVersion: () => 1,
-      isScorable: () => true,
+      getMaximumScore: () => 100,
       renderEditor: () => {},
       renderPlayback: () => {},
-    };
+    } satisfies ContentType;
     const ct2 = {
       getId: () => "poll",
       getVersion: () => 1,
-      isScorable: () => false,
+      getMaximumScore: () => undefined,
       renderEditor: () => {},
       renderPlayback: () => {},
-    };
+    } satisfies ContentType;
 
     registry.register(ct1);
     registry.register(ct2);

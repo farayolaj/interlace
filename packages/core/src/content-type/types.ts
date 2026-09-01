@@ -20,18 +20,12 @@ export interface ContentType<TData = unknown> {
   /** Current version of this content type's data format */
   getVersion(): number;
 
-  /** Whether instances of this content type contribute to aggregation scoring */
-  isScorable(): boolean;
-
   /**
-   * If isScorable returns true, returns the total score available for this content.
+   * Determines the maximum score achievable.
+   * If the content type is scorable and has a defined maximum score, it returns that value.
+   * Otherwise, it returns undefined.
    */
-  getTotalScore?(data: TData): number;
-
-  /**
-   * If isScorable returns true, computes the result score for this content instance.
-   */
-  getResultScore?(): number;
+  getMaximumScore(data: TData): number | undefined;
 
   /**
    * Optional hook describing assets to preload for this content.
@@ -68,6 +62,8 @@ export interface ContentType<TData = unknown> {
   /**
    * Called by the player to render this content type's playback interface.
    * The content type is responsible for rendering into the provided container element.
+   * The content type must call callbacks.onComplete(score) when the user completes the content, passing the achieved score if applicable.
+   * Tracking the score can be done with internal state.
    */
   renderPlayback(
     container: HTMLElement,
