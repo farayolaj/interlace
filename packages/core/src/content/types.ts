@@ -8,7 +8,7 @@ export enum ContentState {
   SKIPPED = "skipped",
 }
 
-export interface ContentRecord<TData = any> {
+export interface ContentRecord<TData = unknown> {
   id: string;
   title: string;
   contentTypeId: string;

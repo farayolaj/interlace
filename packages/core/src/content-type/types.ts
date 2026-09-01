@@ -13,7 +13,7 @@ export interface PlaybackCallbacks {
   onComplete(score?: number): void;
 }
 
-export interface ContentType<TData = any> {
+export interface ContentType<TData = unknown> {
   /** Unique identifier for this content type */
   getId(): string;
 
@@ -84,7 +84,7 @@ export interface ContentType<TData = any> {
   /**
    * Optional migration function to upgrade data from an older version.
    */
-  migrate?(oldData: any, fromVersion: number): TData;
+  migrate?(oldData: unknown, fromVersion: number): TData;
 }
 
 export class ContentTypeRegistry {

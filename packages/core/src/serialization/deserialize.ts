@@ -1,4 +1,4 @@
-import { ContentTypeRegistry } from "../content-type/types";
+import { ContentType, ContentTypeRegistry } from "../content-type/types";
 import { ContentInstance } from "../content/content-instance";
 import { ContentRecord, ContentState } from "../content/types";
 import { Hook } from "../hook/types";
@@ -17,12 +17,12 @@ export interface DeserializationOptions {
  * Deserializes a document into InteractiveMediaItems.
  * Returns items and metadata including any errors or warnings.
  */
-export function deserialize(
+export function deserialize<TData = unknown>(
   doc: SerializedInteractiveMediaDocument,
   registry: ContentTypeRegistry,
   options: DeserializationOptions = {},
 ): {
-  items: ContentInstance[];
+  items: ContentInstance<TData>[];
   videoDuration: number;
   videoSrc: string;
   validationErrors: string[];
@@ -43,7 +43,7 @@ export function deserialize(
   }
 
   // Step 2: Deserialize items
-  const items: ContentInstance[] = [];
+  const items: ContentInstance<TData>[] = [];
   const warnings: string[] = [];
 
   for (const serializedItem of doc.items) {
@@ -55,7 +55,9 @@ export function deserialize(
       continue;
     }
 
-    const contentType = registry.get(serializedItem.content.contentTypeId);
+    const contentType = registry.get(serializedItem.content.contentTypeId) as
+      | ContentType<TData>
+      | undefined;
     if (!contentType) {
       warnings.push(
         `Skipping item ${serializedItem.id}: unrecognized content type "${serializedItem.content.contentTypeId}"`,
@@ -91,7 +93,7 @@ export function deserialize(
       );
     }
 
-    const record: ContentRecord<any> = {
+    const record: ContentRecord<TData> = {
       id: serializedItem.id,
       title: serializedItem.title,
       contentTypeId: serializedItem.content.contentTypeId,

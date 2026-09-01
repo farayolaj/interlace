@@ -18,7 +18,7 @@ describe("ContentInstance", () => {
     const instance = fakeContentInstance({
       record: {
         state: ContentState.PENDING,
-        hook: fakeHook("blocking"),
+        hook: fakeHook("non-blocking"),
       },
     });
     const events: string[] = [];

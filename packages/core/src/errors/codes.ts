@@ -1,8 +1,8 @@
 /**
- * Error reason codes used in error and contentError events.
+ * Error codes used in error and contentError events.
  */
 
-export enum ErrorReasonCode {
+export enum ErrorCode {
   // Video/adapter errors
   VIDEO_LOAD_FAILED = "VIDEO_LOAD_FAILED",
   ADAPTER_ERROR = "ADAPTER_ERROR",
@@ -25,7 +25,7 @@ export enum ErrorReasonCode {
   PRELOAD_ERROR = "PRELOAD_ERROR",
 }
 
-export enum ContentErrorReasonCode {
+export enum ContentErrorCode {
   RENDER_FAILED = "RENDER_FAILED",
   VERSION_MISMATCH = "VERSION_MISMATCH",
   MIGRATION_FAILED = "MIGRATION_FAILED",

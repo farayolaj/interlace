@@ -16,7 +16,7 @@ export interface ContentInstanceEvents {
  * This class is used by the InteractiveMediaController to manage content instances during playback.
  */
 export class ContentInstance<
-  TData = any,
+  TData = unknown,
 > extends EventEmitter<ContentInstanceEvents> {
   private record: ContentRecord<TData>;
   private contentType: ContentType<TData>;

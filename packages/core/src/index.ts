@@ -7,7 +7,7 @@ export { DEFAULT_STRINGS } from "./strings/default-strings";
 export type { Strings } from "./strings/default-strings";
 
 // Error codes
-export { ContentErrorReasonCode, ErrorReasonCode } from "./errors/reason-codes";
+export { ContentErrorCode, ErrorCode } from "./errors/codes";
 
 // Hooks
 export { isBlockingHook, isNonBlockingHook } from "./hook/types";

@@ -1,9 +1,6 @@
 import { ContentInstance } from "../content/content-instance";
 import { ContentState } from "../content/types";
-import {
-  ContentErrorReasonCode,
-  ErrorReasonCode,
-} from "../errors/reason-codes";
+import { ContentErrorCode, ErrorCode } from "../errors/codes";
 import { EventEmitter } from "../events/event-emitter";
 import { Hook, isBlockingHook, isNonBlockingHook } from "../hook/types";
 import { validateHookOverlaps } from "../hook/validation";
@@ -21,12 +18,12 @@ export interface InteractiveMediaControllerEvents {
     };
   };
   error: {
-    reasonCode: ErrorReasonCode;
+    code: ErrorCode;
     message: string;
   };
   contentError: {
     contentId: string;
-    reasonCode: ContentErrorReasonCode;
+    code: ContentErrorCode;
     message: string;
   };
   requestPause: Record<string, never>;
@@ -66,7 +63,7 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
     const violations = validateHookOverlaps(hooks);
     if (violations.length > 0) {
       this.emit("error", {
-        reasonCode: ErrorReasonCode.OVERLAP_VALIDATION_ERROR,
+        code: ErrorCode.OVERLAP_VALIDATION_ERROR,
         message: `Hook overlap validation failed: ${violations.map((v) => v.description).join(", ")}`,
       });
     }
