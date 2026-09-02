@@ -71,6 +71,52 @@ describe("serialization", () => {
     expect(serialized.items[0]?.hook?.type).toBe("blocking");
   });
 
+  it("preserves authored data across round-trip", () => {
+    const registry = new ContentTypeRegistry();
+    registry.register({
+      getId: () => "quiz",
+      getVersion: () => 1,
+      getMaximumScore: () => 100,
+      renderEditor: () => {},
+      renderPlayback: () => {},
+    });
+
+    const data = {
+      question: "What is X?",
+      choices: ["a", "b"],
+      answer: 1,
+    };
+
+    const instance = fakeContentInstance({
+      record: fakeContentRecord({
+        id: "c1",
+        title: "Content c1",
+        contentTypeId: "quiz",
+        data,
+        state: ContentState.PENDING,
+        hook: {
+          type: "blocking",
+          timestamp: 10,
+          placement: { x: 50, y: 50, width: 20, height: 20 },
+        },
+      }),
+      contentType: fakeContentType({
+        getId: () => "quiz",
+        getVersion: () => 1,
+        getMaximumScore: () => 100,
+        renderEditor: () => {},
+        renderPlayback: () => {},
+      }),
+    });
+
+    const serialized = serialize([instance], "https://example.com/video.mp4", 60);
+    const result = deserialize(serialized, registry);
+
+    expect(result.validationErrors).toHaveLength(0);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.getData()).toEqual(data);
+  });
+
   it("deserializes valid document", () => {
     const registry = new ContentTypeRegistry();
     registry.register({

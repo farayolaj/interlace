@@ -39,7 +39,7 @@ export function serialize(
       content: {
         contentTypeId: item.getContentTypeId(),
         version: item.getContentTypeVersion(),
-        data: item.getState(),
+        data: item.getData(),
       },
     }),
   );
