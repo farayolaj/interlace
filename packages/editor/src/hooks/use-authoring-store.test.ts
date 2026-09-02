@@ -1,8 +1,20 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ContentInstance, isBlockingHook } from "@interlace/core";
-import type { ContentRecord, ContentState, ContentType } from "@interlace/core";
-import { useAuthoringStore } from "./use-authoring-store";
+import {
+  ContentInstance,
+  ContentTypeRegistry,
+  isBlockingHook,
+} from "@interlace/core";
+import type {
+  ContentRecord,
+  ContentState,
+  ContentType,
+  SerializedInteractiveMediaDocument,
+} from "@interlace/core";
+import {
+  LoadDocumentResult,
+  useAuthoringStore,
+} from "./use-authoring-store";
 
 /**
  * Builds a real `ContentInstance` (constructed from the exported class, so it
@@ -32,6 +44,40 @@ function makeBlockingItem(id: string, timestamp: number) {
   return {
     hook: record.hook,
     content: new ContentInstance(record, contentType),
+  };
+}
+
+function makeQuizRegistry(): ContentTypeRegistry {
+  const registry = new ContentTypeRegistry();
+  registry.register({
+    getId: () => "quiz",
+    getVersion: () => 1,
+    getMaximumScore: () => 100,
+    renderEditor: () => {},
+    renderPlayback: () => {},
+  });
+  return registry;
+}
+
+function makeQuizDocument(): SerializedInteractiveMediaDocument {
+  return {
+    video: { src: "https://example.com/loaded.mp4", duration: 90 },
+    items: [
+      {
+        id: "c1",
+        title: "Quiz 1",
+        hook: {
+          type: "blocking",
+          timestamp: 10,
+          placement: { x: 50, y: 50, width: 20, height: 20 },
+        },
+        content: {
+          contentTypeId: "quiz",
+          version: 1,
+          data: { question: "Test?" },
+        },
+      },
+    ],
   };
 }
 
@@ -117,12 +163,72 @@ describe("useAuthoringStore", () => {
       result.current.addItem(mockItem);
     });
 
-    const doc = result.current.serialize("native");
+    const doc = result.current.serialize();
 
     expect(doc.video.src).toBe("https://example.com/video.mp4");
     expect(doc.video.duration).toBe(60);
-    expect(doc.video.adapterType).toBe("native");
     expect(doc.items).toHaveLength(1);
+    // Core's `serialize` writes the authored payload (`getData()`), so the
+    // serialized data matches the `{}` recorded in `makeBlockingItem`.
+    expect(doc.items[0]?.content.data).toEqual({});
+  });
+
+  it("loads document", () => {
+    const { result } = renderHook(() =>
+      useAuthoringStore("https://example.com/video.mp4", 60),
+    );
+
+    const registry = makeQuizRegistry();
+    const doc = makeQuizDocument();
+
+    let loadResult: LoadDocumentResult | undefined;
+    act(() => {
+      loadResult = result.current.loadDocument(doc, registry);
+    });
+
+    expect(result.current.state.items).toHaveLength(1);
+    expect(result.current.state.videoSrc).toBe("https://example.com/loaded.mp4");
+    expect(result.current.state.videoDuration).toBe(90);
+    expect(loadResult?.validationErrors).toEqual([]);
+    expect(loadResult?.warnings).toEqual([]);
+  });
+
+  it("loadDocument surfaces warnings", () => {
+    const { result } = renderHook(() =>
+      useAuthoringStore("https://example.com/video.mp4", 60),
+    );
+
+    // Registry without the "unknown" content type registered.
+    const registry = new ContentTypeRegistry();
+    const doc: SerializedInteractiveMediaDocument = {
+      video: { src: "https://example.com/loaded.mp4", duration: 90 },
+      items: [
+        {
+          id: "c1",
+          title: "Quiz 1",
+          hook: {
+            type: "blocking",
+            timestamp: 10,
+            placement: { x: 50, y: 50, width: 20, height: 20 },
+          },
+          content: {
+            contentTypeId: "unknown",
+            version: 1,
+            data: {},
+          },
+        },
+      ],
+    };
+
+    let loadResult: LoadDocumentResult | undefined;
+    act(() => {
+      loadResult = result.current.loadDocument(doc, registry);
+    });
+
+    expect(result.current.state.items).toHaveLength(0);
+    expect(
+      loadResult?.warnings.some((w) => w.includes("unrecognized content type")),
+    ).toBe(true);
   });
 
   it("updates video metadata", () => {

@@ -1,4 +1,11 @@
-import { ContentInstance, Hook } from "@interlace/core";
+import {
+  ContentInstance,
+  ContentTypeRegistry,
+  Hook,
+  deserialize,
+  serialize as coreSerialize,
+} from "@interlace/core";
+import type { SerializedInteractiveMediaDocument } from "@interlace/core";
 import { useCallback, useState } from "react";
 
 /**
@@ -10,27 +17,15 @@ export interface InteractiveMediaItem {
   hook: Hook;
 }
 
-/**
- * Serializes authored items into the document schema, reading hook data from
- * the item pair and content data from the content instance.
- */
-function serializeItems(items: InteractiveMediaItem[]) {
-  return items.map((item) => ({
-    id: item.content.getId(),
-    title: item.content.getTitle(),
-    hook: item.hook,
-    content: {
-      contentTypeId: item.content.getContentTypeId(),
-      version: item.content.getContentTypeVersion(),
-      data: item.content.getData(),
-    },
-  }));
-}
-
 export interface AuthoringStoreState {
   items: InteractiveMediaItem[];
   videoSrc: string;
   videoDuration: number;
+}
+
+export interface LoadDocumentResult {
+  validationErrors: string[];
+  warnings: string[];
 }
 
 export interface AuthoringStore {
@@ -38,7 +33,16 @@ export interface AuthoringStore {
   addItem: (item: InteractiveMediaItem) => void;
   removeItem: (id: string) => void;
   updateItem: (id: string, item: InteractiveMediaItem) => void;
-  serialize: (adapterType?: string) => any;
+  /**
+   * Serializes the current items into a document via core's `serialize`.
+   * The legacy `adapterType` argument is accepted (and ignored) so existing
+   * callers do not break; the new core serializer does not produce it.
+   */
+  serialize: (adapterType?: unknown) => SerializedInteractiveMediaDocument;
+  loadDocument: (
+    doc: SerializedInteractiveMediaDocument,
+    registry: ContentTypeRegistry,
+  ) => LoadDocumentResult;
   setVideoMetadata: (src: string, duration: number) => void;
 }
 
@@ -83,17 +87,30 @@ export function useAuthoringStore(
   );
 
   const doSerialize = useCallback(
-    (adapterType?: string) => {
-      return {
-        video: {
-          src: state.videoSrc,
-          duration: state.videoDuration,
-          ...(adapterType !== undefined ? { adapterType } : {}),
-        },
-        items: serializeItems(state.items),
-      };
-    },
+    (_adapterType?: unknown) =>
+      coreSerialize(
+        state.items.map((item) => item.content),
+        state.videoSrc,
+        state.videoDuration,
+      ),
     [state],
+  );
+
+  const loadDocument = useCallback(
+    (
+      doc: SerializedInteractiveMediaDocument,
+      registry: ContentTypeRegistry,
+    ): LoadDocumentResult => {
+      const { items, videoSrc, videoDuration, validationErrors, warnings } =
+        deserialize(doc, registry);
+      setState({
+        items: items.map((content) => ({ content, hook: content.getHook() })),
+        videoSrc,
+        videoDuration,
+      });
+      return { validationErrors, warnings };
+    },
+    [],
   );
 
   const setVideoMetadata = useCallback((src: string, duration: number) => {
@@ -110,6 +127,7 @@ export function useAuthoringStore(
     removeItem,
     updateItem,
     serialize: doSerialize,
+    loadDocument,
     setVideoMetadata,
   };
 }

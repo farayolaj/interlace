@@ -15,4 +15,5 @@ export type {
   AuthoringStore,
   AuthoringStoreState,
   InteractiveMediaItem,
+  LoadDocumentResult,
 } from "./hooks/use-authoring-store";
