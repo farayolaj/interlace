@@ -381,6 +381,13 @@ describe("InterlaceEditor", () => {
       />,
     );
 
+    // Opening the preview modal pauses the authoring video; jsdom's
+    // pause is "not implemented" and would log noise, so stub it.
+    const authoringVideo = await screen.findByTestId(
+      "interlace-editor-preview-video",
+    ) as HTMLVideoElement;
+    authoringVideo.pause = vi.fn();
+
     // The modal is not open yet.
     expect(
       screen.queryByTestId("preview-modal-backdrop"),
@@ -458,6 +465,13 @@ describe("InterlaceEditor", () => {
       );
     }
     render(<Harness />);
+
+    // Opening the preview modal pauses the authoring video; jsdom's
+    // pause is "not implemented" and would log noise, so stub it.
+    const authoringVideo = await screen.findByTestId(
+      "interlace-editor-preview-video",
+    ) as HTMLVideoElement;
+    authoringVideo.pause = vi.fn();
 
     fireEvent.click(screen.getByTestId("interlace-editor-open-preview"));
     await screen.findByTestId("preview-modal-backdrop");
@@ -853,7 +867,7 @@ describe("InterlaceEditor", () => {
     ).toHaveTextContent("Pick a video to begin.");
   });
 
-  it("applies the placement label override", () => {
+  it("applies the preview label override on the video toolbar", () => {
     render(
       <InterlaceEditor
         contentTypeRegistry={makeRegistry()}
@@ -861,12 +875,16 @@ describe("InterlaceEditor", () => {
         onUpload={vi.fn(async () => "x")}
         onSave={vi.fn()}
         strings={{
-          placementLabel: "Where it goes",
+          previewLabel: "Open preview",
         }}
       />,
     );
 
-    expect(screen.getByText("Where it goes")).toBeInTheDocument();
+    // The placement overlay only renders when an item is selected; the
+    // toolbar (duration + replace + preview) is always visible.
+    expect(screen.getByTestId("interlace-editor-open-preview")).toHaveTextContent(
+      "Open preview",
+    );
   });
 
   it("clicking a timeline entry seeks the video to the hook's anchor time", async () => {

@@ -50,7 +50,14 @@ export interface EditorStrings extends CoreStrings {
   saveLabel: string;
   /** Shown when no item is selected for placement editing. */
   noItemSelectedLabel: string;
-  /** Heading for the placement editor section. */
+  /**
+   * Heading for the placement editor section.
+   *
+   * @deprecated Unused since the placement editor became a video-frame
+   * overlay (there is no separate placement section to head). Retained
+   * for backward compatibility with hosts passing
+   * `strings.placementLabel`. Will be removed in a future major.
+   */
   placementLabel: string;
   /** Heading for the timeline area. */
   timelineHeading: string;
@@ -219,12 +226,14 @@ function pickDefaultContentTypeId(registry: ContentTypeRegistry): string {
 }
 
 /**
- * Toolbar above the video showing the current duration, a button to
- * replace the video (re-opens the source step in replace mode), and a
- * button that opens the preview modal. The `<video>` element itself is
- * rendered as a sibling of this toolbar at the InterlaceEditor level
- * so the shared `videoRef` is live for both placement (Phase 3) and
- * timeline (Phase 4) consumers.
+ * Toolbar below the video frame showing the current duration, an
+ * optional selection hint, a button to replace the video (re-opens the
+ * source step in replace mode), and a button that opens the preview
+ * modal. This toolbar must stay OUTSIDE the video's positioning
+ * context: the placement overlay (Phase 3) maps its percentages against
+ * the `position: relative` wrapper that hugs exactly the `<video>`
+ * element, and an in-flow toolbar inside that wrapper would offset
+ * every rectangle by the toolbar's height.
  */
 function EditorVideoToolbar({
   duration,
@@ -232,12 +241,15 @@ function EditorVideoToolbar({
   onReplaceVideo,
   onOpenPreview,
   theme,
+  hint,
 }: {
   duration: number | undefined;
   strings: EditorStrings;
   onReplaceVideo: () => void;
   onOpenPreview: () => void;
   theme?: EditorTheme;
+  /** Shown next to the duration when no item is selected. */
+  hint?: string;
 }) {
   return (
     <div
@@ -251,10 +263,19 @@ function EditorVideoToolbar({
         color: theme?.mutedTextColor ?? "#666",
       }}
     >
-      <span data-testid="interlace-editor-video-duration">
-        {duration === undefined || !Number.isFinite(duration)
-          ? strings.durationUnknownLabel
-          : `${duration.toFixed(1)}s`}
+      <span
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span data-testid="interlace-editor-video-duration">
+          {duration === undefined || !Number.isFinite(duration)
+            ? strings.durationUnknownLabel
+            : `${duration.toFixed(1)}s`}
+        </span>
+        {hint ? <span data-testid="interlace-editor-selection-hint">{hint}</span> : null}
       </span>
       <div style={{ display: "flex", gap: 8 }}>
         <button
@@ -804,39 +825,55 @@ export function InterlaceEditor({
         </button>
       </header>
 
+      {/*
+        The positioning context for the placement overlay must wrap
+        exactly the video: an in-flow toolbar inside this wrapper would
+        offset every rectangle by the toolbar's height (Gate 3
+        Material #2). The toolbar therefore sits below the frame.
+      */}
       <section
         className="interlace-editor-video"
-        data-testid="interlace-editor-video"
         style={{
-          position: "relative",
           width: "100%",
           maxWidth: 720,
           margin: "0 auto",
         }}
       >
-        <video
-          ref={videoRef}
-          key={state.videoSrc}
-          src={state.videoSrc}
-          controls
-          preload="metadata"
-          onLoadedMetadata={(e) =>
-            handlePreviewLoadedMetadata(e.currentTarget.duration)
-          }
-          data-testid="interlace-editor-preview-video"
-          style={{
-            width: "100%",
-            height: "auto",
-            display: "block",
-            backgroundColor: "#000",
-          }}
-        />
+        <div
+          data-testid="interlace-editor-video"
+          style={{ position: "relative" }}
+        >
+          <video
+            ref={videoRef}
+            key={state.videoSrc}
+            src={state.videoSrc}
+            controls
+            preload="metadata"
+            onLoadedMetadata={(e) =>
+              handlePreviewLoadedMetadata(e.currentTarget.duration)
+            }
+            data-testid="interlace-editor-preview-video"
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              backgroundColor: "#000",
+            }}
+          />
+          {selectedItem ? (
+            <PlacementEditor
+              placement={selectedItem.hook.placement}
+              onPlacementChange={handlePlacementChange}
+            />
+          ) : null}
+        </div>
         <EditorVideoToolbar
           duration={state.videoDuration || undefined}
           strings={strings}
           onReplaceVideo={handleReplaceVideo}
           onOpenPreview={handleOpenPreview}
           theme={theme}
+          hint={selectedItem ? undefined : strings.noItemSelectedLabel}
         />
       </section>
 
@@ -849,38 +886,6 @@ export function InterlaceEditor({
         onError={onError}
         strings={strings.previewModal}
       />
-
-      <section
-        className="interlace-editor-placement"
-        data-testid="interlace-editor-placement"
-        style={{
-          ...surfaceStyle,
-          marginTop: 16,
-          padding: 16,
-          borderRadius: 8,
-          border: "1px solid",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>{strings.placementLabel}</h3>
-        {selectedItem ? (
-          <PlacementEditor
-            placement={selectedItem.hook.placement}
-            onPlacementChange={handlePlacementChange}
-          />
-        ) : (
-          <div
-            style={{
-              padding: 32,
-              textAlign: "center",
-              color: theme?.mutedTextColor ?? "#666",
-              backgroundColor: theme?.surfaceColor ?? "#f0f0f0",
-              borderRadius: 4,
-            }}
-          >
-            {strings.noItemSelectedLabel}
-          </div>
-        )}
-      </section>
 
       <section
         className="interlace-editor-add-content"

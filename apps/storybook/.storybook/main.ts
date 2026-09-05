@@ -29,6 +29,12 @@ const config: StorybookConfig = {
           "@interlace/player": fileURLToPath(
             new URL("../../../packages/player/src/index.ts", import.meta.url),
           ),
+          "@interlace/native-adapter": fileURLToPath(
+            new URL(
+              "../../../packages/native-adapter/src/index.ts",
+              import.meta.url,
+            ),
+          ),
         },
       },
     });
