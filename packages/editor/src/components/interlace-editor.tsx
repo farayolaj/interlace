@@ -10,20 +10,19 @@ import {
   SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
 } from "@interlace/core";
-import { Anchor, BlockingOverlay } from "@interlace/player";
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type RefObject,
 } from "react";
 import { useAuthoringStore } from "../hooks/use-authoring-store";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
 import { ContentTypeEditorSlot } from "./content-type-editor-slot";
 import { ContentTypePicker } from "./content-type-picker";
 import { PlacementEditor } from "./placement-editor";
+import { PreviewModal } from "./preview-modal";
 import { Timeline } from "./timeline";
 import { VideoSourceInput } from "./video-source-input";
 import type {
@@ -40,6 +39,8 @@ export interface EditorStrings extends CoreStrings {
   videoSourceInputTitle: string;
   /** Title for the preview surface. */
   previewTitle: string;
+  /** Label for the button that opens the preview modal. */
+  previewLabel: string;
   /** Label for the button that re-opens the video source step on an existing document. */
   replaceVideoLabel: string;
   /** Label for the button that aborts a replace and returns to the authoring surface. */
@@ -84,6 +85,7 @@ export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
   ...DEFAULT_STRINGS,
   videoSourceInputTitle: "Add a video",
   previewTitle: "Preview",
+  previewLabel: "Preview",
   replaceVideoLabel: "Replace video",
   replaceCancelLabel: "Cancel replace",
   saveLabel: "Save",
@@ -211,122 +213,77 @@ function pickDefaultContentTypeId(registry: ContentTypeRegistry): string {
 }
 
 /**
- * Editor preview surface — the `<video>` element with anchored hooks
- * rendered on top. The anchors are the player's `Anchor` component
- * (no second renderer inside the editor) but the click behavior is
- * local: the editor opens a *preview* BlockingOverlay that does not
- * actually score or persist a completion, so the store's items are
- * never mutated by the preview.
+ * Toolbar above the video showing the current duration, a button to
+ * replace the video (re-opens the source step in replace mode), and a
+ * button that opens the preview modal. The `<video>` element itself is
+ * rendered as a sibling of this toolbar at the InterlaceEditor level
+ * so the shared `videoRef` is live for both placement (Phase 3) and
+ * timeline (Phase 4) consumers.
  */
-function EditorPreview({
-  videoRef,
-  videoSrc,
-  videoDuration,
-  items,
-  onLoadedMetadata,
-  onReplaceVideo,
+function EditorVideoToolbar({
+  duration,
   strings,
-  onAnchorClick,
-  previewingContent,
-  onClosePreview,
+  onReplaceVideo,
+  onOpenPreview,
+  theme,
 }: {
-  videoRef: RefObject<HTMLVideoElement | null>;
-  videoSrc: string;
-  videoDuration: number | undefined;
-  items: { content: ContentInstance }[];
-  onLoadedMetadata: (duration: number) => void;
-  onReplaceVideo: () => void;
+  duration: number | undefined;
   strings: EditorStrings;
-  onAnchorClick: (contentId: string) => void;
-  previewingContent: ContentInstance | null;
-  onClosePreview: () => void;
+  onReplaceVideo: () => void;
+  onOpenPreview: () => void;
+  theme?: EditorTheme;
 }) {
   return (
     <div
-      className="interlace-editor-preview"
-      data-testid="interlace-editor-preview"
+      data-testid="interlace-editor-video-toolbar"
       style={{
-        position: "relative",
-        width: "100%",
-        maxWidth: 720,
-        margin: "0 auto",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "8px 0",
+        fontSize: 13,
+        color: theme?.mutedTextColor ?? "#666",
       }}
     >
-      <video
-        ref={videoRef}
-        key={videoSrc}
-        src={videoSrc}
-        controls
-        preload="metadata"
-        onLoadedMetadata={(e) => onLoadedMetadata(e.currentTarget.duration)}
-        data-testid="interlace-editor-preview-video"
-        style={{
-          width: "100%",
-          height: "auto",
-          display: "block",
-          backgroundColor: "#000",
-        }}
-      />
-      <div
-        className="interlace-editor-preview-overlay"
-        data-testid="interlace-editor-preview-overlay"
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-        }}
-      >
-        {items.map((item) => {
-          const hook = item.content.getHook();
-          return (
-            <Anchor
-              key={item.content.getId()}
-              id={item.content.getId()}
-              placement={hook.placement}
-              title={item.content.getTitle()}
-              onClick={() => onAnchorClick(item.content.getId())}
-            />
-          );
-        })}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: 8,
-          fontSize: 13,
-          color: "#666",
-        }}
-      >
-        <span data-testid="interlace-editor-preview-duration">
-          {videoDuration === undefined
-            ? strings.durationUnknownLabel
-            : `${videoDuration.toFixed(1)}s`}
-        </span>
+      <span data-testid="interlace-editor-video-duration">
+        {duration === undefined || !Number.isFinite(duration)
+          ? strings.durationUnknownLabel
+          : `${duration.toFixed(1)}s`}
+      </span>
+      <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
           onClick={onReplaceVideo}
           data-testid="interlace-editor-replace-video"
           style={{
             padding: "4px 12px",
-            backgroundColor: "#fff",
+            backgroundColor: "transparent",
             border: "1px solid #ccc",
-            borderRadius: "4px",
+            borderRadius: 4,
             cursor: "pointer",
             fontSize: 13,
           }}
         >
           {strings.replaceVideoLabel}
         </button>
+        <button
+          type="button"
+          onClick={onOpenPreview}
+          data-testid="interlace-editor-open-preview"
+          style={{
+            padding: "4px 12px",
+            backgroundColor: theme?.accentColor ?? "#0066cc",
+            color: "#fff",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          {strings.previewLabel}
+        </button>
       </div>
-      {previewingContent ? (
-        <BlockingOverlay
-          content={previewingContent}
-          onClose={onClosePreview}
-          onSubmit={onClosePreview}
-        />
-      ) : null}
     </div>
   );
 }
@@ -377,7 +334,7 @@ export function InterlaceEditor({
   const [newItemType, setNewItemType] = useState<string>(() =>
     pickDefaultContentTypeId(contentTypeRegistry),
   );
-  const [previewingContentId, setPreviewingContentId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const nextIdRef = useRef(1);
   const registryRef = useRef(contentTypeRegistry);
   registryRef.current = contentTypeRegistry;
@@ -641,7 +598,7 @@ export function InterlaceEditor({
       setSlotOpen(false);
       // Close any open preview so the user lands on a clean authoring
       // surface after a replace.
-      setPreviewingContentId(null);
+      setPreviewOpen(false);
     },
     [setVideoMetadata, state.videoSrc, state.videoDuration],
   );
@@ -653,6 +610,28 @@ export function InterlaceEditor({
   const handleCancelReplace = useCallback(() => {
     setReplaceMode(false);
   }, []);
+
+  const handleOpenPreview = useCallback(() => {
+    setPreviewOpen(true);
+  }, []);
+
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+  }, []);
+
+  // When the preview modal opens, pause the authoring video so the
+  // student view (in the modal) and the authoring surface do not
+  // play in parallel. When the modal closes, leave the authoring
+  // video paused — the user can press play to resume.
+  useEffect(() => {
+    if (previewOpen && videoRef.current) {
+      try {
+        videoRef.current.pause();
+      } catch {
+        // The video may not be ready yet; ignore.
+      }
+    }
+  }, [previewOpen]);
 
   const handlePreviewLoadedMetadata = useCallback(
     (duration: number) => {
@@ -685,22 +664,6 @@ export function InterlaceEditor({
     },
     [state.videoSrc, setVideoMetadata],
   );
-
-  const handlePreviewAnchorClick = useCallback((contentId: string) => {
-    setPreviewingContentId(contentId);
-  }, []);
-
-  const handleClosePreview = useCallback(() => {
-    setPreviewingContentId(null);
-  }, []);
-
-  const previewingContent = useMemo(() => {
-    if (!previewingContentId) return null;
-    const item = state.items.find(
-      (it) => it.content.getId() === previewingContentId,
-    );
-    return item?.content ?? null;
-  }, [previewingContentId, state.items]);
 
   const handleSave = useCallback(() => {
     onSave(serialize());
@@ -797,17 +760,68 @@ export function InterlaceEditor({
         </button>
       </header>
 
-      <EditorPreview
-        videoRef={videoRef}
+      <section
+        className="interlace-editor-video"
+        data-testid="interlace-editor-video"
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 720,
+          margin: "0 auto",
+        }}
+      >
+        <video
+          ref={videoRef}
+          key={state.videoSrc}
+          src={state.videoSrc}
+          controls
+          preload="metadata"
+          onLoadedMetadata={(e) =>
+            handlePreviewLoadedMetadata(e.currentTarget.duration)
+          }
+          data-testid="interlace-editor-preview-video"
+          style={{
+            width: "100%",
+            height: "auto",
+            display: "block",
+            backgroundColor: "#000",
+          }}
+        />
+        <EditorVideoToolbar
+          duration={state.videoDuration || undefined}
+          strings={strings}
+          onReplaceVideo={handleReplaceVideo}
+          onOpenPreview={handleOpenPreview}
+          theme={theme}
+        />
+      </section>
+
+      <PreviewModal
+        isOpen={previewOpen}
         videoSrc={state.videoSrc}
-        videoDuration={state.videoDuration || undefined}
-        items={state.items}
-        onLoadedMetadata={handlePreviewLoadedMetadata}
-        onReplaceVideo={handleReplaceVideo}
-        strings={strings}
-        onAnchorClick={handlePreviewAnchorClick}
-        previewingContent={previewingContent}
-        onClosePreview={handleClosePreview}
+        document={
+          state.videoSrc
+            ? {
+                video: {
+                  src: state.videoSrc,
+                  duration: state.videoDuration,
+                },
+                items: state.items.map((item) => ({
+                  id: item.content.getId(),
+                  title: item.content.getTitle(),
+                  hook: item.hook,
+                  content: {
+                    contentTypeId: item.content.getContentTypeId(),
+                    version: item.content.getContentTypeVersion(),
+                    data: item.content.getData(),
+                  },
+                })),
+              }
+            : { video: { src: "" }, items: [] }
+        }
+        contentTypeRegistry={contentTypeRegistry}
+        onClose={handleClosePreview}
+        onError={onError}
       />
 
       <section

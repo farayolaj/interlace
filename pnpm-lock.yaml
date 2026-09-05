@@ -90,6 +90,9 @@ importers:
       '@interlace/core':
         specifier: workspace:*
         version: link:../core
+      '@interlace/native-adapter':
+        specifier: workspace:*
+        version: link:../native-adapter
       '@interlace/player':
         specifier: workspace:*
         version: link:../player

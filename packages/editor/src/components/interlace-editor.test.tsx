@@ -134,7 +134,7 @@ describe("InterlaceEditor", () => {
     ).toBeInTheDocument();
     // No authoring surface until a video is selected.
     expect(
-      screen.queryByTestId("interlace-editor-preview"),
+      screen.queryByTestId("interlace-editor-video"),
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("interlace-editor-save")).not.toBeInTheDocument();
   });
@@ -168,14 +168,14 @@ describe("InterlaceEditor", () => {
 
     // Authoring surface is not visible until the upload resolves.
     expect(
-      container.querySelector(".interlace-editor-preview"),
+      container.querySelector(".interlace-editor-video"),
     ).toBeNull();
 
     resolveUpload?.("https://cdn.example.com/lecture.mp4");
 
     await waitFor(() => {
       expect(
-        screen.getByTestId("interlace-editor-preview"),
+        screen.getByTestId("interlace-editor-video"),
       ).toBeInTheDocument();
     });
     expect(
@@ -202,7 +202,7 @@ describe("InterlaceEditor", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByTestId("interlace-editor-preview"),
+        screen.getByTestId("interlace-editor-video"),
       ).toBeInTheDocument();
     });
   });
@@ -221,7 +221,7 @@ describe("InterlaceEditor", () => {
       screen.queryByTestId("video-source-input-empty"),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByTestId("interlace-editor-preview"),
+      screen.getByTestId("interlace-editor-video"),
     ).toBeInTheDocument();
   });
 
@@ -371,7 +371,7 @@ describe("InterlaceEditor", () => {
     expect(beforeItemCount).toBeGreaterThan(0);
   });
 
-  it("opens the preview BlockingOverlay when an anchor is clicked", async () => {
+  it("opens the preview modal when the Preview button is clicked", async () => {
     const { container } = render(
       <InterlaceEditor
         contentTypeRegistry={makeRegistry()}
@@ -381,15 +381,56 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // The Anchor is rendered inside the preview overlay container.
-    const overlay = await screen.findByTestId("interlace-editor-preview-overlay");
-    const anchor = overlay.querySelector("button");
-    if (!anchor) throw new Error("expected anchor button");
-    fireEvent.click(anchor);
+    // The modal is not open yet.
+    expect(
+      screen.queryByTestId("preview-modal-backdrop"),
+    ).not.toBeInTheDocument();
 
-    // The BlockingOverlay's dialog role is "dialog".
+    fireEvent.click(screen.getByTestId("interlace-editor-open-preview"));
+
+    // The PreviewModal's dialog is visible.
+    expect(
+      await screen.findByTestId("preview-modal-backdrop"),
+    ).toBeInTheDocument();
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+
+    // Closing the modal removes the dialog.
+    fireEvent.click(screen.getByTestId("preview-modal-close"));
     await waitFor(() => {
-      expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(
+        screen.queryByTestId("preview-modal-backdrop"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("pauses the authoring video when the preview modal opens", async () => {
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const video = await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    });
+    // jsdom does not implement play/pause natively; stub them.
+    const pauseSpy = vi.fn();
+    Object.defineProperty(video, "pause", {
+      configurable: true,
+      value: pauseSpy,
+    });
+
+    fireEvent.click(screen.getByTestId("interlace-editor-open-preview"));
+
+    await waitFor(() => {
+      expect(pauseSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -612,7 +653,31 @@ describe("InterlaceEditor", () => {
     fireEvent.click(screen.getByTestId("interlace-editor-cancel-replace"));
     await waitFor(() => {
       expect(
-        screen.getByTestId("interlace-editor-preview"),
+        screen.getByTestId("interlace-editor-video"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("replace flow: cancel restores the authoring surface and keeps existing items", async () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
+    expect(
+      await screen.findByTestId("interlace-editor-cancel-replace"),
+    ).toBeInTheDocument();
+
+    // Cancel returns to the authoring surface.
+    fireEvent.click(screen.getByTestId("interlace-editor-cancel-replace"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("interlace-editor-video"),
       ).toBeInTheDocument();
     });
     // The existing item is still there.
@@ -637,7 +702,7 @@ describe("InterlaceEditor", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByTestId("interlace-editor-preview"),
+        screen.getByTestId("interlace-editor-video"),
       ).toBeInTheDocument();
     });
 
