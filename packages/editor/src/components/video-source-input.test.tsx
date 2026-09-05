@@ -340,4 +340,111 @@ describe("VideoSourceInput", () => {
     const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
     expect(lastCall?.[0]).toEqual({ src: "https://fast.example.com/x.mp4" });
   });
+
+  it("normalizes non-Error rejections into Error instances and reports them via onError", async () => {
+    const onError = vi.fn();
+    const onChange = vi.fn();
+    // Hosts hand-write onUpload; rejecting with a non-Error value is realistic.
+    const onUpload = vi.fn(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-throw-literal
+      throw "boom: 503 from CDN";
+    });
+
+    render(
+      <VideoSourceInput
+        onChange={onChange}
+        onUpload={onUpload}
+        onError={onError}
+      />,
+    );
+
+    const fileInput = screen.getByTestId(
+      "video-source-input-file",
+    ) as HTMLInputElement;
+    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("video-source-input-error")).toBeInTheDocument();
+    });
+    expect(onError).toHaveBeenCalledTimes(1);
+    const reported = onError.mock.calls[0]?.[0] as unknown;
+    expect(reported).toBeInstanceOf(Error);
+    expect((reported as Error).message).toBe("boom: 503 from CDN");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores a stale failing upload if a newer selection has started", async () => {
+    const slowFail = vi.fn(
+      () =>
+        new Promise<string>((_resolve, reject) => {
+          setTimeout(() => reject(new Error("slow failure")), 30);
+        }),
+    );
+    const fastOk = vi.fn(async () => "https://fast.example.com/x.mp4");
+    const onError = vi.fn();
+    const onChange = vi.fn();
+
+    const { rerender } = render(
+      <VideoSourceInput
+        onChange={onChange}
+        onUpload={slowFail}
+        onError={onError}
+      />,
+    );
+
+    const fileInput = screen.getByTestId(
+      "video-source-input-file",
+    ) as HTMLInputElement;
+    dispatchFileChange(fileInput, makeFile("slow.mp4"));
+
+    // Host swaps the upload callback; a new selection starts.
+    rerender(
+      <VideoSourceInput
+        onChange={onChange}
+        onUpload={fastOk}
+        onError={onError}
+      />,
+    );
+    dispatchFileChange(fileInput, makeFile("fast.mp4"));
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith({
+        src: "https://fast.example.com/x.mp4",
+      });
+    });
+
+    // The slow failure settles later. The token check on the catch
+    // path must prevent it from surfacing as an error or firing
+    // onError.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(onError).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("video-source-input-error")).toBeNull();
+  });
+
+  it("drops a late resolution that arrives after the component unmounts", async () => {
+    let resolveUpload: ((url: string) => void) | undefined;
+    const onUpload = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveUpload = resolve;
+        }),
+    );
+    const onChange = vi.fn();
+
+    const { unmount } = render(
+      <VideoSourceInput onChange={onChange} onUpload={onUpload} />,
+    );
+
+    const fileInput = screen.getByTestId(
+      "video-source-input-file",
+    ) as HTMLInputElement;
+    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+
+    unmount();
+
+    // Resolving after unmount must not commit to onChange.
+    resolveUpload?.("https://cdn.example.com/lecture.mp4");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

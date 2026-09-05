@@ -95,7 +95,8 @@ type UploadState =
  * Token discipline: every file selection bumps an internal counter; if a
  * later selection starts (or the component unmounts) before the previous
  * upload resolves, the stale result is dropped. This prevents a slow
- * upload from overwriting the URL of a fast one chosen after it.
+ * upload from overwriting the URL of a fast one chosen after it, and
+ * prevents a late resolution from committing into a torn-down tree.
  */
 export function VideoSourceInput({
   value,
@@ -112,11 +113,23 @@ export function VideoSourceInput({
   const uploadTokenRef = useRef(0);
 
   // Keep the URL draft in sync when the upstream value changes (e.g. a
-  // document load). We intentionally do not clobber an in-flight draft the
-  // user is actively typing into.
+  // document load). The draft is *not* marked dirty — a late upload
+  // resolution that calls `onChange` will still overwrite what the user
+  // is currently typing. Callers that want to preserve the user's
+  // in-flight draft across value changes should not pass a new
+  // `value.src` while a upload is in progress.
   useEffect(() => {
     setUrlDraft(value?.src ?? "");
   }, [value?.src]);
+
+  // Token discipline also covers unmount: bump the counter so any
+  // in-flight upload that resolves after the component is gone is
+  // dropped instead of committing into a torn-down tree.
+  useEffect(() => {
+    return () => {
+      uploadTokenRef.current += 1;
+    };
+  }, []);
 
   const handleApplyUrl = useCallback(() => {
     const trimmed = urlDraft.trim();
@@ -133,17 +146,22 @@ export function VideoSourceInput({
 
       const token = ++uploadTokenRef.current;
       setUploadState({ kind: "uploading", fileName: file.name });
+      let url: string;
       try {
-        const url = await onUpload(file);
-        if (token !== uploadTokenRef.current) return;
-        setUploadState({ kind: "idle" });
-        onChange({ src: url });
+        url = await onUpload(file);
       } catch (err) {
         if (token !== uploadTokenRef.current) return;
         const error = err instanceof Error ? err : new Error(String(err));
         setUploadState({ kind: "error", message: error.message });
         onError?.(error);
+        return;
       }
+      // Resolution is the only path that calls onChange. A throw from
+      // the host's onChange handler is the host's problem and is not
+      // surfaced as an upload failure.
+      if (token !== uploadTokenRef.current) return;
+      setUploadState({ kind: "idle" });
+      onChange({ src: url });
     },
     [onUpload, onChange, onError],
   );
