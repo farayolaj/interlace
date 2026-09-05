@@ -23,6 +23,7 @@ import { ContentTypeEditorSlot } from "./content-type-editor-slot";
 import { ContentTypePicker } from "./content-type-picker";
 import { PlacementEditor } from "./placement-editor";
 import { PreviewModal } from "./preview-modal";
+import type { PreviewModalStrings } from "./preview-modal";
 import { Timeline } from "./timeline";
 import { VideoSourceInput } from "./video-source-input";
 import type {
@@ -74,6 +75,11 @@ export interface EditorStrings extends CoreStrings {
    * `DEFAULT_VIDEO_SOURCE_INPUT_STRINGS` in `VideoSourceInput`.
    */
   videoSource?: Partial<VideoSourceInputStrings>;
+  /**
+   * String overrides forwarded to the preview modal. Any field omitted
+   * falls back to `DEFAULT_PREVIEW_MODAL_STRINGS` in `PreviewModal`.
+   */
+  previewModal?: Partial<PreviewModalStrings>;
 }
 
 /**
@@ -295,8 +301,13 @@ function EditorVideoToolbar({
  *
  * The component composes:
  * - `VideoSourceInput` (shown first when the document has no video source)
- * - Video preview + the player's `Anchor` + `BlockingOverlay` for an
- *   authoring-time preview (no controller is run; the store is not mutated)
+ * - An authoring-time video surface (a `<video>` element) used by the
+ *   placement editor (Phase 3) and the timeline playhead (Phase 4)
+ * - `PreviewModal` for the gated "what students will see" surface
+ *   (replaces the prior always-on preview). The modal mounts
+ *   `InteractiveVideoPlayer` + a fresh `NativeVideoAdapter` over its
+ *   own `<video>`, so the student view and the authoring view are
+ *   decoupled.
  * - `Timeline` for CRUD over hooks
  * - `PlacementEditor` for the selected item's placement
  * - `ContentTypePicker` + `ContentTypeEditorSlot` for adding/editing hooks
@@ -306,10 +317,10 @@ function EditorVideoToolbar({
  *   `loadedmetadata` and pushed into the store so the serialized
  *   document is not stale.
  * - A "Replace video" button re-opens the source step in replace mode.
+ * - A "Preview" button opens the modal; opening the modal pauses the
+ *   authoring video so the two surfaces do not play in parallel.
  * - `adapterType` is a host-level prop (default `"native"`); it is not
  *   written into the serialized document.
- * - The editor uses the player's `Anchor` directly (not `OverlayLayer`),
- *   so authored items are never mutated by the preview.
  */
 export function InterlaceEditor({
   contentTypeRegistry,
@@ -444,6 +455,39 @@ export function InterlaceEditor({
       }),
     [state.items],
   );
+
+  /**
+   * The serialized document fed to the preview modal. Memoized on the
+   * specific state slices that affect its content so a parent
+   * re-render that does not change the document does not restart the
+   * player's controller.
+   */
+  const previewDocument = useMemo<SerializedInteractiveMediaDocument>(() => {
+    if (!state.videoSrc) {
+      return { video: { src: "" }, items: [] };
+    }
+    return {
+      video: {
+        src: state.videoSrc,
+        duration: state.videoDuration,
+      },
+      items: state.items.map((item) => ({
+        id: item.content.getId(),
+        title: item.content.getTitle(),
+        hook: item.hook,
+        content: {
+          contentTypeId: item.content.getContentTypeId(),
+          version: item.content.getContentTypeVersion(),
+          data: item.content.getData(),
+        },
+      })),
+    };
+    // The memo is intentionally keyed on the document's content
+    // slices only. `state.items` is a new array reference on every
+    // store update; the controller will restart when items change,
+    // which is the correct semantic (the document did change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.videoSrc, state.videoDuration, state.items]);
 
   const handleSelectEntry = useCallback(
     (id: string) => {
@@ -799,29 +843,11 @@ export function InterlaceEditor({
       <PreviewModal
         isOpen={previewOpen}
         videoSrc={state.videoSrc}
-        document={
-          state.videoSrc
-            ? {
-                video: {
-                  src: state.videoSrc,
-                  duration: state.videoDuration,
-                },
-                items: state.items.map((item) => ({
-                  id: item.content.getId(),
-                  title: item.content.getTitle(),
-                  hook: item.hook,
-                  content: {
-                    contentTypeId: item.content.getContentTypeId(),
-                    version: item.content.getContentTypeVersion(),
-                    data: item.content.getData(),
-                  },
-                })),
-              }
-            : { video: { src: "" }, items: [] }
-        }
+        document={previewDocument}
         contentTypeRegistry={contentTypeRegistry}
         onClose={handleClosePreview}
         onError={onError}
+        strings={strings.previewModal}
       />
 
       <section

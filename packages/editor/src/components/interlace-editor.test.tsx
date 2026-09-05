@@ -434,6 +434,57 @@ describe("InterlaceEditor", () => {
     });
   });
 
+  it("memoizes the preview document so parent re-renders do not restart the player controller", async () => {
+    // The PreviewModal is wired to the player's `useInteractiveMedia`
+    // hook, which restarts the controller when its `document` dep
+    // changes. The document is memoized in InterlaceEditor on the
+    // specific state slices that affect it; a parent re-render that
+    // does not change those slices must not produce a new document
+    // identity.
+    function Harness() {
+      const [, force] = useState(0);
+      return (
+        <>
+          <button onClick={() => force((n) => n + 1)} data-testid="force">
+            force
+          </button>
+          <InterlaceEditor
+            contentTypeRegistry={makeRegistry()}
+            document={makePopulatedDocument()}
+            onUpload={vi.fn(async () => "x")}
+            onSave={vi.fn()}
+          />
+        </>
+      );
+    }
+    render(<Harness />);
+
+    fireEvent.click(screen.getByTestId("interlace-editor-open-preview"));
+    await screen.findByTestId("preview-modal-backdrop");
+
+    // The modal's adapter is created after mount. Capture its parent
+    // (the wrapper div that the adapter replaces the container with)
+    // as a stable reference.
+    const playerContainer = await screen.findByTestId(
+      "preview-modal-player-container",
+    );
+    const adapterWrapperBefore = playerContainer.parentElement;
+
+    // Force a parent re-render that does NOT change the document
+    // content (no item added, no video replaced, no field edited).
+    fireEvent.click(screen.getByTestId("force"));
+
+    // The player container should still be present and its parent
+    // (the adapter's wrapper div) should be the same DOM node. If the
+    // adapter were destroyed and recreated, the wrapper would be a
+    // new node.
+    const playerContainerAfter = screen.getByTestId(
+      "preview-modal-player-container",
+    );
+    expect(playerContainerAfter).toBe(playerContainer);
+    expect(playerContainerAfter.parentElement).toBe(adapterWrapperBefore);
+  });
+
   it("applies string overrides to the surface headings and save button", () => {
     render(
       <InterlaceEditor

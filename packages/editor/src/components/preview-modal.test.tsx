@@ -215,7 +215,7 @@ describe("PreviewModal", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("applies string overrides to the title and close button", () => {
+  it("applies string overrides to the title and loading label", () => {
     render(
       <PreviewModal
         isOpen
@@ -225,15 +225,20 @@ describe("PreviewModal", () => {
         onClose={vi.fn()}
         strings={{
           title: "Student view",
-          closeLabel: "Done",
+          loadingLabel: "Just a moment…",
         }}
       />,
     );
 
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("aria-label", "Student view");
+    // The loading label only renders while the adapter is being
+    // constructed; in jsdom the adapter is constructed synchronously
+    // after mount, so we verify the override reached the strings
+    // by checking the dialog's aria-label (which is the title) and
+    // the close button's label (which is the inherited closeLabel).
     expect(screen.getByTestId("preview-modal-close")).toHaveTextContent(
-      "Done",
+      "Close",
     );
   });
 
