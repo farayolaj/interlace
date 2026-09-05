@@ -38,6 +38,54 @@ function makeRegistry(): ContentTypeRegistry {
   return registry;
 }
 
+/**
+ * Builds a tracked quiz content type whose editor renders a single text
+ * input bound to `data.question`. Used to assert the slot's
+ * render/update lifecycle from inside InterlaceEditor without depending
+ * on QuizEditor's DOM.
+ */
+function makeTrackedQuizType() {
+  const renderForm = (
+    container: HTMLElement,
+    data: unknown,
+    onChange: (next: unknown) => void,
+  ) => {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "quiz-question";
+    input.value = (data as { question: string }).question ?? "";
+    input.addEventListener("input", () => {
+      onChange({ ...(data as object), question: input.value });
+    });
+    container.appendChild(input);
+  };
+
+  const renderEditor = vi.fn(
+    (container: HTMLElement, data: unknown, onChange: (next: unknown) => void) => {
+      renderForm(container, data, onChange);
+    },
+  );
+  const updateEditor = vi.fn(
+    (container: HTMLElement, data: unknown, onChange: (next: unknown) => void) => {
+      container.innerHTML = "";
+      renderForm(container, data, onChange);
+    },
+  );
+  const unmount = vi.fn();
+
+  const contentType = {
+    getId: () => "quiz-editor",
+    getVersion: () => 1,
+    getMaximumScore: () => 100,
+    renderEditor,
+    updateEditor,
+    unmount,
+    renderPlayback: () => {},
+  };
+
+  return { contentType, renderEditor, updateEditor, unmount };
+}
+
 function makeDocument(
   overrides: Partial<SerializedInteractiveMediaDocument> = {},
 ): SerializedInteractiveMediaDocument {
@@ -709,5 +757,63 @@ describe("InterlaceEditor", () => {
     expect(screen.getByTestId("interlace-editor-edit-content")).toHaveTextContent(
       "Edit this",
     );
+  });
+
+  it("does not remount or re-update the slot editor on unrelated re-renders", async () => {
+    // This pins the composition-level wiring in InterlaceEditor: the
+    // slot's `data` prop must be memoized against the selected
+    // ContentInstance so an unrelated parent re-render does not cause
+    // ContentTypeEditorSlot to fall back to a remount. A future
+    // refactor that inlines `slotData` would regress this silently.
+    const { contentType, renderEditor, updateEditor } = makeTrackedQuizType();
+    const registry = new ContentTypeRegistry();
+    registry.register(contentType);
+    registry.register({
+      getId: () => "poll",
+      getVersion: () => 1,
+      getMaximumScore: () => undefined,
+      renderEditor: () => {},
+      renderPlayback: () => {},
+    });
+
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={registry}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    // Select the item via the timeline entry and open the slot.
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+    fireEvent.click(screen.getByTestId("interlace-editor-edit-content"));
+
+    await waitFor(() => expect(renderEditor).toHaveBeenCalledTimes(1));
+
+    // Find the question input rendered by the tracked content type.
+    const body = container.querySelector(".content-type-editor-body");
+    if (!body) throw new Error("expected slot body");
+    const input = body.querySelector(".quiz-question");
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("expected question input");
+    }
+
+    // Edit triggers onChange → slot's data prop changes → updateEditor
+    // is called (not renderEditor).
+    fireEvent.input(input, { target: { value: "Hello" } });
+
+    await waitFor(() => expect(updateEditor).toHaveBeenCalledTimes(1));
+    expect(renderEditor).toHaveBeenCalledTimes(1);
+
+    // Force an unrelated parent re-render by changing the content-type
+    // picker's selection. The memoized slot data must keep the editor
+    // mounted and un-updated.
+    fireEvent.click(screen.getByText("quiz-editor"));
+    fireEvent.click(await screen.findByText("poll"));
+
+    expect(renderEditor).toHaveBeenCalledTimes(1);
+    expect(updateEditor).toHaveBeenCalledTimes(1);
   });
 });

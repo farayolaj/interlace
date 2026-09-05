@@ -40,7 +40,7 @@ export interface EditorStrings extends CoreStrings {
   previewTitle: string;
   /** Label for the button that re-opens the video source step on an existing document. */
   replaceVideoLabel: string;
-  /** Label for the cancel button in replace mode (replaces the "save" path). */
+  /** Label for the button that aborts a replace and returns to the authoring surface. */
   replaceCancelLabel: string;
   /** Label for the button that triggers `onSave`. */
   saveLabel: string;
@@ -342,9 +342,9 @@ function EditorPreview({
  * - `PlacementEditor` for the selected item's placement
  * - `ContentTypePicker` + `ContentTypeEditorSlot` for adding/editing hooks
  *
- * Phase 2 risks addressed (per Oracle Gate 1):
- * - Duration is captured from the preview `<video>`'s `loadedmetadata`
- *   and pushed into the store via `setVideoMetadata` so the serialized
+ * Behavior:
+ * - Video duration is captured from the preview `<video>`'s
+ *   `loadedmetadata` and pushed into the store so the serialized
  *   document is not stale.
  * - A "Replace video" button re-opens the source step in replace mode.
  * - `adapterType` is a host-level prop (default `"native"`); it is not
