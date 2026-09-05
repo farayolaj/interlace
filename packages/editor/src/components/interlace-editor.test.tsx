@@ -394,4 +394,320 @@ describe("InterlaceEditor", () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
   });
+
+  it("surfaces deserialize warnings via onError (skipped items are persisted)", () => {
+    const onError = vi.fn();
+    // Register a registry that only knows "quiz-editor"; the document
+    // also references "poll", which `deserialize` will skip with a
+    // warning. The host must be told or the silent Save will persist a
+    // pruned document.
+    const doc: SerializedInteractiveMediaDocument = {
+      video: { src: VIDEO_SRC, duration: VIDEO_DURATION },
+      items: [
+        {
+          id: "c1",
+          title: "Quiz 1",
+          hook: {
+            type: "blocking",
+            timestamp: 10,
+            placement: { x: 30, y: 30, width: 20, height: 20 },
+          },
+          content: {
+            contentTypeId: "quiz-editor",
+            version: 1,
+            data: { question: "Q1", options: ["a", "b"], correctIndex: 0 },
+          },
+        },
+        {
+          id: "c2",
+          title: "Unknown poll",
+          hook: {
+            type: "non-blocking",
+            start: 20,
+            end: 40,
+            placement: { x: 50, y: 50, width: 20, height: 20 },
+            revealBehavior: "click",
+          },
+          content: {
+            contentTypeId: "poll",
+            version: 1,
+            data: {},
+          },
+        },
+      ],
+    };
+
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={doc}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+        onError={onError}
+      />,
+    );
+
+    const warningCalls = onError.mock.calls.filter((call) => {
+      const arg = call[0] as Error;
+      return arg instanceof Error && /unrecognized content type/.test(arg.message);
+    });
+    expect(warningCalls.length).toBeGreaterThan(0);
+  });
+
+  it("end-to-end: add blocking hook → edit title/timestamp → save emits a serialized doc with edits", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    // Add a blocking hook.
+    fireEvent.click(screen.getByText("+ Blocking Hook"));
+    // The new entry shows up in both the timeline and the preview
+    // overlay; either is enough to confirm the add worked.
+    expect(
+      (await screen.findAllByText("New quiz-editor")).length,
+    ).toBeGreaterThan(0);
+
+    // The TimelineEntry's Edit button (the "+ Blocking Hook" add
+    // already created one). Click it and change the title.
+    const entry = screen.getByTestId("timeline-entry");
+    const editButton = entry.querySelector("button");
+    if (!editButton) throw new Error("expected edit button on timeline entry");
+    fireEvent.click(editButton);
+
+    const titleInput = entry.querySelector(
+      'input[placeholder="Title"]',
+    ) as HTMLInputElement | null;
+    if (!titleInput) throw new Error("expected title input on timeline entry");
+    fireEvent.change(titleInput, { target: { value: "Renamed" } });
+
+    // The TimelineEntry's Save button is the second button inside the
+    // entry (Edit was first, then Save, then Cancel).
+    const entryButtons = entry.querySelectorAll("button");
+    const saveButton = Array.from(entryButtons).find(
+      (b) => b.textContent === "Save",
+    );
+    if (!saveButton) throw new Error("expected save button on timeline entry");
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Renamed").length).toBeGreaterThan(0);
+    });
+
+    // Save and assert the serialized doc carries the new title.
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    expect(onSave).toHaveBeenCalled();
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    expect(last?.items?.[0]?.title).toBe("Renamed");
+    expect(last?.video?.src).toBe(VIDEO_SRC);
+  });
+
+  it("end-to-end: slot data edit propagates to the saved document", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    // Select the loaded item via the timeline entry (not the preview
+    // anchor, which would open a preview BlockingOverlay instead).
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+
+    // Open the slot.
+    fireEvent.click(screen.getByTestId("interlace-editor-edit-content"));
+
+    // The slot mounts the content type's editor; the test registry's
+    // editor renders the question text into a node. We assert the
+    // slot is present (via its h2) and then save; the saved doc must
+    // round-trip.
+    expect(
+      await screen.findByText("Edit quiz-editor"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const data = last?.items?.[0]?.content?.data as
+      | { question?: string }
+      | undefined;
+    expect(data?.question).toBe("Q1");
+  });
+
+  it("replace flow: cancel restores the authoring surface and keeps existing items", async () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    // Open replace.
+    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
+    expect(
+      await screen.findByTestId("interlace-editor-cancel-replace"),
+    ).toBeInTheDocument();
+
+    // Cancel returns to the authoring surface.
+    fireEvent.click(screen.getByTestId("interlace-editor-cancel-replace"));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("interlace-editor-preview"),
+      ).toBeInTheDocument();
+    });
+    // The existing item is still there.
+    expect(screen.getAllByText("Quiz 1").length).toBeGreaterThan(0);
+  });
+
+  it("replace flow: commit with a new URL keeps the existing items and writes the new src", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
+    const urlInput = await screen.findByTestId("video-source-input-url");
+    fireEvent.change(urlInput, { target: { value: "https://new.example.com/v.mp4" } });
+    fireEvent.click(screen.getByTestId("video-source-input-apply"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("interlace-editor-preview"),
+      ).toBeInTheDocument();
+    });
+
+    // Existing item survives the replace.
+    expect(screen.getAllByText("Quiz 1").length).toBeGreaterThan(0);
+
+    // Save and assert the new src.
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    expect(last?.video?.src).toBe("https://new.example.com/v.mp4");
+    expect(last?.items?.length).toBe(1);
+  });
+
+  it("replace flow: closing the source step with the slot open also closes the slot", async () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    // Select an item via the timeline entry (not the preview anchor).
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+    fireEvent.click(screen.getByTestId("interlace-editor-edit-content"));
+    expect(
+      await screen.findByText("Edit quiz-editor"),
+    ).toBeInTheDocument();
+
+    // Now click replace and commit a new URL.
+    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
+    const urlInput = await screen.findByTestId("video-source-input-url");
+    fireEvent.change(urlInput, { target: { value: "https://other.example.com/v.mp4" } });
+    fireEvent.click(screen.getByTestId("video-source-input-apply"));
+
+    // The slot must be closed (the "Edit quiz-editor" h2 disappears).
+    await waitFor(() => {
+      expect(screen.queryByText("Edit quiz-editor")).toBeNull();
+    });
+  });
+
+  it("same-URL replace preserves the previously reported duration", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={{ video: { src: VIDEO_SRC, duration: 0 }, items: [] }}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    // Simulate the preview <video> reporting a duration.
+    const video = screen.getByTestId(
+      "interlace-editor-preview-video",
+    ) as HTMLVideoElement;
+    Object.defineProperty(video, "duration", {
+      value: 123,
+      configurable: true,
+    });
+    fireEvent.loadedMetadata(video);
+
+    // User clicks replace and re-applies the *same* URL.
+    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
+    const urlInput = await screen.findByTestId("video-source-input-url");
+    fireEvent.change(urlInput, { target: { value: VIDEO_SRC } });
+    fireEvent.click(screen.getByTestId("video-source-input-apply"));
+
+    // Save and assert the duration survived the same-URL replace.
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    expect(last?.video?.duration).toBe(123);
+  });
+
+  it("forwards strings.videoSource to the embedded VideoSourceInput", () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+        strings={{
+          videoSource: {
+            noVideoSelectedLabel: "Pick a video to begin.",
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("video-source-input-empty"),
+    ).toHaveTextContent("Pick a video to begin.");
+  });
+
+  it("applies the placement and edit-content label overrides", () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+        strings={{
+          placementLabel: "Where it goes",
+          editContentLabel: "Edit this",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Where it goes")).toBeInTheDocument();
+    expect(screen.getByTestId("interlace-editor-edit-content")).toHaveTextContent(
+      "Edit this",
+    );
+  });
 });

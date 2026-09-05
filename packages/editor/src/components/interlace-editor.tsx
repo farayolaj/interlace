@@ -24,6 +24,9 @@ import { ContentTypePicker } from "./content-type-picker";
 import { PlacementEditor } from "./placement-editor";
 import { Timeline } from "./timeline";
 import { VideoSourceInput } from "./video-source-input";
+import type {
+  VideoSourceInputStrings,
+} from "./video-source-input";
 
 /**
  * Editor-local strings layered on top of the core `Strings`. Hosts pass
@@ -37,22 +40,31 @@ export interface EditorStrings extends CoreStrings {
   previewTitle: string;
   /** Label for the button that re-opens the video source step on an existing document. */
   replaceVideoLabel: string;
+  /** Label for the cancel button in replace mode (replaces the "save" path). */
+  replaceCancelLabel: string;
   /** Label for the button that triggers `onSave`. */
   saveLabel: string;
   /** Shown when no item is selected for placement editing. */
   noItemSelectedLabel: string;
+  /** Heading for the placement editor section. */
+  placementLabel: string;
   /** Heading for the timeline area. */
   timelineHeading: string;
   /** Heading for the add-content area. */
   addContentHeading: string;
-  /** Shown in the preview BlockingOverlay's title row. */
-  previewOverlayTitle: string;
-  /** Label for the close button on the preview overlay. */
-  previewCloseLabel: string;
+  /** Label for the button that opens the content editor slot. */
+  editContentLabel: string;
   /** Shown when a host-supplied onError fires during a load failure. */
   loadErrorTitle: string;
   /** Shown when the video element has not yet reported a duration. */
   durationUnknownLabel: string;
+  /**
+   * String overrides forwarded to the embedded `VideoSourceInput`. The
+   * first screen of the drop-in component is otherwise unreachable to a
+   * host passing `strings`. Any field omitted falls back to
+   * `DEFAULT_VIDEO_SOURCE_INPUT_STRINGS` in `VideoSourceInput`.
+   */
+  videoSource?: Partial<VideoSourceInputStrings>;
 }
 
 export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
@@ -74,12 +86,13 @@ export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
   videoSourceInputTitle: "Add a video",
   previewTitle: "Preview",
   replaceVideoLabel: "Replace video",
+  replaceCancelLabel: "Cancel replace",
   saveLabel: "Save",
   noItemSelectedLabel: "Select an item to edit its placement.",
+  placementLabel: "Placement",
   timelineHeading: "Hooks",
   addContentHeading: "Add content",
-  previewOverlayTitle: "Preview",
-  previewCloseLabel: "Close",
+  editContentLabel: "Edit content",
   loadErrorTitle: "Could not load the document",
   durationUnknownLabel: "Duration unknown",
 };
@@ -367,7 +380,14 @@ export function InterlaceEditor({
   const registryRef = useRef(contentTypeRegistry);
   registryRef.current = contentTypeRegistry;
   const loadedInitialDocRef = useRef<SerializedInteractiveMediaDocument | null>(null);
-  const initialLoadPendingRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  /**
+   * Last reported duration for the *current* `videoSrc`. When the load
+   * effect overwrites a freshly observed duration with the document's
+   * stale value (cached video fires `loadedmetadata` before the load
+   * commits), a follow-up effect re-pushes this value.
+   */
+  const lastDurationForSrcRef = useRef<{ src: string; duration: number } | null>(null);
 
   // Load the initial document once per document identity. The effect is
   // keyed on the document only (not the registry) so a consumer that
@@ -380,7 +400,6 @@ export function InterlaceEditor({
     }
     if (loadedInitialDocRef.current === document) return;
     loadedInitialDocRef.current = document;
-    initialLoadPendingRef.current = true;
     const { validationErrors, warnings } = loadDocument(
       document,
       registryRef.current,
@@ -388,10 +407,29 @@ export function InterlaceEditor({
     if (validationErrors.length > 0) {
       onError?.(new Error(`${strings.loadErrorTitle}: ${validationErrors.join("; ")}`));
     }
-    if (warnings.length > 0) {
-      console.warn("[InterlaceEditor] deserialize warnings:", warnings);
+    // Warnings are *not* cosmetic: `deserialize` skips items that produce
+    // them (unrecognized content type, invalid hook, version mismatch
+    // without `migrate`). The store ends up pruned, and a later Save
+    // persists the pruned document. Surface them through `onError` so the
+    // host can decide what to do (re-register, migrate, refuse to save).
+    for (const warning of warnings) {
+      onError?.(new Error(warning));
     }
   }, [document, loadDocument, onError, strings.loadErrorTitle]);
+
+  // Repair: if the document load commits *after* the preview video
+  // already reported metadata, re-push the observed duration. Without
+  // this, a cached video that fires `loadedmetadata` before the load
+  // effect's setState commits would have its real duration overwritten
+  // by the document's stale value and `loadedmetadata` would never
+  // re-fire (the `<video>`'s `key` is unchanged, no remount).
+  useEffect(() => {
+    const last = lastDurationForSrcRef.current;
+    if (!last) return;
+    if (last.src !== state.videoSrc) return;
+    if (Math.abs(last.duration - state.videoDuration) < 0.001) return;
+    setVideoMetadata(last.src, last.duration);
+  }, [state.videoSrc, state.videoDuration, setVideoMetadata]);
 
   const hasVideo = Boolean(state.videoSrc);
   const showSourceStep = !hasVideo || replaceMode;
@@ -545,18 +583,42 @@ export function InterlaceEditor({
 
   const handleVideoSourceChange = useCallback(
     (next: { src: string; duration?: number }) => {
-      setVideoMetadata(next.src, next.duration ?? 0);
+      // Same-URL replace: the `<video>`'s `key` is unchanged so
+      // `loadedmetadata` will not re-fire. Preserve any duration the
+      // preview element already reported, otherwise the document is
+      // silently reset to duration 0.
+      const preserveDuration =
+        next.src === state.videoSrc ? state.videoDuration : 0;
+      const duration = next.duration ?? preserveDuration;
+      setVideoMetadata(next.src, duration);
       setReplaceMode(false);
+      setSlotOpen(false);
+      // Close any open preview so the user lands on a clean authoring
+      // surface after a replace.
+      setPreviewingContentId(null);
     },
-    [setVideoMetadata],
+    [setVideoMetadata, state.videoSrc, state.videoDuration],
   );
 
   const handleReplaceVideo = useCallback(() => {
     setReplaceMode(true);
   }, []);
 
+  const handleCancelReplace = useCallback(() => {
+    setReplaceMode(false);
+  }, []);
+
   const handlePreviewLoadedMetadata = useCallback(
     (duration: number) => {
+      // Track the last reported duration per src so the load-effect
+      // repair pass can re-push it after the document commits its
+      // potentially-stale value.
+      if (state.videoSrc) {
+        lastDurationForSrcRef.current = {
+          src: state.videoSrc,
+          duration,
+        };
+      }
       // Push the actual video duration into the store so the serialized
       // document is not stale.
       setVideoMetadata(state.videoSrc, duration);
@@ -605,12 +667,39 @@ export function InterlaceEditor({
         className="interlace-editor"
         style={{ ...rootStyle, padding: 16, borderRadius: 8, border: "1px solid" }}
       >
-        <h2 style={{ marginTop: 0 }}>{strings.videoSourceInputTitle}</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}
+        >
+          <h2 style={{ margin: 0 }}>{strings.videoSourceInputTitle}</h2>
+          {replaceMode ? (
+            <button
+              type="button"
+              onClick={handleCancelReplace}
+              data-testid="interlace-editor-cancel-replace"
+              style={{
+                padding: "4px 12px",
+                backgroundColor: "#fff",
+                border: "1px solid #ccc",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              {strings.replaceCancelLabel}
+            </button>
+          ) : null}
+        </div>
         <VideoSourceInput
           value={{ src: state.videoSrc || undefined, duration: state.videoDuration || undefined }}
           onChange={handleVideoSourceChange}
           onUpload={onUpload}
           onError={onError}
+          strings={strings.videoSource}
         />
       </div>
     );
@@ -671,7 +760,7 @@ export function InterlaceEditor({
           border: "1px solid",
         }}
       >
-        <h3 style={{ marginTop: 0 }}>Placement</h3>
+        <h3 style={{ marginTop: 0 }}>{strings.placementLabel}</h3>
         {selectedItem ? (
           <PlacementEditor
             placement={selectedItem.hook.placement}
@@ -757,7 +846,7 @@ export function InterlaceEditor({
             fontWeight: 600,
           }}
         >
-          Edit Content
+          {strings.editContentLabel}
         </button>
       </div>
 

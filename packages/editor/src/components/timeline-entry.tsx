@@ -48,6 +48,8 @@ export const TimelineEntry: React.FC<TimelineEntryProps> = ({
   return (
     <div
       onClick={onSelect}
+      data-testid="timeline-entry"
+      data-content-id={id}
       style={{
         padding: "12px",
         marginBottom: "8px",
