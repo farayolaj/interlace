@@ -1,3 +1,4 @@
+import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 /**
@@ -11,11 +12,13 @@ export interface VideoSourceValue {
 }
 
 /**
- * Localized strings consumed by `VideoSourceInput`. Hosts can override
- * individual fields via the `strings` prop; the rest fall back to the
- * defaults exported alongside the component.
+ * Localized strings consumed by `VideoSourceInput`. Extends the core
+ * `Strings` so a host passing a single translation table covers every
+ * editor surface. The fields below are the ones specific to the
+ * video-source step; everything else (cancel, close, content error, …)
+ * is inherited from `Strings`.
  */
-export interface VideoSourceInputStrings {
+export interface VideoSourceInputStrings extends Strings {
   /** Heading for the file upload row. */
   uploadLabel: string;
   /** Label for the trigger button that opens the native file picker. */
@@ -38,7 +41,13 @@ export interface VideoSourceInputStrings {
   currentSourceLabel: string;
 }
 
+/**
+ * Defaults are derived from core's `DEFAULT_STRINGS` so a host that
+ * overrides the core base gets matching inheritance automatically; the
+ * video-source-specific fields are filled in alongside.
+ */
 export const DEFAULT_VIDEO_SOURCE_INPUT_STRINGS: VideoSourceInputStrings = {
+  ...DEFAULT_STRINGS,
   uploadLabel: "Upload a video file",
   uploadButtonLabel: "Choose file",
   uploadingLabel: "Uploading…",

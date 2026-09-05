@@ -4,10 +4,11 @@ import {
   ContentState,
   ContentType,
   ContentTypeRegistry,
+  DEFAULT_STRINGS,
   Hook,
   Placement,
   SerializedInteractiveMediaDocument,
-  Strings as CoreStrings,
+  type Strings as CoreStrings,
 } from "@interlace/core";
 import { Anchor, BlockingOverlay } from "@interlace/player";
 import {
@@ -16,6 +17,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type RefObject,
 } from "react";
 import { useAuthoringStore } from "../hooks/use-authoring-store";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
@@ -67,22 +69,13 @@ export interface EditorStrings extends CoreStrings {
   videoSource?: Partial<VideoSourceInputStrings>;
 }
 
+/**
+ * Defaults are derived from core's `DEFAULT_STRINGS` so a host that
+ * overrides the core base gets matching inheritance automatically. The
+ * editor-specific fields are filled in alongside.
+ */
 export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
-  ...({
-    anchorOpenLabel: "Open",
-    anchorOpenedLabel: "Completed",
-    blockingOverlayLoadingLabel: "Loading…",
-    completedTagLabel: "Completed",
-    contentErrorLabel: "Content Error",
-    contentErrorDescription:
-      "An error occurred while rendering this content. Please try again or contact support.",
-    contentTypePickerLabel: "Select Content Type",
-    contentTypePickerPlaceholder: "Choose a content type…",
-    timelineLabel: "Timeline",
-    closeLabel: "Close",
-    submitLabel: "Submit",
-    cancelLabel: "Cancel",
-  } satisfies CoreStrings),
+  ...DEFAULT_STRINGS,
   videoSourceInputTitle: "Add a video",
   previewTitle: "Preview",
   replaceVideoLabel: "Replace video",
@@ -220,6 +213,7 @@ function pickDefaultContentTypeId(registry: ContentTypeRegistry): string {
  * never mutated by the preview.
  */
 function EditorPreview({
+  videoRef,
   videoSrc,
   videoDuration,
   items,
@@ -230,6 +224,7 @@ function EditorPreview({
   previewingContent,
   onClosePreview,
 }: {
+  videoRef: RefObject<HTMLVideoElement | null>;
   videoSrc: string;
   videoDuration: number | undefined;
   items: { content: ContentInstance }[];
@@ -252,6 +247,7 @@ function EditorPreview({
       }}
     >
       <video
+        ref={videoRef}
         key={videoSrc}
         src={videoSrc}
         controls
@@ -477,9 +473,33 @@ export function InterlaceEditor({
     [state.items],
   );
 
-  const handleSelectEntry = useCallback((id: string) => {
-    setSelectedItemId(id);
-  }, []);
+  const handleSelectEntry = useCallback(
+    (id: string) => {
+      setSelectedItemId(id);
+      // Seek the shared authoring video to the hook's anchor time and
+      // open the content editor slot. The seek is a no-op until the
+      // <video> has loaded metadata; the next `onLoadedMetadata` will
+      // honor it. The slot is opened on every selection — including a
+      // re-click after the user closed it — so the editor surface
+      // always reflects the selected item.
+      const item = state.items.find((it) => it.content.getId() === id);
+      if (!item) return;
+      const hook = item.content.getHook();
+      const target =
+        hook.type === "blocking" ? hook.timestamp : hook.start;
+      const video = videoRef.current;
+      if (video && Number.isFinite(target)) {
+        try {
+          video.currentTime = Math.max(0, target);
+        } catch {
+          // Some browsers throw if the video isn't ready yet; ignore —
+          // the user can still scrub via the timeline.
+        }
+      }
+      setSlotOpen(true);
+    },
+    [state.items],
+  );
 
   const handleAddEntry = useCallback(
     (hookType: "blocking" | "non-blocking") => {
@@ -738,6 +758,7 @@ export function InterlaceEditor({
       </header>
 
       <EditorPreview
+        videoRef={videoRef}
         videoSrc={state.videoSrc}
         videoDuration={state.videoDuration || undefined}
         items={state.items}
@@ -819,36 +840,6 @@ export function InterlaceEditor({
           onAddEntry={handleAddEntry}
         />
       </section>
-
-      <div
-        style={{
-          ...surfaceStyle,
-          marginTop: 16,
-          display: "flex",
-          justifyContent: "flex-end",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setSlotOpen(true)}
-          disabled={!selectedItem}
-          data-testid="interlace-editor-edit-content"
-          style={{
-            padding: "8px 16px",
-            backgroundColor: selectedItem
-              ? theme?.accentColor ?? "#0066cc"
-              : "#ccc",
-            color: "#fff",
-            border: "none",
-            borderRadius: 4,
-            cursor: selectedItem ? "pointer" : "not-allowed",
-            fontSize: 14,
-            fontWeight: 600,
-          }}
-        >
-          {strings.editContentLabel}
-        </button>
-      </div>
 
       <ContentTypeEditorSlot
         contentTypeId={slotContentTypeId}

@@ -6,7 +6,7 @@ import {
   type ContentType,
   type SerializedInteractiveMediaDocument,
 } from "@interlace/core";
-import { InterlaceEditor } from "./interlace-editor";
+import { InterlaceEditor, DEFAULT_EDITOR_STRINGS } from "./interlace-editor";
 
 afterEach(() => {
   cleanup();
@@ -568,13 +568,10 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // Select the loaded item via the timeline entry (not the preview
-    // anchor, which would open a preview BlockingOverlay instead).
+    // Select the loaded item via the timeline entry. The slot opens
+    // automatically (Phase 1 click-to-seek-and-open behavior).
     const entry = await screen.findByTestId("timeline-entry");
     fireEvent.click(entry);
-
-    // Open the slot.
-    fireEvent.click(screen.getByTestId("interlace-editor-edit-content"));
 
     // The slot mounts the content type's editor; the test registry's
     // editor renders the question text into a node. We assert the
@@ -665,10 +662,10 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // Select an item via the timeline entry (not the preview anchor).
+    // Select an item via the timeline entry. The slot opens
+    // automatically (Phase 1 click-to-seek-and-open behavior).
     const entry = await screen.findByTestId("timeline-entry");
     fireEvent.click(entry);
-    fireEvent.click(screen.getByTestId("interlace-editor-edit-content"));
     expect(
       await screen.findByText("Edit quiz-editor"),
     ).toBeInTheDocument();
@@ -739,7 +736,7 @@ describe("InterlaceEditor", () => {
     ).toHaveTextContent("Pick a video to begin.");
   });
 
-  it("applies the placement and edit-content label overrides", () => {
+  it("applies the placement label override", () => {
     render(
       <InterlaceEditor
         contentTypeRegistry={makeRegistry()}
@@ -748,15 +745,242 @@ describe("InterlaceEditor", () => {
         onSave={vi.fn()}
         strings={{
           placementLabel: "Where it goes",
-          editContentLabel: "Edit this",
         }}
       />,
     );
 
     expect(screen.getByText("Where it goes")).toBeInTheDocument();
-    expect(screen.getByTestId("interlace-editor-edit-content")).toHaveTextContent(
-      "Edit this",
+  });
+
+  it("clicking a timeline entry seeks the video to the hook's anchor time", async () => {
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
     );
+
+    // Wait for the preview <video> to mount.
+    const video = await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    });
+
+    // Simulate the video having loaded metadata (jsdom does not
+    // dispatch loadedmetadata automatically; the component reads
+    // `duration` lazily on its own effect).
+    Object.defineProperty(video, "duration", {
+      value: 60,
+      configurable: true,
+    });
+    fireEvent.loadedMetadata(video);
+
+    // Select the loaded item (timestamp 10s). The click handler should
+    // seek the video to 10s.
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+
+    expect(video.currentTime).toBe(10);
+  });
+
+  it("clicking a non-blocking timeline entry seeks the video to the start time", async () => {
+    const doc: SerializedInteractiveMediaDocument = {
+      video: { src: VIDEO_SRC, duration: VIDEO_DURATION },
+      items: [
+        {
+          id: "c1",
+          title: "Poll 1",
+          hook: {
+            type: "non-blocking",
+            start: 25,
+            end: 40,
+            placement: { x: 50, y: 50, width: 20, height: 20 },
+            revealBehavior: "click",
+          },
+          content: {
+            contentTypeId: "quiz-editor",
+            version: 1,
+            data: { question: "", options: ["", ""], correctIndex: 0 },
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={doc}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const video = await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    });
+    Object.defineProperty(video, "duration", {
+      value: 60,
+      configurable: true,
+    });
+    fireEvent.loadedMetadata(video);
+
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+
+    // Non-blocking: seeks to `start`, not to `end`.
+    expect(video.currentTime).toBe(25);
+  });
+
+  it("EditorStrings extends the core Strings base (compile-time assignment check)", () => {
+    // The line below fails to compile if EditorStrings stops
+    // extending Strings. The runtime assertions confirm every
+    // core field is present on the editor defaults.
+    const fromCore: import("@interlace/core").Strings = DEFAULT_EDITOR_STRINGS;
+    expect(fromCore.cancelLabel).toBe("Cancel");
+    expect(fromCore.closeLabel).toBe("Close");
+    expect(fromCore.submitLabel).toBe("Submit");
+  });
+
+  it("clicking a timeline entry opens the content editor slot", async () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+
+    // The slot's h2 ("Edit quiz-editor") is the visible marker that
+    // the slot is open.
+    expect(
+      await screen.findByText("Edit quiz-editor"),
+    ).toBeInTheDocument();
+  });
+
+  it("clicking a different timeline entry re-seeks and re-opens the slot", async () => {
+    const doc: SerializedInteractiveMediaDocument = {
+      video: { src: VIDEO_SRC, duration: VIDEO_DURATION },
+      items: [
+        {
+          id: "c1",
+          title: "First",
+          hook: {
+            type: "blocking",
+            timestamp: 10,
+            placement: { x: 50, y: 50, width: 20, height: 20 },
+          },
+          content: {
+            contentTypeId: "quiz-editor",
+            version: 1,
+            data: { question: "Q1", options: ["a", "b"], correctIndex: 0 },
+          },
+        },
+        {
+          id: "c2",
+          title: "Second",
+          hook: {
+            type: "blocking",
+            timestamp: 30,
+            placement: { x: 50, y: 50, width: 20, height: 20 },
+          },
+          content: {
+            contentTypeId: "quiz-editor",
+            version: 1,
+            data: { question: "Q2", options: ["c", "d"], correctIndex: 0 },
+          },
+        },
+      ],
+    };
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={doc}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const video = await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    });
+    Object.defineProperty(video, "duration", {
+      value: 60,
+      configurable: true,
+    });
+    fireEvent.loadedMetadata(video);
+
+    const entries = await screen.findAllByTestId("timeline-entry");
+    fireEvent.click(entries[0]!);
+    expect(video.currentTime).toBe(10);
+    expect(
+      await screen.findByText("Edit quiz-editor"),
+    ).toBeInTheDocument();
+
+    // The slot is closed (Cancel) and a different entry is clicked.
+    fireEvent.click(screen.getByText("Cancel"));
+    await waitFor(() => {
+      expect(screen.queryByText("Edit quiz-editor")).toBeNull();
+    });
+    fireEvent.click(entries[1]!);
+    expect(video.currentTime).toBe(30);
+    expect(
+      await screen.findByText("Edit quiz-editor"),
+    ).toBeInTheDocument();
+  });
+
+  it("seek handles a video that has not yet loaded metadata (no throw)", async () => {
+    // jsdom's HTMLVideoElement does not have a `currentTime` setter
+    // that throws, but a real browser does for a video with no
+    // metadata. We simulate by stubbing the setter to throw and
+    // asserting the click does not surface an unhandled error.
+    const setter = vi.fn(() => {
+      throw new Error("InvalidStateError");
+    });
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const video = await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    });
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      set: setter,
+      get: () => 0,
+    });
+
+    const entry = await screen.findByTestId("timeline-entry");
+    // The click should not throw; the slot still opens.
+    fireEvent.click(entry);
+    expect(
+      await screen.findByText("Edit quiz-editor"),
+    ).toBeInTheDocument();
+    expect(setter).toHaveBeenCalledWith(10);
   });
 
   it("does not remount or re-update the slot editor on unrelated re-renders", async () => {
@@ -785,10 +1009,10 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // Select the item via the timeline entry and open the slot.
+    // Select the item via the timeline entry. The slot opens
+    // automatically (Phase 1 click-to-seek-and-open behavior).
     const entry = await screen.findByTestId("timeline-entry");
     fireEvent.click(entry);
-    fireEvent.click(screen.getByTestId("interlace-editor-edit-content"));
 
     await waitFor(() => expect(renderEditor).toHaveBeenCalledTimes(1));
 

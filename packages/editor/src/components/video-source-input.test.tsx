@@ -1,6 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { VideoSourceInput } from "./video-source-input";
+import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
+import {
+  DEFAULT_VIDEO_SOURCE_INPUT_STRINGS,
+  VideoSourceInput,
+  type VideoSourceInputStrings,
+} from "./video-source-input";
 
 afterEach(() => {
   cleanup();
@@ -446,5 +451,42 @@ describe("VideoSourceInput", () => {
     resolveUpload?.("https://cdn.example.com/lecture.mp4");
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("VideoSourceInputStrings", () => {
+  it("extends the core Strings base (compile-time assignment check)", () => {
+    // The line below fails to compile if VideoSourceInputStrings
+    // stops extending Strings. It also serves as a runtime smoke
+    // test that every core field is present on the defaults.
+    const fromCore: Strings = DEFAULT_VIDEO_SOURCE_INPUT_STRINGS;
+    expect(fromCore.cancelLabel).toBe(DEFAULT_STRINGS.cancelLabel);
+    expect(fromCore.closeLabel).toBe(DEFAULT_STRINGS.closeLabel);
+    expect(fromCore.submitLabel).toBe(DEFAULT_STRINGS.submitLabel);
+  });
+
+  it("exposes the video-source-specific fields alongside the core base", () => {
+    expect(DEFAULT_VIDEO_SOURCE_INPUT_STRINGS.uploadLabel).toBe(
+      "Upload a video file",
+    );
+    expect(DEFAULT_VIDEO_SOURCE_INPUT_STRINGS.uploadButtonLabel).toBe(
+      "Choose file",
+    );
+    expect(DEFAULT_VIDEO_SOURCE_INPUT_STRINGS.applyUrlLabel).toBe("Use URL");
+  });
+
+  it("accepts a Partial<VideoSourceInputStrings> override that satisfies the base", () => {
+    // A host passing just the video-source-specific fields gets the
+    // core defaults for everything else. This is the contract.
+    const override: Partial<VideoSourceInputStrings> = {
+      uploadLabel: "Upload",
+    };
+    const merged: VideoSourceInputStrings = {
+      ...DEFAULT_VIDEO_SOURCE_INPUT_STRINGS,
+      ...override,
+    };
+    expect(merged.uploadLabel).toBe("Upload");
+    // Core fields are still present.
+    expect(merged.cancelLabel).toBe(DEFAULT_STRINGS.cancelLabel);
   });
 });
