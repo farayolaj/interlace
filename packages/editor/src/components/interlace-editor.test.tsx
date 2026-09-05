@@ -5,6 +5,7 @@ import {
   ContentTypeRegistry,
   type ContentType,
   type SerializedInteractiveMediaDocument,
+  type Strings as CoreStrings,
 } from "@interlace/core";
 import { InterlaceEditor, DEFAULT_EDITOR_STRINGS } from "./interlace-editor";
 
@@ -843,7 +844,7 @@ describe("InterlaceEditor", () => {
     // The line below fails to compile if EditorStrings stops
     // extending Strings. The runtime assertions confirm every
     // core field is present on the editor defaults.
-    const fromCore: import("@interlace/core").Strings = DEFAULT_EDITOR_STRINGS;
+    const fromCore: CoreStrings = DEFAULT_EDITOR_STRINGS;
     expect(fromCore.cancelLabel).toBe("Cancel");
     expect(fromCore.closeLabel).toBe("Close");
     expect(fromCore.submitLabel).toBe("Submit");
@@ -942,6 +943,69 @@ describe("InterlaceEditor", () => {
     expect(
       await screen.findByText("Edit quiz-editor"),
     ).toBeInTheDocument();
+  });
+
+  it("deferred seek is applied when the video later reports loadedmetadata", async () => {
+    // Simulate the real-browser behavior: the video's `currentTime`
+    // setter throws before metadata is loaded. The click should defer
+    // the seek into `pendingSeekRef`, and the next `loadedmetadata`
+    // event should consume it.
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const video = await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    });
+    // First: the setter throws (pre-metadata).
+    let setterCalls = 0;
+    let postMetadataSetterCalls = 0;
+    let metadataReady = false;
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => 0,
+      set: () => {
+        setterCalls += 1;
+        if (metadataReady) {
+          postMetadataSetterCalls += 1;
+        } else {
+          throw new Error("InvalidStateError");
+        }
+      },
+    });
+    // duration is not yet known.
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      get: () => Number.NaN,
+    });
+
+    const entry = await screen.findByTestId("timeline-entry");
+    fireEvent.click(entry);
+    // The throw path was hit exactly once and the seek was deferred.
+    expect(setterCalls).toBe(1);
+    expect(postMetadataSetterCalls).toBe(0);
+
+    // Now simulate `loadedmetadata` reporting a real duration. The
+    // pending seek should be applied.
+    metadataReady = true;
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      get: () => 60,
+    });
+    fireEvent.loadedMetadata(video);
+
+    await waitFor(() => {
+      expect(postMetadataSetterCalls).toBe(1);
+    });
   });
 
   it("seek handles a video that has not yet loaded metadata (no throw)", async () => {

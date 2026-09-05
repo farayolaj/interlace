@@ -54,7 +54,13 @@ export interface EditorStrings extends CoreStrings {
   timelineHeading: string;
   /** Heading for the add-content area. */
   addContentHeading: string;
-  /** Label for the button that opens the content editor slot. */
+  /**
+   * Label for the button that opens the content editor slot.
+   *
+   * @deprecated Unused since the slot opens on entry selection. Retained
+   * for backward compatibility with hosts passing `strings.editContentLabel`
+   * at the 1.0 API freeze. Will be removed in a future major.
+   */
   editContentLabel: string;
   /** Shown when a host-supplied onError fires during a load failure. */
   loadErrorTitle: string;
@@ -384,6 +390,15 @@ export function InterlaceEditor({
    * commits), a follow-up effect re-pushes this value.
    */
   const lastDurationForSrcRef = useRef<{ src: string; duration: number } | null>(null);
+  /**
+   * Pending seek target. Set when `handleSelectEntry`'s `video.currentTime`
+   * setter throws (the video has not loaded metadata yet) and consumed by
+   * `handlePreviewLoadedMetadata` once the video is ready. Without this,
+   * selecting a hook before the preview's `<video>` has metadata silently
+   * does nothing, and the user has to click again after `loadedmetadata`
+   * fires.
+   */
+  const pendingSeekRef = useRef<number | null>(null);
 
   // Load the initial document once per document identity. The effect is
   // keyed on the document only (not the registry) so a consumer that
@@ -477,24 +492,32 @@ export function InterlaceEditor({
     (id: string) => {
       setSelectedItemId(id);
       // Seek the shared authoring video to the hook's anchor time and
-      // open the content editor slot. The seek is a no-op until the
-      // <video> has loaded metadata; the next `onLoadedMetadata` will
-      // honor it. The slot is opened on every selection — including a
-      // re-click after the user closed it — so the editor surface
-      // always reflects the selected item.
+      // open the content editor slot. The slot is opened on every
+      // selection — including a re-click after the user closed it —
+      // so the editor surface always reflects the selected item.
       const item = state.items.find((it) => it.content.getId() === id);
       if (!item) return;
       const hook = item.content.getHook();
       const target =
         hook.type === "blocking" ? hook.timestamp : hook.start;
+      if (!Number.isFinite(target)) {
+        setSlotOpen(true);
+        return;
+      }
       const video = videoRef.current;
-      if (video && Number.isFinite(target)) {
+      if (video) {
         try {
           video.currentTime = Math.max(0, target);
         } catch {
-          // Some browsers throw if the video isn't ready yet; ignore —
-          // the user can still scrub via the timeline.
+          // The video has not loaded metadata yet. Defer the seek
+          // until `loadedmetadata` fires; the consuming handler is
+          // `handlePreviewLoadedMetadata` below.
+          pendingSeekRef.current = Math.max(0, target);
         }
+      } else {
+        // No live video element (e.g. source step shown). Defer until
+        // the <video> mounts; same consumer.
+        pendingSeekRef.current = Math.max(0, target);
       }
       setSlotOpen(true);
     },
@@ -519,7 +542,10 @@ export function InterlaceEditor({
       );
       addItem({ content: item, hook });
       setSelectedItemId(id);
-      setSlotOpen(false);
+      // Align with `handleSelectEntry`: selecting an item opens the
+      // content editor slot. The instructor typically adds a hook to
+      // immediately fill in its content, so the slot opens here too.
+      setSlotOpen(true);
     },
     [newItemType, contentTypeRegistry, addItem],
   );
@@ -642,6 +668,20 @@ export function InterlaceEditor({
       // Push the actual video duration into the store so the serialized
       // document is not stale.
       setVideoMetadata(state.videoSrc, duration);
+      // Consume any pending seek that was deferred because the
+      // <video> was not ready when `handleSelectEntry` fired. Now that
+      // metadata is loaded, the setter is safe to call.
+      const pending = pendingSeekRef.current;
+      if (pending != null && videoRef.current) {
+        try {
+          videoRef.current.currentTime = pending;
+        } catch {
+          // Defensive: if the setter still throws, leave the ref alone
+          // so the next metadata event (e.g. after a remount) can
+          // re-attempt.
+        }
+        pendingSeekRef.current = null;
+      }
     },
     [state.videoSrc, setVideoMetadata],
   );
