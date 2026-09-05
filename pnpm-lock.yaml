@@ -90,6 +90,9 @@ importers:
       '@interlace/core':
         specifier: workspace:*
         version: link:../core
+      '@interlace/player':
+        specifier: workspace:*
+        version: link:../player
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:^

@@ -39,6 +39,8 @@
   "devDependencies": {
     "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
+    "@storybook/react": "^8.6.18",
+    "@storybook/test": "^8.6.18",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.0",
@@ -50,6 +52,7 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@interlace/core": "workspace:*"
+    "@interlace/core": "workspace:*",
+    "@interlace/player": "workspace:*"
   }
 }
