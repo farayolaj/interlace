@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Placement } from "@interlace/core";
 import {
   PlacementEditor,
+  PlacementInputs,
   PLACEMENT_MIN_SIZE,
   clampPlacement,
 } from "./placement-editor";
@@ -310,64 +311,6 @@ describe("PlacementEditor", () => {
     expect(placement.width).toBe(PLACEMENT_MIN_SIZE);
   });
 
-  it("X input move-clamps so the rectangle stays inside the frame", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 30, height: 20 });
-    const input = inputEl(container, "x");
-    fireEvent.change(input, { target: { value: "99" } });
-
-    const placement = lastPlacement(onPlacementChange);
-    expect(placement.x).toBe(70); // 100 - 30
-    expect(placement.width).toBe(30);
-  });
-
-  it("Y input move-clamps so the rectangle stays inside the frame", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 30 });
-    const input = inputEl(container, "y");
-    fireEvent.change(input, { target: { value: "95" } });
-
-    const placement = lastPlacement(onPlacementChange);
-    expect(placement.y).toBe(70); // 100 - 30
-    expect(placement.height).toBe(30);
-  });
-
-  it("W input resize-clamps to the remaining frame width", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
-    const input = inputEl(container, "w");
-    fireEvent.change(input, { target: { value: "200" } });
-
-    const placement = lastPlacement(onPlacementChange);
-    expect(placement.x).toBe(50);
-    expect(placement.width).toBe(50); // 100 - 50
-  });
-
-  it("H input resize-clamps to the remaining frame height", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
-    const input = inputEl(container, "h");
-    fireEvent.change(input, { target: { value: "200" } });
-
-    const placement = lastPlacement(onPlacementChange);
-    expect(placement.y).toBe(50);
-    expect(placement.height).toBe(50); // 100 - 50
-  });
-
-  it("numerical input NaN (parseFloat || 0) falls back to the minimum size for W/H", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
-    const input = inputEl(container, "w");
-    fireEvent.change(input, { target: { value: "abc" } });
-
-    const placement = lastPlacement(onPlacementChange);
-    expect(placement.width).toBe(PLACEMENT_MIN_SIZE);
-  });
-
-  it("numerical input NaN falls back to 0 for X and clamps through the move policy", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
-    const input = inputEl(container, "x");
-    fireEvent.change(input, { target: { value: "abc" } });
-
-    const placement = lastPlacement(onPlacementChange);
-    expect(placement.x).toBe(0);
-  });
-
   it("arrow keys nudge by 1% and clamp through the move policy", () => {
     const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
     const rect = rectEl(container);
@@ -391,5 +334,117 @@ describe("PlacementEditor", () => {
     expect(lastPlacement(onPlacementChange).x).toBe(80); // 100 - 20
     fireEvent.keyDown(rect, { key: "ArrowDown" });
     expect(lastPlacement(onPlacementChange).y).toBe(80);
+  });
+});
+
+describe("PlacementInputs", () => {
+  function renderInputs(placement: Placement = DEFAULT_PLACEMENT) {
+    const onPlacementChange = vi.fn();
+    const utils = render(
+      <PlacementInputs placement={placement} onPlacementChange={onPlacementChange} />,
+    );
+    return { ...utils, onPlacementChange };
+  }
+
+  function lastInputsPlacement(
+    onPlacementChange: ReturnType<typeof vi.fn>,
+  ): Placement {
+    const calls = onPlacementChange.mock.calls;
+    const last = calls[calls.length - 1];
+    if (!last) throw new Error("expected onPlacementChange to have been called");
+    return last[0] as Placement;
+  }
+
+  function inputEl(
+    container: HTMLElement,
+    axis: "x" | "y" | "w" | "h",
+  ): HTMLInputElement {
+    const el = container.querySelector(
+      `[data-testid="placement-editor-input-${axis}"]`,
+    ) as HTMLInputElement | null;
+    if (!el) throw new Error(`expected ${axis} input`);
+    return el;
+  }
+
+  it("X input move-clamps so the rectangle stays inside the frame", () => {
+    const { container, onPlacementChange } = renderInputs({
+      x: 50,
+      y: 50,
+      width: 30,
+      height: 20,
+    });
+    fireEvent.change(inputEl(container, "x"), { target: { value: "99" } });
+
+    const placement = lastInputsPlacement(onPlacementChange);
+    expect(placement.x).toBe(70); // 100 - 30
+    expect(placement.width).toBe(30);
+  });
+
+  it("Y input move-clamps so the rectangle stays inside the frame", () => {
+    const { container, onPlacementChange } = renderInputs({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 30,
+    });
+    fireEvent.change(inputEl(container, "y"), { target: { value: "95" } });
+
+    const placement = lastInputsPlacement(onPlacementChange);
+    expect(placement.y).toBe(70); // 100 - 30
+    expect(placement.height).toBe(30);
+  });
+
+  it("W input resize-clamps to the remaining frame width", () => {
+    const { container, onPlacementChange } = renderInputs({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
+    fireEvent.change(inputEl(container, "w"), { target: { value: "200" } });
+
+    const placement = lastInputsPlacement(onPlacementChange);
+    expect(placement.x).toBe(50);
+    expect(placement.width).toBe(50); // 100 - 50
+  });
+
+  it("H input resize-clamps to the remaining frame height", () => {
+    const { container, onPlacementChange } = renderInputs({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
+    fireEvent.change(inputEl(container, "h"), { target: { value: "200" } });
+
+    const placement = lastInputsPlacement(onPlacementChange);
+    expect(placement.y).toBe(50);
+    expect(placement.height).toBe(50); // 100 - 50
+  });
+
+  it("numerical input NaN (parseFloat || 0) falls back to the minimum size for W/H", () => {
+    const { container, onPlacementChange } = renderInputs({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
+    fireEvent.change(inputEl(container, "w"), { target: { value: "abc" } });
+
+    const placement = lastInputsPlacement(onPlacementChange);
+    expect(placement.width).toBe(PLACEMENT_MIN_SIZE);
+  });
+
+  it("numerical input NaN falls back to 0 for X and clamps through the move policy", () => {
+    const { container, onPlacementChange } = renderInputs({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
+    fireEvent.change(inputEl(container, "x"), { target: { value: "abc" } });
+
+    const placement = lastInputsPlacement(onPlacementChange);
+    expect(placement.x).toBe(0);
   });
 });

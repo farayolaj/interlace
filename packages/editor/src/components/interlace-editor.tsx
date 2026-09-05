@@ -21,7 +21,7 @@ import { useAuthoringStore } from "../hooks/use-authoring-store";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
 import { ContentTypeEditorSlot } from "./content-type-editor-slot";
 import { ContentTypePicker } from "./content-type-picker";
-import { PlacementEditor } from "./placement-editor";
+import { PlacementEditor, PlacementInputs } from "./placement-editor";
 import { PreviewModal } from "./preview-modal";
 import type { PreviewModalStrings } from "./preview-modal";
 import { Timeline } from "./timeline";
@@ -875,6 +875,12 @@ export function InterlaceEditor({
           theme={theme}
           hint={selectedItem ? undefined : strings.noItemSelectedLabel}
         />
+        {selectedItem ? (
+          <PlacementInputs
+            placement={selectedItem.hook.placement}
+            onPlacementChange={handlePlacementChange}
+          />
+        ) : null}
       </section>
 
       <PreviewModal

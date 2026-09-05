@@ -1,5 +1,3 @@
-import type { MockInstance } from "vitest";
-
 /**
  * Stub `getBoundingClientRect` for a single element.
  *
@@ -32,5 +30,3 @@ export function stubRect(
       .getBoundingClientRect;
   };
 }
-
-export type { MockInstance };

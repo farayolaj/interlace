@@ -1,5 +1,5 @@
 import { Placement } from "@interlace/core";
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 
 /**
  * PlacementEditor - an overlay for positioning a hook's placement
@@ -219,6 +219,17 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
   const onPlacementChangeRef = useRef(onPlacementChange);
   onPlacementChangeRef.current = onPlacementChange;
 
+  // Ensure a drag in progress is cleaned up if the component unmounts
+  // mid-drag (e.g. the parent removes the selected item or the
+  // editor is torn down). Without this, the target and window
+  // listeners would leak and dragRef.current would stay set, blocking
+  // future drags on a remounted instance.
+  useEffect(() => {
+    return () => {
+      dragRef.current?.cleanup();
+    };
+  }, []);
+
   const beginDrag = useCallback(
     (e: React.PointerEvent<HTMLElement>, handle: HandleId | "move") => {
       // Reject non-primary buttons. jsdom has no PointerEvent
@@ -263,6 +274,12 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
         target.removeEventListener("pointermove", onMove);
         target.removeEventListener("pointerup", onUp);
         target.removeEventListener("pointercancel", onUp);
+        // Window-level fallbacks (added in beginDrag below) — they
+        // catch the release when the pointer is over an element that
+        // did not receive the captured events, or when capture itself
+        // is unsupported.
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
         try {
           target.releasePointerCapture?.(pointerId);
         } catch {
@@ -289,6 +306,12 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
       target.addEventListener("pointermove", onMove);
       target.addEventListener("pointerup", onUp);
       target.addEventListener("pointercancel", onUp);
+      // Window-level fallbacks: if pointer capture is unavailable
+      // and the pointer is released off-target, `pointerup` never
+      // reaches `target`, so the target listeners alone would leave
+      // the drag stuck. The window listeners guarantee cleanup runs.
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
       dragRef.current = { cleanup };
     },
     [],
@@ -320,17 +343,6 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
     },
     [],
   );
-
-  const commitInput = useCallback(
-    (partial: Partial<Placement>, intent: DragIntent) => {
-      onPlacementChangeRef.current(
-        clampPlacement({ ...placementRef.current, ...partial }, intent),
-      );
-    },
-    [],
-  );
-
-  const inputStyle: React.CSSProperties = { width: "60px", padding: "2px" };
 
   return (
     <div
@@ -389,70 +401,112 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
           />
         ))}
       </div>
+    </div>
+  );
+};
 
-      {/* Numerical input controls (bottom-left of the frame) */}
-      <div
-        data-testid="placement-editor-inputs"
-        style={{
-          position: "absolute",
-          bottom: "8px",
-          left: "8px",
-          backgroundColor: "#fff",
-          padding: "8px",
-          borderRadius: "4px",
-          fontSize: "12px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "4px",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-          pointerEvents: "auto",
-        }}
-      >
-        <label>
-          X:{" "}
-          <input
-            type="number"
-            data-testid="placement-editor-input-x"
-            value={placement.x.toFixed(1)}
-            onChange={(e) => commitInput({ x: parseFloat(e.target.value) || 0 }, "move")}
-            style={inputStyle}
-          />
-        </label>
-        <label>
-          Y:{" "}
-          <input
-            type="number"
-            data-testid="placement-editor-input-y"
-            value={placement.y.toFixed(1)}
-            onChange={(e) => commitInput({ y: parseFloat(e.target.value) || 0 }, "move")}
-            style={inputStyle}
-          />
-        </label>
-        <label>
-          W:{" "}
-          <input
-            type="number"
-            data-testid="placement-editor-input-w"
-            value={placement.width.toFixed(1)}
-            onChange={(e) =>
-              commitInput({ width: parseFloat(e.target.value) || 0 }, "resize")
-            }
-            style={inputStyle}
-          />
-        </label>
-        <label>
-          H:{" "}
-          <input
-            type="number"
-            data-testid="placement-editor-input-h"
-            value={placement.height.toFixed(1)}
-            onChange={(e) =>
-              commitInput({ height: parseFloat(e.target.value) || 0 }, "resize")
-            }
-            style={inputStyle}
-          />
-        </label>
-      </div>
+export interface PlacementInputsProps {
+  placement: Placement;
+  onPlacementChange: (placement: Placement) => void;
+}
+
+const PLACEMENT_INPUT_STYLE: React.CSSProperties = {
+  width: "60px",
+  padding: "2px",
+};
+
+/**
+ * PlacementInputs - numerical X/Y/W/H editor for a placement. Lives
+ * separately from `PlacementEditor` so the overlay frame does not have
+ * to host a control panel that would otherwise occlude the video's
+ * native controls. Hosts render this in their own toolbar (the
+ * editor's `InterlaceEditor` puts it in a row below the video toolbar;
+ * standalone hosts compose it however they like).
+ *
+ * X/Y edits use the "move" policy (position clamped so the rect stays
+ * inside the frame). W/H edits use the "resize" policy (size clamped,
+ * with the 1% minimum).
+ */
+export const PlacementInputs: React.FC<PlacementInputsProps> = ({
+  placement,
+  onPlacementChange,
+}) => {
+  // Latest props, read from the native event handlers (which would
+  // otherwise close over stale values).
+  const placementRef = useRef(placement);
+  placementRef.current = placement;
+  const onChangeRef = useRef(onPlacementChange);
+  onChangeRef.current = onPlacementChange;
+
+  const commit = useCallback(
+    (partial: Partial<Placement>, intent: DragIntent) => {
+      onChangeRef.current(
+        clampPlacement({ ...placementRef.current, ...partial }, intent),
+      );
+    },
+    [],
+  );
+
+  return (
+    <div
+      data-testid="placement-editor-inputs"
+      style={{
+        display: "flex",
+        gap: 8,
+        padding: "8px 0",
+        fontSize: 12,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
+      <label>
+        X:{" "}
+        <input
+          type="number"
+          data-testid="placement-editor-input-x"
+          value={placement.x.toFixed(1)}
+          onChange={(e) =>
+            commit({ x: parseFloat(e.target.value) || 0 }, "move")
+          }
+          style={PLACEMENT_INPUT_STYLE}
+        />
+      </label>
+      <label>
+        Y:{" "}
+        <input
+          type="number"
+          data-testid="placement-editor-input-y"
+          value={placement.y.toFixed(1)}
+          onChange={(e) =>
+            commit({ y: parseFloat(e.target.value) || 0 }, "move")
+          }
+          style={PLACEMENT_INPUT_STYLE}
+        />
+      </label>
+      <label>
+        W:{" "}
+        <input
+          type="number"
+          data-testid="placement-editor-input-w"
+          value={placement.width.toFixed(1)}
+          onChange={(e) =>
+            commit({ width: parseFloat(e.target.value) || 0 }, "resize")
+          }
+          style={PLACEMENT_INPUT_STYLE}
+        />
+      </label>
+      <label>
+        H:{" "}
+        <input
+          type="number"
+          data-testid="placement-editor-input-h"
+          value={placement.height.toFixed(1)}
+          onChange={(e) =>
+            commit({ height: parseFloat(e.target.value) || 0 }, "resize")
+          }
+          style={PLACEMENT_INPUT_STYLE}
+        />
+      </label>
     </div>
   );
 };

@@ -225,6 +225,50 @@ describe("InterlaceEditor", () => {
     ).toBeInTheDocument();
   });
 
+  it("composes the placement editor (selected): overlay inside the video frame, inputs below the toolbar", async () => {
+    // Pin Gate 3 Material #2: the positioning context for the placement
+    // overlay wraps exactly the video, and the toolbar sits below it.
+    // Without this, an in-flow toolbar inside the frame would offset
+    // every rectangle by the toolbar's height.
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+    fireEvent.click(await screen.findByTestId("timeline-entry"));
+
+    const frame = await screen.findByTestId("interlace-editor-video");
+    expect(
+      frame.querySelector('[data-testid="interlace-editor-preview-video"]'),
+    ).not.toBeNull();
+    expect(
+      frame.querySelector('[data-testid="placement-editor"]'),
+    ).not.toBeNull();
+    expect(screen.queryByTestId("placement-editor-inputs")).not.toBeNull();
+  });
+
+  it("composes the placement editor (no selection): overlay and inputs absent", () => {
+    // Companion to the test above: an empty document has no selected
+    // item, so the overlay and the inputs must both be absent.
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+    const frame = screen.getByTestId("interlace-editor-video");
+    expect(
+      frame.querySelector('[data-testid="interlace-editor-preview-video"]'),
+    ).not.toBeNull();
+    expect(frame.querySelector('[data-testid="placement-editor"]')).toBeNull();
+    expect(screen.queryByTestId("placement-editor-inputs")).toBeNull();
+  });
+
   it("renders the replace-video button and re-opens the source step on click", async () => {
     render(
       <InterlaceEditor
