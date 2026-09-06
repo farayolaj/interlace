@@ -528,7 +528,6 @@ export function InterlaceEditor({
     // slices only. `state.items` is a new array reference on every
     // store update; the controller will restart when items change,
     // which is the correct semantic (the document did change).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.videoSrc, state.videoDuration, state.items]);
 
   const handleSelectEntry = useCallback(
