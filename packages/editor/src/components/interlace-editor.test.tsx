@@ -238,7 +238,7 @@ describe("InterlaceEditor", () => {
         onSave={vi.fn()}
       />,
     );
-    fireEvent.click(await screen.findByTestId("timeline-entry"));
+    fireEvent.click(await screen.findByTestId("timeline-keyframe"));
 
     const frame = await screen.findByTestId("interlace-editor-video");
     expect(
@@ -653,7 +653,7 @@ describe("InterlaceEditor", () => {
     expect(warningCalls.length).toBeGreaterThan(0);
   });
 
-  it("end-to-end: add blocking hook → edit title/timestamp → save emits a serialized doc with edits", async () => {
+  it("end-to-end: add blocking hook at playhead → rename via inspector → save emits a serialized doc with edits", async () => {
     const onSave = vi.fn();
     render(
       <InterlaceEditor
@@ -664,41 +664,28 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // Add a blocking hook.
-    fireEvent.click(screen.getByText("+ Blocking Hook"));
-    // The new entry shows up in both the timeline and the preview
-    // overlay; either is enough to confirm the add worked.
+    // Add a blocking hook (lands at the current playhead — 0s here).
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    // The new entry shows up in the keyframe track; either visible
+    // surface is enough to confirm the add worked.
     expect(
       (await screen.findAllByText("New quiz-editor")).length,
     ).toBeGreaterThan(0);
 
-    // The TimelineEntry's Edit button (the "+ Blocking Hook" add
-    // already created one). Click it and change the title.
-    const entry = screen.getByTestId("timeline-entry");
-    const editButton = entry.querySelector("button");
-    if (!editButton) throw new Error("expected edit button on timeline entry");
-    fireEvent.click(editButton);
-
-    const titleInput = entry.querySelector(
-      'input[placeholder="Title"]',
-    ) as HTMLInputElement | null;
-    if (!titleInput) throw new Error("expected title input on timeline entry");
+    // The add auto-selects the new hook, so the InspectorPanel is
+    // visible. Rename through its title input — the update is live
+    // (no separate Save step).
+    const titleInput = screen.getByTestId(
+      "inspector-panel-title",
+    ) as HTMLInputElement;
     fireEvent.change(titleInput, { target: { value: "Renamed" } });
-
-    // The TimelineEntry's Save button is the second button inside the
-    // entry (Edit was first, then Save, then Cancel).
-    const entryButtons = entry.querySelectorAll("button");
-    const saveButton = Array.from(entryButtons).find(
-      (b) => b.textContent === "Save",
-    );
-    if (!saveButton) throw new Error("expected save button on timeline entry");
-    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(screen.getAllByText("Renamed").length).toBeGreaterThan(0);
     });
 
-    // Save and assert the serialized doc carries the new title.
+    // Save and assert the serialized doc carries the new title and the
+    // playhead timestamp.
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     expect(onSave).toHaveBeenCalled();
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
@@ -706,6 +693,7 @@ describe("InterlaceEditor", () => {
       | undefined;
     expect(last?.items?.[0]?.title).toBe("Renamed");
     expect(last?.video?.src).toBe(VIDEO_SRC);
+    expect((last?.items?.[0]?.hook as { timestamp?: number }).timestamp).toBe(0);
   });
 
   it("end-to-end: slot data edit propagates to the saved document", async () => {
@@ -721,7 +709,7 @@ describe("InterlaceEditor", () => {
 
     // Select the loaded item via the timeline entry. The slot opens
     // automatically (Phase 1 click-to-seek-and-open behavior).
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
     // The slot mounts the content type's editor; the test registry's
@@ -839,7 +827,7 @@ describe("InterlaceEditor", () => {
 
     // Select an item via the timeline entry. The slot opens
     // automatically (Phase 1 click-to-seek-and-open behavior).
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
     expect(
       await screen.findByText("Edit quiz-editor"),
@@ -961,7 +949,7 @@ describe("InterlaceEditor", () => {
 
     // Select the loaded item (timestamp 10s). The click handler should
     // seek the video to 10s.
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
     expect(video.currentTime).toBe(10);
@@ -1011,7 +999,7 @@ describe("InterlaceEditor", () => {
     });
     fireEvent.loadedMetadata(video);
 
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
     // Non-blocking: seeks to `start`, not to `end`.
@@ -1038,7 +1026,7 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
     // The slot's h2 ("Edit quiz-editor") is the visible marker that
@@ -1104,7 +1092,7 @@ describe("InterlaceEditor", () => {
     });
     fireEvent.loadedMetadata(video);
 
-    const entries = await screen.findAllByTestId("timeline-entry");
+    const entries = await screen.findAllByTestId("timeline-keyframe");
     fireEvent.click(entries[0]!);
     expect(video.currentTime).toBe(10);
     expect(
@@ -1166,7 +1154,7 @@ describe("InterlaceEditor", () => {
       get: () => Number.NaN,
     });
 
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
     // The throw path was hit exactly once and the seek was deferred.
     expect(setterCalls).toBe(1);
@@ -1216,7 +1204,7 @@ describe("InterlaceEditor", () => {
       get: () => 0,
     });
 
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     // The click should not throw; the slot still opens.
     fireEvent.click(entry);
     expect(
@@ -1253,7 +1241,7 @@ describe("InterlaceEditor", () => {
 
     // Select the item via the timeline entry. The slot opens
     // automatically (Phase 1 click-to-seek-and-open behavior).
-    const entry = await screen.findByTestId("timeline-entry");
+    const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
     await waitFor(() => expect(renderEditor).toHaveBeenCalledTimes(1));

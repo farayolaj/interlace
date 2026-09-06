@@ -7,6 +7,7 @@ import {
   PLACEMENT_MIN_SIZE,
   clampPlacement,
 } from "./placement-editor";
+import { firePointer, stubPointerCapture } from "../test-utils/pointer";
 import { stubRect } from "../test-utils/stub-rect";
 
 afterEach(() => {
@@ -69,44 +70,6 @@ function inputEl(container: HTMLElement, axis: "x" | "y" | "w" | "h"): HTMLInput
   ) as HTMLInputElement | null;
   if (!el) throw new Error(`expected ${axis} input`);
   return el;
-}
-
-/**
- * jsdom's PointerEvent does not inherit MouseEvent init, so
- * `fireEvent.pointerDown(el, { clientX })` produces events without
- * coordinates. Dispatch real MouseEvents typed as pointer events —
- * React's synthetic handlers and the component's native listeners
- * match by event type, and MouseEvent reliably carries clientX/Y.
- */
-function firePointer(
-  el: Element,
-  type: "pointerdown" | "pointermove" | "pointerup",
-  clientX: number,
-  clientY: number,
-) {
-  return fireEvent(
-    el,
-    new MouseEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      clientX,
-      clientY,
-      button: 0,
-    }),
-  );
-}
-
-/**
- * jsdom does not implement pointer capture; stub it so the component's
- * capture request (the mechanism that keeps drags alive outside the
- * frame) can also be asserted.
- */
-function stubPointerCapture(el: HTMLElement) {
-  const setPointerCapture = vi.fn();
-  const releasePointerCapture = vi.fn();
-  el.setPointerCapture = setPointerCapture;
-  el.releasePointerCapture = releasePointerCapture;
-  return { setPointerCapture, releasePointerCapture };
 }
 
 describe("clampPlacement", () => {

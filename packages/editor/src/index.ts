@@ -19,10 +19,25 @@ export { ContentTypePicker } from "./components/content-type-picker";
 export type { ContentTypePickerProps } from "./components/content-type-picker";
 export { PlacementEditor } from "./components/placement-editor";
 export type { PlacementEditorProps } from "./components/placement-editor";
-export { Timeline } from "./components/timeline";
-export type { TimelineProps } from "./components/timeline";
-export { TimelineEntry } from "./components/timeline-entry";
-export type { TimelineEntryProps } from "./components/timeline-entry";
+export { PlacementInputs } from "./components/placement-editor";
+export type { PlacementInputsProps } from "./components/placement-editor";
+export { clampPlacement, PLACEMENT_MIN_SIZE } from "./components/placement-editor";
+
+// Keyframe timeline + inspector
+export { KeyframeTimeline } from "./components/keyframe-timeline";
+export type {
+  KeyframeTimelineProps,
+  KeyframeTimelineEntry,
+  KeyframeTimelineStrings,
+} from "./components/keyframe-timeline";
+export { DEFAULT_KEYFRAME_TIMELINE_STRINGS } from "./components/keyframe-timeline";
+export { InspectorPanel } from "./components/inspector-panel";
+export type {
+  InspectorPanelProps,
+  InspectorPanelEntry,
+  InspectorPanelStrings,
+} from "./components/inspector-panel";
+export { DEFAULT_INSPECTOR_PANEL_STRINGS } from "./components/inspector-panel";
 
 // Built-in quiz content type (default for new content)
 export { QuizEditor } from "./content-types/quiz-editor";

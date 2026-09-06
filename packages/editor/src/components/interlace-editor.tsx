@@ -21,10 +21,11 @@ import { useAuthoringStore } from "../hooks/use-authoring-store";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
 import { ContentTypeEditorSlot } from "./content-type-editor-slot";
 import { ContentTypePicker } from "./content-type-picker";
+import { InspectorPanel } from "./inspector-panel";
+import { KeyframeTimeline } from "./keyframe-timeline";
 import { PlacementEditor, PlacementInputs } from "./placement-editor";
 import { PreviewModal } from "./preview-modal";
 import type { PreviewModalStrings } from "./preview-modal";
-import { Timeline } from "./timeline";
 import { VideoSourceInput } from "./video-source-input";
 import type {
   VideoSourceInputStrings,
@@ -171,14 +172,18 @@ function makeDefaultData(contentTypeId: string): unknown {
   return {};
 }
 
-function makeHook(hookType: "blocking" | "non-blocking"): Hook {
+function makeHook(hookType: "blocking" | "non-blocking", atTime: number): Hook {
   if (hookType === "blocking") {
-    return { type: "blocking", timestamp: 0, placement: DEFAULT_PLACEMENT };
+    return {
+      type: "blocking",
+      timestamp: atTime,
+      placement: DEFAULT_PLACEMENT,
+    };
   }
   return {
     type: "non-blocking",
-    start: 0,
-    end: 10,
+    start: atTime,
+    end: atTime + 10,
     placement: DEFAULT_PLACEMENT,
     revealBehavior: "click",
   };
@@ -367,6 +372,10 @@ export function InterlaceEditor({
     pickDefaultContentTypeId(contentTypeRegistry),
   );
   const [previewOpen, setPreviewOpen] = useState(false);
+  /** Authoring-video playhead position in seconds (drives the timeline). */
+  const [currentTime, setCurrentTime] = useState(0);
+  /** Whether the authoring video is currently playing (drives the timeline's play button). */
+  const [isPlaying, setIsPlaying] = useState(false);
   const nextIdRef = useRef(1);
   const registryRef = useRef(contentTypeRegistry);
   registryRef.current = contentTypeRegistry;
@@ -541,9 +550,12 @@ export function InterlaceEditor({
         // the <video> mounts; same consumer.
         pendingSeekRef.current = Math.max(0, target);
       }
+      // Keep the timeline playhead in sync immediately; the video's own
+      // `timeupdate` confirms once the seek lands.
+      setCurrentTime(Math.max(0, target));
       setSlotOpen(true);
     },
-    [state.items],
+    [state.items, setCurrentTime],
   );
 
   const handleAddEntry = useCallback(
@@ -554,7 +566,8 @@ export function InterlaceEditor({
         contentTypeRegistry.getAll()[0];
       if (!contentType) return;
       const id = `new-${nextIdRef.current++}`;
-      const hook = makeHook(hookType);
+      // The keyframe metaphor: new hooks land at the current playhead.
+      const hook = makeHook(hookType, currentTime);
       const item = buildContentInstance(
         id,
         `New ${contentType.getId()}`,
@@ -569,7 +582,7 @@ export function InterlaceEditor({
       // immediately fill in its content, so the slot opens here too.
       setSlotOpen(true);
     },
-    [newItemType, contentTypeRegistry, addItem],
+    [newItemType, contentTypeRegistry, addItem, currentTime],
   );
 
   const handleDeleteEntry = useCallback(
@@ -674,6 +687,60 @@ export function InterlaceEditor({
 
   const handleCancelReplace = useCallback(() => {
     setReplaceMode(false);
+  }, []);
+
+  /** Mirrors the authoring video's playhead into the timeline. */
+  const handleTimeUpdate = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement>) => {
+      setCurrentTime(e.currentTarget.currentTime);
+    },
+    [],
+  );
+
+  /**
+   * Timeline-initiated seek (playhead drag, ruler click, keyboard).
+   * Sets the video's time when it can, defers through the pending-seek
+   * mechanism when it cannot, and always keeps the playhead responsive
+   * immediately so the strip does not lag behind the pointer.
+   */
+  const handleTimelineSeek = useCallback((time: number) => {
+    const t = Math.max(0, time);
+    const video = videoRef.current;
+    if (video) {
+      try {
+        video.currentTime = t;
+      } catch {
+        // Video not ready; the pending-seek mechanism applies it once
+        // metadata loads.
+        pendingSeekRef.current = t;
+      }
+    } else {
+      pendingSeekRef.current = t;
+    }
+    setCurrentTime(t);
+  }, []);
+
+  /** Play/pause for the authoring video (drives the timeline button). */
+  const handleTogglePlay = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      try {
+        const p = video.play() as unknown as Promise<void> | undefined;
+        p?.catch?.(() => {
+          // Autoplay policy or engine restriction; the button state
+          // corrects on the next play/pause event.
+        });
+      } catch {
+        // jsdom and some engines throw synchronously.
+      }
+    } else {
+      try {
+        video.pause();
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   const handleOpenPreview = useCallback(() => {
@@ -852,6 +919,9 @@ export function InterlaceEditor({
             onLoadedMetadata={(e) =>
               handlePreviewLoadedMetadata(e.currentTarget.duration)
             }
+            onTimeUpdate={handleTimeUpdate}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
             data-testid="interlace-editor-preview-video"
             style={{
               width: "100%",
@@ -922,14 +992,38 @@ export function InterlaceEditor({
         }}
       >
         <h3 style={{ marginTop: 0 }}>{strings.timelineHeading}</h3>
-        <Timeline
+        <KeyframeTimeline
           entries={timelineEntries}
           selectedId={selectedItemId ?? undefined}
+          videoDuration={state.videoDuration || 0}
+          currentTime={currentTime}
+          isPlaying={isPlaying}
+          onSeek={handleTimelineSeek}
+          onTogglePlay={handleTogglePlay}
           onSelectEntry={handleSelectEntry}
           onUpdateEntry={handleUpdateEntry}
           onDeleteEntry={handleDeleteEntry}
           onAddEntry={handleAddEntry}
         />
+        {selectedItem ? (
+          <div style={{ marginTop: 12 }}>
+            <InspectorPanel
+              entry={{
+                id: selectedItem.content.getId(),
+                title: selectedItem.content.getTitle(),
+                hookType: selectedItem.hook.type,
+                timeLabel:
+                  selectedItem.hook.type === "blocking"
+                    ? `blocking at ${selectedItem.hook.timestamp}s`
+                    : `non-blocking ${selectedItem.hook.start}s – ${selectedItem.hook.end}s`,
+              }}
+              onTitleChange={(title) =>
+                handleUpdateEntry(selectedItem.content.getId(), { title })
+              }
+              onDelete={() => handleDeleteEntry(selectedItem.content.getId())}
+            />
+          </div>
+        ) : null}
       </section>
 
       <ContentTypeEditorSlot
