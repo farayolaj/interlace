@@ -172,18 +172,30 @@ function makeDefaultData(contentTypeId: string): unknown {
   return {};
 }
 
-function makeHook(hookType: "blocking" | "non-blocking", atTime: number): Hook {
+function makeHook(
+  hookType: "blocking" | "non-blocking",
+  atTime: number,
+  videoDuration: number,
+): Hook {
   if (hookType === "blocking") {
     return {
       type: "blocking",
-      timestamp: atTime,
+      timestamp: Math.max(0, atTime),
       placement: DEFAULT_PLACEMENT,
     };
   }
+  const start = Math.max(0, atTime);
+  // The default 10s range is clamped to the video duration, matching
+  // every other path that mutates hook times (drag, edges, keyboard).
+  // When the playhead sits within 1s of the end, the 1s minimum range
+  // wins over the duration bound — a 0-length range is worse than a
+  // sub-second overflow, and the timeline's own end-edge clamp floors
+  // at `start + 1` the same way.
+  const end = Math.min(start + 10, Math.max(videoDuration, start + 1));
   return {
     type: "non-blocking",
-    start: atTime,
-    end: atTime + 10,
+    start,
+    end,
     placement: DEFAULT_PLACEMENT,
     revealBehavior: "click",
   };
@@ -566,8 +578,9 @@ export function InterlaceEditor({
         contentTypeRegistry.getAll()[0];
       if (!contentType) return;
       const id = `new-${nextIdRef.current++}`;
-      // The keyframe metaphor: new hooks land at the current playhead.
-      const hook = makeHook(hookType, currentTime);
+      // The keyframe metaphor: new hooks land at the current playhead,
+      // clamped to the video's duration.
+      const hook = makeHook(hookType, currentTime, state.videoDuration);
       const item = buildContentInstance(
         id,
         `New ${contentType.getId()}`,

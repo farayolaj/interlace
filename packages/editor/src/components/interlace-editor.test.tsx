@@ -696,6 +696,48 @@ describe("InterlaceEditor", () => {
     expect((last?.items?.[0]?.hook as { timestamp?: number }).timestamp).toBe(0);
   });
 
+  it("add-at-playhead clamps the default non-blocking range to the video duration", async () => {
+    // Gate 4 Material #1: the default 10s range must not extend past
+    // the video end when the playhead sits within 10s of it.
+    const onSave = vi.fn();
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    // Move the playhead to 55s of 60s: stub the video's currentTime and
+    // fire timeupdate so handleTimeUpdate reads it.
+    const video = (await waitFor(() => {
+      const v = container.querySelector(
+        '[data-testid="interlace-editor-preview-video"]',
+      ) as HTMLVideoElement | null;
+      if (!v) throw new Error("expected preview video");
+      return v;
+    })) as HTMLVideoElement;
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => 55,
+      set: vi.fn(),
+    });
+    fireEvent.timeUpdate(video);
+
+    fireEvent.click(
+      screen.getByTestId("keyframe-timeline-add-non-blocking"),
+    );
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const hook = last?.items?.[1]?.hook as { start?: number; end?: number };
+    expect(hook.start).toBe(55);
+    expect(hook.end).toBe(60); // clamped to duration, not 55 + 10
+  });
+
   it("end-to-end: slot data edit propagates to the saved document", async () => {
     const onSave = vi.fn();
     render(

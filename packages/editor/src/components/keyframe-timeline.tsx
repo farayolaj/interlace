@@ -84,8 +84,6 @@ const MAX_ZOOM = 100;
 const DEFAULT_ZOOM = 8;
 const MIN_RANGE = 1; // seconds
 
-type HandleId = "playhead";
-
 interface DragState {
   cleanup: () => void;
 }
@@ -316,13 +314,15 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
         const step = e.shiftKey ? 5 : 1;
         let updates: { timestamp?: number; start?: number; end?: number } | null =
           null;
+        // Round the nudge base so keyboard nudges re-align to the
+        // seconds grid even after a Shift-bypass drag left a float.
         if (entry.hookType === "blocking") {
-          const base = entry.timestamp ?? 0;
+          const base = Math.round(entry.timestamp ?? 0);
           if (e.key === "ArrowLeft") updates = { timestamp: clampValue(base - step, 0, propsRef.current.videoDuration) };
           if (e.key === "ArrowRight") updates = { timestamp: clampValue(base + step, 0, propsRef.current.videoDuration) };
         } else {
-          const s = entry.start ?? 0;
-          const en = entry.end ?? 0;
+          const s = Math.round(entry.start ?? 0);
+          const en = Math.round(entry.end ?? 0);
           const dur = en - s;
           if (e.key === "ArrowLeft") {
             const next = clampValue(s - step, 0, propsRef.current.videoDuration - dur);
