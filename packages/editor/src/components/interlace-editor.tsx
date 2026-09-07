@@ -195,13 +195,17 @@ function makeHook(
       placement: DEFAULT_PLACEMENT,
     };
   }
-  const start = Math.max(0, atTime);
+  // Origin-first (unifying with `clampTimeUpdates`): the playhead is
+  // bounded inside the video so the created range never extends past
+  // its end — a playhead exactly at the duration previously produced
+  // `end = duration + 1`.
+  const start = Math.max(0, Math.min(atTime, videoDuration - 1));
   // The default 10s range is clamped to the video duration, matching
   // every other path that mutates hook times (drag, edges, keyboard).
-  // When the playhead sits within 1s of the end, the 1s minimum range
-  // wins over the duration bound — a 0-length range is worse than a
-  // sub-second overflow, and the timeline's own end-edge clamp floors
-  // at `start + 1` the same way.
+  // The 1s minimum range wins over the duration bound when the bounds
+  // conflict — a 0-length range is worse than a sub-second overflow,
+  // and the timeline's own end-edge clamp floors at `start + 1` the
+  // same way.
   const end = Math.min(start + 10, Math.max(videoDuration, start + 1));
   return {
     type: "non-blocking",
@@ -233,7 +237,7 @@ function buildContentInstance(
 function rebuildContentInstance(
   content: ContentInstance,
   contentType: ContentType,
-  overrides: { title?: string; data?: unknown },
+  overrides: { title?: string; data?: unknown; hook?: Hook },
 ): ContentInstance {
   const record: ContentRecord = {
     id: content.getId(),
@@ -241,7 +245,12 @@ function rebuildContentInstance(
     contentTypeId: content.getContentTypeId(),
     data: overrides.data !== undefined ? overrides.data : content.getData(),
     state: content.getState(),
-    hook: content.getHook(),
+    // The hook override is load-bearing: core's `serialize` reads the
+    // hook from the instance's record (`content.getHook()`), NOT from
+    // the store wrapper's parallel `hook` field. Every time/placement
+    // edit must be rebuilt into the record or `Save` persists the old
+    // hook.
+    hook: overrides.hook ?? content.getHook(),
   };
   return new ContentInstance(record, contentType);
 }
@@ -276,7 +285,12 @@ function clampTimeUpdates(
   }
   const start = updates.start ?? hook.start;
   const end = updates.end ?? hook.end;
-  const nextStart = Math.max(0, Math.min(start, end - 1));
+  // Origin-first ordering (mirroring `clampPlacement`): bound the start
+  // against the video first, then the end against both the start and
+  // the video. Without the duration bound on `start`, manual inputs
+  // could produce ranges entirely beyond the video (duration 60, start
+  // 100, end 110) — a state no timeline drag path can produce.
+  const nextStart = Math.max(0, Math.min(start, videoDuration - 1));
   const nextEnd = Math.max(nextStart + 1, Math.min(end, videoDuration));
   return { start: nextStart, end: nextEnd };
 }
@@ -458,9 +472,14 @@ export function InterlaceEditor({
   // in-progress edits.
   useEffect(() => {
     if (!document) {
-      loadedInitialDocRef.current = null;
-      // A fresh authoring session invalidates any pending hook.
-      setPendingHook(null);
+      // Clear the pending hook only on an actual transition out of a
+      // document. The effect re-runs on unrelated identity churn (e.g.
+      // a host-inlined `onError` callback), and must not destroy a
+      // draft on those runs.
+      if (loadedInitialDocRef.current !== null) {
+        loadedInitialDocRef.current = null;
+        setPendingHook(null);
+      }
       return;
     }
     if (loadedInitialDocRef.current === document) return;
@@ -727,6 +746,7 @@ export function InterlaceEditor({
       updateItem(id, {
         content: rebuildContentInstance(current.content, contentType, {
           title,
+          hook,
         }),
         hook,
       });
@@ -749,12 +769,19 @@ export function InterlaceEditor({
         (item) => item.content.getId() === selectedItemId,
       );
       if (!current) return;
+      const contentType = contentTypeRegistry.get(
+        current.content.getContentTypeId(),
+      );
+      if (!contentType) return;
+      const nextHook = { ...current.hook, placement: nextPlacement };
       updateItem(selectedItemId, {
-        content: current.content,
-        hook: { ...current.hook, placement: nextPlacement },
+        content: rebuildContentInstance(current.content, contentType, {
+          hook: nextHook,
+        }),
+        hook: nextHook,
       });
     },
-    [selectedItemId, pendingHook, state.items, updateItem],
+    [selectedItemId, pendingHook, state.items, contentTypeRegistry, updateItem],
   );
 
   /** Content editor onChange for a materialized (typed) hook. */
@@ -841,12 +868,14 @@ export function InterlaceEditor({
       const duration = next.duration ?? preserveDuration;
       setVideoMetadata(next.src, duration);
       setReplaceMode(false);
-      // Close any open preview so the user lands on a clean authoring
-      // surface after a replace. The pending hook (if any) survives —
-      // it is an un-materialized edit against the authoring session.
+      // A video replace changes the timeline the pending hook's anchor
+      // times reference — drop it, matching the document-load path
+      // (both start a new authoring session for hook times). Also
+      // close any open preview so the user lands on a clean surface.
+      setPendingHook(null);
       setPreviewOpen(false);
     },
-    [setVideoMetadata, state.videoSrc, state.videoDuration],
+    [setVideoMetadata, setPendingHook, state.videoSrc, state.videoDuration],
   );
 
   const handleReplaceVideo = useCallback(() => {

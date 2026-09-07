@@ -731,6 +731,213 @@ describe("InterlaceEditor", () => {
     expect(last?.items).toHaveLength(0);
   });
 
+  it("keeps a pending hook across parent re-renders with an unstable onError", async () => {
+    // Gate 5 Material #1: the load effect re-runs whenever the host's
+    // inline `onError` changes identity. Neither effect branch may
+    // destroy a pending draft on unrelated identity churn (the
+    // document branch early-returns on an identity match; the
+    // document-less branch clears only on an actual transition).
+    // The document identity itself must stay stable — a new document
+    // object per render is a documented reload, not churn.
+    const doc = makeDocument();
+    function Harness() {
+      const [, force] = useState(0);
+      return (
+        <>
+          <button onClick={() => force((n) => n + 1)} data-testid="force">
+            force
+          </button>
+          {/* Inline onError: a new identity on every Harness render. */}
+          <InterlaceEditor
+            contentTypeRegistry={makeRegistry()}
+            document={doc}
+            onUpload={vi.fn(async () => "x")}
+            onSave={vi.fn()}
+            onError={(e) => e}
+          />
+        </>
+      );
+    }
+    render(<Harness />);
+
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+
+    // Unrelated parent re-renders (new onError identity per render):
+    // the pending draft must survive.
+    fireEvent.click(screen.getByTestId("force"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(screen.getByTestId("force"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("deleting a pending hook removes it without touching the store", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+
+    // Delete the pending hook via Hook details.
+    fireEvent.click(screen.getByTestId("inspector-panel-delete"));
+    await waitFor(() => {
+      expect(screen.queryAllByText("New hook")).toHaveLength(0);
+    });
+
+    // The store is untouched.
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    expect(last?.items).toHaveLength(0);
+  });
+
+  it("carries pending hook placement edits into the materialized item", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+
+    // Move the pending hook's placement via the manual inputs before
+    // picking a content type.
+    const x = screen.getByTestId(
+      "placement-editor-input-x",
+    ) as HTMLInputElement;
+    fireEvent.change(x, { target: { value: "12" } });
+
+    // Materialize.
+    fireEvent.click(screen.getByText(/Select content type/i));
+    fireEvent.click(await screen.findByText("quiz-editor"));
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const placement = last?.items?.[0]?.hook?.placement as { x?: number };
+    expect(placement.x).toBe(12);
+  });
+
+  it("manual time inputs clamp beyond the video duration (blocking timestamp)", async () => {
+    // Gate 5 Material #2: manual inputs must not produce times outside
+    // the video.
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+    const timestamp = screen.getByTestId(
+      "inspector-panel-timestamp",
+    ) as HTMLInputElement;
+    fireEvent.change(timestamp, { target: { value: "100" } });
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    expect((last?.items?.[0]?.hook as { timestamp?: number }).timestamp).toBe(
+      60,
+    );
+  });
+
+  it("manual time inputs clamp beyond the video duration (non-blocking range)", async () => {
+    const onSave = vi.fn();
+    const nonBlockingDoc: SerializedInteractiveMediaDocument = {
+      video: { src: VIDEO_SRC, duration: VIDEO_DURATION },
+      items: [
+        {
+          id: "c1",
+          title: "Range",
+          hook: {
+            type: "non-blocking",
+            start: 30,
+            end: 45,
+            placement: { x: 50, y: 50, width: 20, height: 20 },
+            revealBehavior: "click",
+          },
+          content: {
+            contentTypeId: "quiz-editor",
+            version: 1,
+            data: { question: "Q", options: ["a", "b"], correctIndex: 0 },
+          },
+        },
+      ],
+    };
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={nonBlockingDoc}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+
+    // Start beyond the duration (end valid): the origin is bounded
+    // inside the video.
+    const start = screen.getByTestId(
+      "inspector-panel-start",
+    ) as HTMLInputElement;
+    fireEvent.change(start, { target: { value: "100" } });
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const first = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const firstHook = first?.items?.[0]?.hook as {
+      start?: number;
+      end?: number;
+    };
+    expect(firstHook.start).toBe(59);
+    expect(firstHook.end).toBe(60);
+
+    // Both ends beyond the duration: fully clamped inside.
+    const end = screen.getByTestId("inspector-panel-end") as HTMLInputElement;
+    fireEvent.change(end, { target: { value: "110" } });
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const second = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const secondHook = second?.items?.[0]?.hook as {
+      start?: number;
+      end?: number;
+    };
+    expect(secondHook.start).toBe(59);
+    expect(secondHook.end).toBe(60);
+  });
+
   it("add-at-playhead clamps the default non-blocking range to the video duration", async () => {
     // Gate 4 Material #1: the default 10s range must not extend past
     // the video end when the playhead sits within 10s of it.

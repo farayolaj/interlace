@@ -135,7 +135,7 @@ export const StringsOverride: Story = {
       previewTitle: "Authoring surface",
       saveLabel: "Publish document",
       timelineHeading: "My hooks",
-      addContentHeading: "New hook",
+      hookHeading: "Selected hook",
       replaceVideoLabel: "Swap video",
       noItemSelectedLabel: "Pick a hook below to edit its placement.",
     },
