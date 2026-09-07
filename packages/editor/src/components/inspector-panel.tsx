@@ -244,22 +244,18 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         </div>
       ) : null}
 
-      {/* Content type: picker for pending hooks, read-only for typed ones */}
+      {/* Content type: picker for pending hooks and for re-typing
+          typed hooks (re-typing resets the content data to the new
+          type's default shape). */}
       <div>
         <div style={{ color: "#556", marginBottom: 4 }}>
           {strings.contentTypeLabel}
         </div>
-        {entry.contentTypeId == null ? (
-          <ContentTypePicker
-            registeredTypes={entry.registeredTypes}
-            selectedType={null}
-            onSelect={onContentTypeSelect}
-          />
-        ) : (
-          <div data-testid="inspector-panel-content-type">
-            <strong>{entry.contentTypeId}</strong>
-          </div>
-        )}
+        <ContentTypePicker
+          registeredTypes={entry.registeredTypes}
+          selectedType={entry.contentTypeId ?? null}
+          onSelect={onContentTypeSelect}
+        />
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>

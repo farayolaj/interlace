@@ -1,5 +1,5 @@
 import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Localized strings consumed by `KeyframeTimeline`. Extends the core
@@ -76,6 +76,8 @@ export interface KeyframeTimelineProps {
   ) => void;
   onDeleteEntry: (id: string) => void;
   onAddEntry: (hookType: "blocking" | "non-blocking") => void;
+  /** Called when the user clicks the track background (not a keyframe, range, or the ruler). */
+  onDeselect?: () => void;
   strings?: Partial<KeyframeTimelineStrings>;
 }
 
@@ -112,6 +114,30 @@ function formatTick(seconds: number): string {
   return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
+const LANE_HEIGHT = 28; // px per lane row
+const KEYFRAME_WIDTH_PX = 14; // rendered diamond width
+const RANGE_MIN_WIDTH_PX = 12; // rendered minimum range width
+
+function anchorOf(entry: KeyframeTimelineEntry): number {
+  return entry.hookType === "blocking"
+    ? (entry.timestamp ?? 0)
+    : (entry.start ?? 0);
+}
+
+/**
+ * The time extent an entry occupies on the strip: ranges span their
+ * start→end; blocking keyframes occupy their rendered diamond width
+ * (expressed in seconds at the current zoom), so two keyframes stack
+ * exactly when their rendered shapes would overlap.
+ */
+function extentOf(entry: KeyframeTimelineEntry, zoom: number): number {
+  if (entry.hookType === "blocking") {
+    return KEYFRAME_WIDTH_PX / zoom;
+  }
+  const span = (entry.end ?? 0) - (entry.start ?? 0);
+  return Math.max(RANGE_MIN_WIDTH_PX / zoom, span);
+}
+
 /**
  * KeyframeTimeline - a horizontal, zoomable video-editor timeline.
  *
@@ -146,6 +172,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   onUpdateEntry,
   onDeleteEntry,
   onAddEntry,
+  onDeselect,
   strings: stringsOverride,
 }) => {
   const strings = { ...DEFAULT_KEYFRAME_TIMELINE_STRINGS, ...stringsOverride };
@@ -368,6 +395,32 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
     [onSeek],
   );
 
+  /**
+   * Greedy interval packing: entries sorted by anchor time, each
+   * placed in the first lane whose last occupant ends at or before
+   * its start. Overlapping entries stack into successive lanes; the
+   * track height grows to fit them. The playhead still spans the
+   * full track.
+   */
+  const layout = useMemo(() => {
+    const sorted = [...entries].sort((a, b) => anchorOf(a) - anchorOf(b));
+    const laneEnds: number[] = [];
+    const lanes = new Map<string, number>();
+    for (const entry of sorted) {
+      const start = anchorOf(entry);
+      const end = start + extentOf(entry, zoom);
+      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(end);
+      } else {
+        laneEnds[lane] = end;
+      }
+      lanes.set(entry.id, lane);
+    }
+    return { lanes, laneCount: Math.max(laneEnds.length, 1) };
+  }, [entries, zoom]);
+
   const interval = tickInterval(zoom);
   const ticks: number[] = [];
   for (let t = 0; t <= videoDuration; t += interval) {
@@ -543,7 +596,16 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
             role="listbox"
             aria-label={strings.trackLabel}
             data-testid="keyframe-timeline-track"
-            style={{ position: "relative", height: 48 }}
+            onPointerDown={(e) => {
+              // Clicking the empty track background (not a keyframe,
+              // range, or the ruler) deselects the selected hook.
+              if (e.target !== e.currentTarget) return;
+              onDeselect?.();
+            }}
+            style={{
+              position: "relative",
+              height: Math.max(48, layout.laneCount * LANE_HEIGHT + 6),
+            }}
           >
             {entries.length === 0 ? (
               <p
@@ -561,6 +623,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
               entries.map((entry) => {
                 const selected = entry.id === selectedId;
                 const accent = selected ? "#e65100" : "#0066cc";
+                // Lane assignment from the greedy interval packing:
+                // overlapping entries stack into successive rows.
+                const lane = layout.lanes.get(entry.id) ?? 0;
+                const laneTop = 3 + lane * LANE_HEIGHT;
                 if (entry.hookType === "blocking") {
                   const px = (entry.timestamp ?? 0) * zoom;
                   return (
@@ -575,7 +641,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       style={{
                         position: "absolute",
                         left: px - 7,
-                        top: 10,
+                        top: laneTop + 5,
                         width: 14,
                         height: 14,
                         transform: "rotate(45deg)",
@@ -616,8 +682,8 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       position: "absolute",
                       left: startPx,
                       width: widthPx,
-                      top: 13,
-                      height: 22,
+                      top: laneTop,
+                      height: LANE_HEIGHT - 4,
                       backgroundColor: selected
                         ? "rgba(230, 81, 0, 0.25)"
                         : "rgba(33, 150, 243, 0.25)",

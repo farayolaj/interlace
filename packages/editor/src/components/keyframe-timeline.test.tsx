@@ -354,4 +354,63 @@ describe("KeyframeTimeline", () => {
     ) as HTMLElement;
     expect(playhead.style.left).toBe("200px"); // 25 * 8
   });
+
+  it("overlapping keyframes stack into lanes", () => {
+    // Two blocking hooks at the same timestamp would render on top of
+    // each other; the lane packing assigns them successive rows and
+    // the track grows to fit.
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "First", hookType: "blocking", timestamp: 10 },
+      { id: "b2", title: "Second", hookType: "blocking", timestamp: 10 },
+    ];
+    const { container } = renderTimeline({ entries });
+    const diamonds = container.querySelectorAll(
+      '[data-testid="timeline-keyframe"]',
+    );
+    expect(diamonds.length).toBe(2);
+    const firstTop = (diamonds[0] as HTMLElement).style.top;
+    const secondTop = (diamonds[1] as HTMLElement).style.top;
+    // Lane 0: top = 3 + 0*28 + 5 = 8; lane 1: top = 3 + 1*28 + 5 = 36.
+    expect(firstTop).toBe("8px");
+    expect(secondTop).toBe("36px");
+    // The track grows with the lane count (2 lanes → 2*28 + 6 = 62).
+    const track = container.querySelector(
+      '[data-testid="keyframe-timeline-track"]',
+    ) as HTMLElement;
+    expect(track.style.height).toBe("62px");
+  });
+
+  it("non-overlapping keyframes share a lane", () => {
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "First", hookType: "blocking", timestamp: 10 },
+      { id: "b2", title: "Second", hookType: "blocking", timestamp: 30 },
+    ];
+    const { container } = renderTimeline({ entries });
+    const diamonds = container.querySelectorAll(
+      '[data-testid="timeline-keyframe"]',
+    );
+    const firstTop = (diamonds[0] as HTMLElement).style.top;
+    const secondTop = (diamonds[1] as HTMLElement).style.top;
+    // t=30 is after lane 0's occupied extent (10 + 14/8 = 11.75s), so
+    // both fit in lane 0.
+    expect(firstTop).toBe(secondTop);
+  });
+
+  it("clicking the track background calls onDeselect", () => {
+    const onDeselect = vi.fn();
+    const { container } = renderTimeline({ onDeselect });
+    const track = container.querySelector(
+      '[data-testid="keyframe-timeline-track"]',
+    ) as HTMLElement;
+
+    // A background click (target === the track) deselects.
+    fireEvent.pointerDown(track);
+    expect(onDeselect).toHaveBeenCalledTimes(1);
+
+    // A pointer-down on a keyframe does not deselect (its own drag
+    // handler wins, and the event targets the keyframe).
+    const kf = keyframeEl(container, "b1");
+    fireEvent.pointerDown(kf);
+    expect(onDeselect).toHaveBeenCalledTimes(1);
+  });
 });

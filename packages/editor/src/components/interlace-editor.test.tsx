@@ -1015,6 +1015,69 @@ describe("InterlaceEditor", () => {
     expect(data?.question).toBe("Q1");
   });
 
+  it("re-typing a hook resets its content data and preserves time/title", async () => {
+    // Phase 6: choosing a different content type rebuilds the hook
+    // with the new type's default data; time, placement, and title
+    // are preserved.
+    const registry = new ContentTypeRegistry();
+    registry.register(makeQuizContentType());
+    registry.register({
+      getId: () => "poll",
+      getVersion: () => 1,
+      getMaximumScore: () => undefined,
+      renderEditor: () => {},
+      renderPlayback: () => {},
+    });
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={registry}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+
+    // The picker shows the current type; choose "poll" to re-type.
+    fireEvent.click(screen.getByText("quiz-editor"));
+    fireEvent.click(screen.getByText("poll"));
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const item = last?.items?.[0];
+    expect(item?.content?.contentTypeId).toBe("poll");
+    expect(item?.content?.data).toEqual({});
+    expect(item?.title).toBe("Quiz 1");
+    expect((item?.hook as { timestamp?: number }).timestamp).toBe(10);
+  });
+
+  it("clicking the timeline track background deselects the selected hook", async () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+    expect(
+      await screen.findByTestId("interlace-editor-hook"),
+    ).toBeInTheDocument();
+
+    // A background click on the track (not on a keyframe) clears the
+    // selection; the Hook section disappears.
+    fireEvent.pointerDown(screen.getByTestId("keyframe-timeline-track"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("interlace-editor-hook")).toBeNull();
+    });
+  });
+
   it("replace flow: cancel restores the authoring surface and keeps existing items", async () => {
     render(
       <InterlaceEditor

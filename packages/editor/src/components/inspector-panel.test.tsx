@@ -18,7 +18,7 @@ const TYPED_BLOCKING: InspectorPanelEntry = {
   timestamp: 18,
   videoDuration: 60,
   contentTypeId: "quiz-editor",
-  registeredTypes: ["quiz-editor"],
+  registeredTypes: ["quiz-editor", "poll"],
 };
 
 const PENDING_NON_BLOCKING: InspectorPanelEntry = {
@@ -88,13 +88,16 @@ describe("InspectorPanel", () => {
     );
   });
 
-  it("shows the content type read-only for a typed hook", () => {
-    renderPanel(TYPED_BLOCKING);
-    expect(screen.getByTestId("inspector-panel-content-type")).toHaveTextContent(
-      "quiz-editor",
-    );
-    // No picker for typed hooks.
-    expect(screen.queryByTestId("content-type-picker-button")).toBeNull();
+  it("shows the picker with the selected type for a typed hook (re-typing)", () => {
+    const { onContentTypeSelect } = renderPanel(TYPED_BLOCKING);
+    // The picker button reflects the hook's current type.
+    expect(screen.getByText("quiz-editor")).toBeInTheDocument();
+
+    // Choosing a different type re-types the hook (data reset is the
+    // parent's concern; the panel just reports the selection).
+    fireEvent.click(screen.getByText("quiz-editor"));
+    fireEvent.click(screen.getByText("poll"));
+    expect(onContentTypeSelect).toHaveBeenCalledWith("poll");
   });
 
   it("shows the content type picker for a pending hook", () => {

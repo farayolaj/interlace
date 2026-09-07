@@ -671,6 +671,11 @@ export function InterlaceEditor({
     [state.items, pendingHook, setCurrentTime],
   );
 
+  /** Clicking the timeline track background deselects the hook. */
+  const handleDeselect = useCallback(() => {
+    setSelectedItemId(null);
+  }, []);
+
   const handleAddEntry = useCallback(
     (hookType: "blocking" | "non-blocking") => {
       const id = `pending-${nextIdRef.current++}`;
@@ -810,27 +815,47 @@ export function InterlaceEditor({
 
   /**
    * Materializes a pending hook into the store once its content type
-   * is chosen in Hook details. A clean store id is generated and
-   * selected so the inline content editor appears immediately.
+   * is chosen in Hook details (a clean store id is generated and
+   * selected so the inline content editor appears immediately), or
+   * re-types an existing hook: the authored data is reset to the new
+   * type's default shape (data shapes differ per type) while the
+   * hook's time, placement, and title are preserved. Selecting the
+   * current type is a no-op.
    */
   const handleContentTypeSelect = useCallback(
     (typeId: string) => {
-      if (!pendingHook || pendingHook.id !== selectedItemId) return;
+      if (!selectedItemId) return;
       const contentType = contentTypeRegistry.get(typeId);
       if (!contentType) return;
-      const id = `hook-${nextIdRef.current++}`;
-      const item = buildContentInstance(
-        id,
-        pendingHook.title,
+      if (pendingHook?.id === selectedItemId) {
+        const id = `hook-${nextIdRef.current++}`;
+        const item = buildContentInstance(
+          id,
+          pendingHook.title,
+          contentType,
+          pendingHook.hook,
+          makeDefaultData(contentType.getId()),
+        );
+        addItem({ content: item, hook: pendingHook.hook });
+        setPendingHook(null);
+        setSelectedItemId(id);
+        return;
+      }
+      const current = state.items.find(
+        (item) => item.content.getId() === selectedItemId,
+      );
+      if (!current) return;
+      if (current.content.getContentTypeId() === typeId) return;
+      const rebuilt = buildContentInstance(
+        current.content.getId(),
+        current.content.getTitle(),
         contentType,
-        pendingHook.hook,
+        current.hook,
         makeDefaultData(contentType.getId()),
       );
-      addItem({ content: item, hook: pendingHook.hook });
-      setPendingHook(null);
-      setSelectedItemId(id);
+      updateItem(selectedItemId, { content: rebuilt, hook: current.hook });
     },
-    [pendingHook, selectedItemId, contentTypeRegistry, addItem],
+    [pendingHook, selectedItemId, contentTypeRegistry, addItem, state.items, updateItem],
   );
 
   /** Manual time edits from Hook details (clamped, pending-aware). */
@@ -1177,6 +1202,7 @@ export function InterlaceEditor({
           onUpdateEntry={handleUpdateEntry}
           onDeleteEntry={handleDeleteEntry}
           onAddEntry={handleAddEntry}
+          onDeselect={handleDeselect}
         />
       </section>
 
