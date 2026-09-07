@@ -15,6 +15,8 @@ export { DEFAULT_VIDEO_SOURCE_INPUT_STRINGS } from "./components/video-source-in
 // Authoring surface building blocks
 export { ContentTypeEditorSlot } from "./components/content-type-editor-slot";
 export type { ContentTypeEditorSlotProps } from "./components/content-type-editor-slot";
+export { ContentTypeEditor } from "./components/content-type-editor";
+export type { ContentTypeEditorProps } from "./components/content-type-editor";
 export { ContentTypePicker } from "./components/content-type-picker";
 export type { ContentTypePickerProps } from "./components/content-type-picker";
 export { PlacementEditor } from "./components/placement-editor";

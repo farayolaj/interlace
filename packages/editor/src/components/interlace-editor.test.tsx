@@ -554,7 +554,7 @@ describe("InterlaceEditor", () => {
           previewTitle: "Authoring surface",
           saveLabel: "Publish",
           timelineHeading: "My hooks",
-          addContentHeading: "New hook",
+          hookHeading: "Selected hook",
           noItemSelectedLabel: "Pick something.",
         }}
       />,
@@ -568,7 +568,6 @@ describe("InterlaceEditor", () => {
       "Publish",
     );
     expect(screen.getByText("My hooks")).toBeInTheDocument();
-    expect(screen.getByText("New hook")).toBeInTheDocument();
     expect(screen.getByText("Pick something.")).toBeInTheDocument();
   });
 
@@ -653,7 +652,7 @@ describe("InterlaceEditor", () => {
     expect(warningCalls.length).toBeGreaterThan(0);
   });
 
-  it("end-to-end: add blocking hook at playhead → rename via inspector → save emits a serialized doc with edits", async () => {
+  it("end-to-end: add blocking hook at playhead → pick type → rename → save emits a serialized doc with edits", async () => {
     const onSave = vi.fn();
     render(
       <InterlaceEditor
@@ -665,16 +664,26 @@ describe("InterlaceEditor", () => {
     );
 
     // Add a blocking hook (lands at the current playhead — 0s here).
+    // It starts PENDING (no content type): the Hook section shows the
+    // details with the picker, and the content editor is hidden.
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
-    // The new entry shows up in the keyframe track; either visible
-    // surface is enough to confirm the add worked.
     expect(
-      (await screen.findAllByText("New quiz-editor")).length,
+      (await screen.findAllByText("New hook")).length,
     ).toBeGreaterThan(0);
+    expect(screen.getByTestId("interlace-editor-hook")).toBeInTheDocument();
+    expect(screen.queryByTestId("content-type-editor")).toBeNull();
 
-    // The add auto-selects the new hook, so the InspectorPanel is
-    // visible. Rename through its title input — the update is live
-    // (no separate Save step).
+    // Pick the content type in Hook details — this materializes the
+    // pending hook into the store.
+    fireEvent.click(screen.getByText(/Select content type/i));
+    fireEvent.click(await screen.findByText("quiz-editor"));
+
+    // The inline content editor appears once the hook has a type.
+    await waitFor(() => {
+      expect(screen.getByTestId("content-type-editor")).toBeInTheDocument();
+    });
+
+    // Rename through the inspector title input — the update is live.
     const titleInput = screen.getByTestId(
       "inspector-panel-title",
     ) as HTMLInputElement;
@@ -694,6 +703,32 @@ describe("InterlaceEditor", () => {
     expect(last?.items?.[0]?.title).toBe("Renamed");
     expect(last?.video?.src).toBe(VIDEO_SRC);
     expect((last?.items?.[0]?.hook as { timestamp?: number }).timestamp).toBe(0);
+  });
+
+  it("save does not serialize a pending hook (no content type chosen)", async () => {
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+
+    // Save without picking a content type: the pending hook is
+    // editor-local only and must not reach the host's document.
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    expect(onSave).toHaveBeenCalled();
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    expect(last?.items).toHaveLength(0);
   });
 
   it("add-at-playhead clamps the default non-blocking range to the video duration", async () => {
@@ -729,6 +764,11 @@ describe("InterlaceEditor", () => {
       screen.getByTestId("keyframe-timeline-add-non-blocking"),
     );
 
+    // Pending hooks are not serialized — pick the content type to
+    // materialize before saving.
+    fireEvent.click(screen.getByText(/Select content type/i));
+    fireEvent.click(await screen.findByText("quiz-editor"));
+
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
       | SerializedInteractiveMediaDocument
@@ -738,7 +778,7 @@ describe("InterlaceEditor", () => {
     expect(hook.end).toBe(60); // clamped to duration, not 55 + 10
   });
 
-  it("end-to-end: slot data edit propagates to the saved document", async () => {
+  it("end-to-end: content editor edits propagate to the saved document", async () => {
     const onSave = vi.fn();
     render(
       <InterlaceEditor
@@ -749,18 +789,14 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // Select the loaded item via the timeline entry. The slot opens
-    // automatically (Phase 1 click-to-seek-and-open behavior).
+    // Select the loaded item via the timeline keyframe. The Hook
+    // section shows the details and — the hook already has a content
+    // type — the inline content editor mounts it.
     const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
-    // The slot mounts the content type's editor; the test registry's
-    // editor renders the question text into a node. We assert the
-    // slot is present (via its h2) and then save; the saved doc must
-    // round-trip.
-    expect(
-      await screen.findByText("Edit quiz-editor"),
-    ).toBeInTheDocument();
+    const editor = await screen.findByTestId("content-type-editor");
+    expect(editor.textContent).toBe("Q1");
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
@@ -855,36 +891,6 @@ describe("InterlaceEditor", () => {
       | undefined;
     expect(last?.video?.src).toBe("https://new.example.com/v.mp4");
     expect(last?.items?.length).toBe(1);
-  });
-
-  it("replace flow: closing the source step with the slot open also closes the slot", async () => {
-    render(
-      <InterlaceEditor
-        contentTypeRegistry={makeRegistry()}
-        document={makePopulatedDocument()}
-        onUpload={vi.fn(async () => "x")}
-        onSave={vi.fn()}
-      />,
-    );
-
-    // Select an item via the timeline entry. The slot opens
-    // automatically (Phase 1 click-to-seek-and-open behavior).
-    const entry = await screen.findByTestId("timeline-keyframe");
-    fireEvent.click(entry);
-    expect(
-      await screen.findByText("Edit quiz-editor"),
-    ).toBeInTheDocument();
-
-    // Now click replace and commit a new URL.
-    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
-    const urlInput = await screen.findByTestId("video-source-input-url");
-    fireEvent.change(urlInput, { target: { value: "https://other.example.com/v.mp4" } });
-    fireEvent.click(screen.getByTestId("video-source-input-apply"));
-
-    // The slot must be closed (the "Edit quiz-editor" h2 disappears).
-    await waitFor(() => {
-      expect(screen.queryByText("Edit quiz-editor")).toBeNull();
-    });
   });
 
   it("same-URL replace preserves the previously reported duration", async () => {
@@ -1058,7 +1064,7 @@ describe("InterlaceEditor", () => {
     expect(fromCore.submitLabel).toBe("Submit");
   });
 
-  it("clicking a timeline entry opens the content editor slot", async () => {
+  it("clicking a timeline entry shows the Hook section with the content editor", async () => {
     render(
       <InterlaceEditor
         contentTypeRegistry={makeRegistry()}
@@ -1071,14 +1077,16 @@ describe("InterlaceEditor", () => {
     const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
-    // The slot's h2 ("Edit quiz-editor") is the visible marker that
-    // the slot is open.
+    // The Hook section appears with the hook's details, and — the
+    // hook already has a content type — the inline content editor
+    // mounts.
     expect(
-      await screen.findByText("Edit quiz-editor"),
+      await screen.findByTestId("interlace-editor-hook"),
     ).toBeInTheDocument();
+    expect(await screen.findByTestId("content-type-editor")).toBeInTheDocument();
   });
 
-  it("clicking a different timeline entry re-seeks and re-opens the slot", async () => {
+  it("clicking a different timeline entry re-seeks and updates the Hook section", async () => {
     const doc: SerializedInteractiveMediaDocument = {
       video: { src: VIDEO_SRC, duration: VIDEO_DURATION },
       items: [
@@ -1138,19 +1146,15 @@ describe("InterlaceEditor", () => {
     fireEvent.click(entries[0]!);
     expect(video.currentTime).toBe(10);
     expect(
-      await screen.findByText("Edit quiz-editor"),
+      await screen.findByTestId("interlace-editor-hook"),
     ).toBeInTheDocument();
 
-    // The slot is closed (Cancel) and a different entry is clicked.
-    fireEvent.click(screen.getByText("Cancel"));
-    await waitFor(() => {
-      expect(screen.queryByText("Edit quiz-editor")).toBeNull();
-    });
+    // A different entry is clicked: re-seek and the Hook section
+    // re-renders with that hook's content.
     fireEvent.click(entries[1]!);
     expect(video.currentTime).toBe(30);
-    expect(
-      await screen.findByText("Edit quiz-editor"),
-    ).toBeInTheDocument();
+    const editor = await screen.findByTestId("content-type-editor");
+    expect(editor.textContent).toBe("Q2");
   });
 
   it("deferred seek is applied when the video later reports loadedmetadata", async () => {
@@ -1247,20 +1251,21 @@ describe("InterlaceEditor", () => {
     });
 
     const entry = await screen.findByTestId("timeline-keyframe");
-    // The click should not throw; the slot still opens.
+    // The click should not throw; the Hook section still shows.
     fireEvent.click(entry);
     expect(
-      await screen.findByText("Edit quiz-editor"),
+      await screen.findByTestId("interlace-editor-hook"),
     ).toBeInTheDocument();
     expect(setter).toHaveBeenCalledWith(10);
   });
 
-  it("does not remount or re-update the slot editor on unrelated re-renders", async () => {
+  it("does not remount or re-update the content editor on unrelated re-renders", async () => {
     // This pins the composition-level wiring in InterlaceEditor: the
-    // slot's `data` prop must be memoized against the selected
-    // ContentInstance so an unrelated parent re-render does not cause
-    // ContentTypeEditorSlot to fall back to a remount. A future
-    // refactor that inlines `slotData` would regress this silently.
+    // inline content editor's `data` prop must be memoized against the
+    // selected ContentInstance so an unrelated parent re-render does
+    // not cause the editor to fall back to a remount. A future
+    // refactor that inlines `selectedData` would regress this
+    // silently.
     const { contentType, renderEditor, updateEditor } = makeTrackedQuizType();
     const registry = new ContentTypeRegistry();
     registry.register(contentType);
@@ -1272,42 +1277,61 @@ describe("InterlaceEditor", () => {
       renderPlayback: () => {},
     });
 
-    const { container } = render(
-      <InterlaceEditor
-        contentTypeRegistry={registry}
-        document={makePopulatedDocument()}
-        onUpload={vi.fn(async () => "x")}
-        onSave={vi.fn()}
-      />,
-    );
+    // The document identity must be stable across Harness renders — a
+    // new object per render would trigger the documented reload path
+    // (new ContentInstances → new editor data → updateEditor), which
+    // is correct behavior for a changed document, not an unrelated
+    // re-render.
+    const document = makePopulatedDocument();
 
-    // Select the item via the timeline entry. The slot opens
-    // automatically (Phase 1 click-to-seek-and-open behavior).
+    function Harness() {
+      const [, force] = useState(0);
+      return (
+        <>
+          <button onClick={() => force((n) => n + 1)} data-testid="force">
+            force
+          </button>
+          <InterlaceEditor
+            contentTypeRegistry={registry}
+            document={document}
+            onUpload={vi.fn(async () => "x")}
+            onSave={vi.fn()}
+          />
+        </>
+      );
+    }
+
+    const { container } = render(<Harness />);
+
+    // Select the item via the timeline keyframe. The Hook section
+    // shows the details and mounts the inline content editor.
     const entry = await screen.findByTestId("timeline-keyframe");
     fireEvent.click(entry);
 
     await waitFor(() => expect(renderEditor).toHaveBeenCalledTimes(1));
 
-    // Find the question input rendered by the tracked content type.
-    const body = container.querySelector(".content-type-editor-body");
-    if (!body) throw new Error("expected slot body");
-    const input = body.querySelector(".quiz-question");
+    // The tracked content type renders its input directly into the
+    // inline editor's container div.
+    const editorBody = container.querySelector(
+      '[data-testid="content-type-editor"]',
+    );
+    if (!editorBody) throw new Error("expected content editor body");
+    const input = editorBody.querySelector(".quiz-question");
     if (!(input instanceof HTMLInputElement)) {
       throw new Error("expected question input");
     }
 
-    // Edit triggers onChange → slot's data prop changes → updateEditor
-    // is called (not renderEditor).
+    // Edit triggers onChange → the editor's data prop changes →
+    // updateEditor is called (not renderEditor).
     fireEvent.input(input, { target: { value: "Hello" } });
 
     await waitFor(() => expect(updateEditor).toHaveBeenCalledTimes(1));
     expect(renderEditor).toHaveBeenCalledTimes(1);
 
-    // Force an unrelated parent re-render by changing the content-type
-    // picker's selection. The memoized slot data must keep the editor
-    // mounted and un-updated.
-    fireEvent.click(screen.getByText("quiz-editor"));
-    fireEvent.click(await screen.findByText("poll"));
+    // Force an unrelated parent re-render (registry identity stable,
+    // document unchanged). The memoized editor data must keep the
+    // editor mounted and un-updated.
+    fireEvent.click(screen.getByTestId("force"));
 
     expect(renderEditor).toHaveBeenCalledTimes(1);
     expect(updateEditor).toHaveBeenCalledTimes(1);

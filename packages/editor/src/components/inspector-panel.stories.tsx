@@ -2,26 +2,35 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { InspectorPanel, type InspectorPanelEntry } from "./inspector-panel";
 
-const BLOCKING: InspectorPanelEntry = {
-  id: "c1",
+const TYPED_BLOCKING: InspectorPanelEntry = {
+  id: "hook-1",
   title: "Mid-roll quiz",
   hookType: "blocking",
-  timeLabel: "blocking at 18s",
+  timestamp: 18,
+  videoDuration: 60,
+  contentTypeId: "quiz-editor",
+  registeredTypes: ["quiz-editor", "poll"],
 };
 
-const NON_BLOCKING: InspectorPanelEntry = {
-  id: "c2",
-  title: "Side poll",
+const PENDING_NON_BLOCKING: InspectorPanelEntry = {
+  id: "pending-1",
+  title: "New hook",
   hookType: "non-blocking",
-  timeLabel: "non-blocking 30s – 45s",
+  start: 30,
+  end: 45,
+  videoDuration: 60,
+  contentTypeId: null,
+  registeredTypes: ["quiz-editor", "poll"],
 };
 
 const meta: Meta<typeof InspectorPanel> = {
   title: "Editor/InspectorPanel",
   component: InspectorPanel,
   args: {
-    entry: BLOCKING,
+    entry: TYPED_BLOCKING,
     onTitleChange: fn(),
+    onTimeChange: fn(),
+    onContentTypeSelect: fn(),
     onDelete: fn(),
   },
 };
@@ -29,11 +38,20 @@ const meta: Meta<typeof InspectorPanel> = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Blocking: Story = {};
+/** A typed hook: read-only content type, no picker. */
+export const TypedBlocking: Story = {};
 
-export const NonBlocking: Story = {
+/** A pending hook: the content type picker is shown. */
+export const PendingNonBlocking: Story = {
   args: {
-    entry: NON_BLOCKING,
+    entry: PENDING_NON_BLOCKING,
+  },
+};
+
+export const WithPlacement: Story = {
+  args: {
+    placement: { x: 50, y: 50, width: 20, height: 20 },
+    onPlacementChange: fn(),
   },
 };
 
@@ -43,6 +61,8 @@ export const StringsOverride: Story = {
       inspectorHeading: "Hook",
       deleteLabel: "Remove",
       blockingTypeLabel: "Pauses video",
+      timestampLabel: "At (s)",
+      contentTypeLabel: "Content",
     },
   },
 };

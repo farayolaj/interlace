@@ -1,5 +1,11 @@
-import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
+import {
+  DEFAULT_STRINGS,
+  type Placement,
+  type Strings,
+} from "@interlace/core";
 import React, { useCallback, useRef } from "react";
+import { ContentTypePicker } from "./content-type-picker";
+import { PlacementInputs } from "./placement-editor";
 
 /**
  * Localized strings consumed by `InspectorPanel`. Extends the core
@@ -19,6 +25,16 @@ export interface InspectorPanelStrings extends Strings {
   blockingTypeLabel: string;
   /** Rendered value for a non-blocking hook's type row. */
   nonBlockingTypeLabel: string;
+  /** Label above the blocking hook's timestamp input. */
+  timestampLabel: string;
+  /** Label above a non-blocking hook's start input. */
+  startLabel: string;
+  /** Label above a non-blocking hook's end input. */
+  endLabel: string;
+  /** Label above the placement inputs. */
+  placementLabel: string;
+  /** Label above the content type row. */
+  contentTypeLabel: string;
 }
 
 export const DEFAULT_INSPECTOR_PANEL_STRINGS: InspectorPanelStrings = {
@@ -29,33 +45,77 @@ export const DEFAULT_INSPECTOR_PANEL_STRINGS: InspectorPanelStrings = {
   hookTypeLabel: "Type",
   blockingTypeLabel: "Blocking",
   nonBlockingTypeLabel: "Non-blocking",
+  timestampLabel: "Timestamp (s)",
+  startLabel: "Start (s)",
+  endLabel: "End (s)",
+  placementLabel: "Placement",
+  contentTypeLabel: "Content type",
 };
 
 export interface InspectorPanelEntry {
   id: string;
   title: string;
   hookType: "blocking" | "non-blocking";
-  /** Human-readable time description, e.g. "blocking at 12s". */
-  timeLabel: string;
+  /** Anchor time for a blocking hook (seconds). */
+  timestamp?: number;
+  /** Range start for a non-blocking hook (seconds). */
+  start?: number;
+  /** Range end for a non-blocking hook (seconds). */
+  end?: number;
+  /** Total video duration (bounds for the time inputs). */
+  videoDuration: number;
+  /**
+   * The hook's resolved content type id, or `null` while the hook is
+   * pending (newly created, content type not yet chosen).
+   */
+  contentTypeId: string | null;
+  /** Registered content type ids (drives the picker for pending hooks). */
+  registeredTypes: string[];
 }
 
 export interface InspectorPanelProps {
   entry: InspectorPanelEntry;
   onTitleChange: (title: string) => void;
+  onTimeChange: (updates: {
+    timestamp?: number;
+    start?: number;
+    end?: number;
+  }) => void;
+  /** Called when a pending hook's content type is chosen (materializes it). */
+  onContentTypeSelect: (contentTypeId: string) => void;
+  placement?: Placement;
+  onPlacementChange?: (placement: Placement) => void;
   onDelete: () => void;
   strings?: Partial<InspectorPanelStrings>;
 }
 
+const INPUT_STYLE: React.CSSProperties = {
+  width: "70px",
+  padding: "4px 6px",
+  border: "1px solid #ccc",
+  borderRadius: 4,
+  fontSize: 13,
+};
+
 /**
- * InspectorPanel - the structured editor for the currently selected
- * hook. Shows the title input, a read-only type row, the hook's anchor
- * time, and the delete action. Content editing lives in the
- * `ContentTypeEditorSlot` (opened on selection); the timeline position
- * is edited directly on the `KeyframeTimeline` strip.
+ * InspectorPanel - the "Hook details" panel for the currently selected
+ * hook. Shows the title input, the read-only hook type, editable
+ * time/timespan inputs, the manual placement inputs, the content type
+ * (a picker for pending hooks; read-only for hooks that already have
+ * one — switching an existing hook's type would discard its authored
+ * data), and the delete action.
+ *
+ * The content *editing* surface itself lives in the inline
+ * `ContentTypeEditor`, rendered by `InterlaceEditor` directly under
+ * this panel when the hook has a content type.
  */
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   entry,
   onTitleChange,
+  onTimeChange,
+  onContentTypeSelect,
+  placement,
+  onPlacementChange,
   onDelete,
   strings: stringsOverride,
 }) => {
@@ -69,9 +129,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // Delete via keyboard, mirroring the button affordance. The input
-      // itself handles its own keys; this only fires when the panel
-      // (not the input) has focus.
+      // Delete via keyboard, mirroring the button affordance. The
+      // inputs handle their own keys; this only fires when the panel
+      // (not an input) has focus.
       if (e.key === "Delete" || e.key === "Backspace") {
         if ((e.target as HTMLElement).tagName === "INPUT") return;
         e.preventDefault();
@@ -80,6 +140,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     },
     [],
   );
+
+  const isBlocking = entry.hookType === "blocking";
 
   return (
     <div
@@ -119,13 +181,87 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         <span>
           {strings.hookTypeLabel}:{" "}
           <strong data-testid="inspector-panel-type">
-            {entry.hookType === "blocking"
-              ? strings.blockingTypeLabel
-              : strings.nonBlockingTypeLabel}
+            {isBlocking ? strings.blockingTypeLabel : strings.nonBlockingTypeLabel}
           </strong>
         </span>
-        <span data-testid="inspector-panel-time">{entry.timeLabel}</span>
       </div>
+
+      {/* Time / timespan inputs (clamped by the parent's onTimeChange) */}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+        {isBlocking ? (
+          <label>
+            {strings.timestampLabel}
+            <input
+              type="number"
+              data-testid="inspector-panel-timestamp"
+              value={(entry.timestamp ?? 0).toFixed(1)}
+              onChange={(e) =>
+                onTimeChange({ timestamp: parseFloat(e.target.value) || 0 })
+              }
+              style={INPUT_STYLE}
+            />
+          </label>
+        ) : (
+          <>
+            <label>
+              {strings.startLabel}
+              <input
+                type="number"
+                data-testid="inspector-panel-start"
+                value={(entry.start ?? 0).toFixed(1)}
+                onChange={(e) =>
+                  onTimeChange({ start: parseFloat(e.target.value) || 0 })
+                }
+                style={INPUT_STYLE}
+              />
+            </label>
+            <label>
+              {strings.endLabel}
+              <input
+                type="number"
+                data-testid="inspector-panel-end"
+                value={(entry.end ?? 0).toFixed(1)}
+                onChange={(e) =>
+                  onTimeChange({ end: parseFloat(e.target.value) || 0 })
+                }
+                style={INPUT_STYLE}
+              />
+            </label>
+          </>
+        )}
+      </div>
+
+      {/* Manual placement inputs */}
+      {placement && onPlacementChange ? (
+        <div>
+          <div style={{ color: "#556", marginBottom: 4 }}>
+            {strings.placementLabel}
+          </div>
+          <PlacementInputs
+            placement={placement}
+            onPlacementChange={onPlacementChange}
+          />
+        </div>
+      ) : null}
+
+      {/* Content type: picker for pending hooks, read-only for typed ones */}
+      <div>
+        <div style={{ color: "#556", marginBottom: 4 }}>
+          {strings.contentTypeLabel}
+        </div>
+        {entry.contentTypeId == null ? (
+          <ContentTypePicker
+            registeredTypes={entry.registeredTypes}
+            selectedType={null}
+            onSelect={onContentTypeSelect}
+          />
+        ) : (
+          <div data-testid="inspector-panel-content-type">
+            <strong>{entry.contentTypeId}</strong>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           type="button"

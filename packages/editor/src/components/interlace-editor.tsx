@@ -19,11 +19,10 @@ import {
 } from "react";
 import { useAuthoringStore } from "../hooks/use-authoring-store";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
-import { ContentTypeEditorSlot } from "./content-type-editor-slot";
-import { ContentTypePicker } from "./content-type-picker";
+import { ContentTypeEditor } from "./content-type-editor";
 import { InspectorPanel } from "./inspector-panel";
 import { KeyframeTimeline } from "./keyframe-timeline";
-import { PlacementEditor, PlacementInputs } from "./placement-editor";
+import { PlacementEditor } from "./placement-editor";
 import { PreviewModal } from "./preview-modal";
 import type { PreviewModalStrings } from "./preview-modal";
 import { VideoSourceInput } from "./video-source-input";
@@ -62,8 +61,19 @@ export interface EditorStrings extends CoreStrings {
   placementLabel: string;
   /** Heading for the timeline area. */
   timelineHeading: string;
-  /** Heading for the add-content area. */
+  /**
+   * Heading for the add-content area.
+   *
+   * @deprecated Unused since the content type picker moved into the
+   * Hook details panel. Retained for backward compatibility with hosts
+   * passing `strings.addContentHeading`. Will be removed in a future
+   * major.
+   */
   addContentHeading: string;
+  /** Heading for the Hook section (shown when a hook is selected). */
+  hookHeading: string;
+  /** Heading for the inline content editor subsection of the Hook section. */
+  contentEditorHeading: string;
   /**
    * Label for the button that opens the content editor slot.
    *
@@ -107,6 +117,8 @@ export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
   placementLabel: "Placement",
   timelineHeading: "Hooks",
   addContentHeading: "Add content",
+  hookHeading: "Hook",
+  contentEditorHeading: "Content",
   editContentLabel: "Edit content",
   loadErrorTitle: "Could not load the document",
   durationUnknownLabel: "Duration unknown",
@@ -162,7 +174,6 @@ export interface InterlaceEditorProps {
   adapterType?: string;
 }
 
-const DEFAULT_CONTENT_TYPE_ID = "quiz-editor";
 const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
 
 function makeDefaultData(contentTypeId: string): unknown {
@@ -235,11 +246,39 @@ function rebuildContentInstance(
   return new ContentInstance(record, contentType);
 }
 
-function pickDefaultContentTypeId(registry: ContentTypeRegistry): string {
-  const ids = registry.getAll().map((ct) => ct.getId());
-  if (ids.includes(DEFAULT_CONTENT_TYPE_ID)) return DEFAULT_CONTENT_TYPE_ID;
-  if (ids.includes("quiz")) return "quiz";
-  return ids[0] ?? DEFAULT_CONTENT_TYPE_ID;
+/**
+ * A hook created at the playhead but not yet given a content type.
+ * Pending hooks live only in editor-local state (never in the store —
+ * `ContentInstance` requires a registered type), so `Save` does not
+ * serialize them. Choosing a content type in Hook details materializes
+ * the pending hook into the store.
+ */
+interface PendingHook {
+  id: string;
+  title: string;
+  hook: Hook;
+}
+
+/**
+ * Clamps manual time edits to the video bounds with the same policies
+ * as the timeline's drag paths: blocking timestamps stay inside
+ * `[0, duration]`; non-blocking ranges keep `start < end` with at
+ * least a 1s span and both ends inside the video.
+ */
+function clampTimeUpdates(
+  hook: Hook,
+  updates: { timestamp?: number; start?: number; end?: number },
+  videoDuration: number,
+): { timestamp?: number; start?: number; end?: number } {
+  if (hook.type === "blocking") {
+    const t = updates.timestamp ?? hook.timestamp;
+    return { timestamp: Math.max(0, Math.min(t, videoDuration)) };
+  }
+  const start = updates.start ?? hook.start;
+  const end = updates.end ?? hook.end;
+  const nextStart = Math.max(0, Math.min(start, end - 1));
+  const nextEnd = Math.max(nextStart + 1, Math.min(end, videoDuration));
+  return { start: nextStart, end: nextEnd };
 }
 
 /**
@@ -378,11 +417,14 @@ export function InterlaceEditor({
     );
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [slotOpen, setSlotOpen] = useState(false);
+  /**
+   * A hook created at the playhead that has no content type yet. Lives
+   * only in editor-local state — it appears in the timeline and Hook
+   * details, but `Save` does not serialize it. Choosing a content type
+   * in Hook details materializes it into the store.
+   */
+  const [pendingHook, setPendingHook] = useState<PendingHook | null>(null);
   const [replaceMode, setReplaceMode] = useState(false);
-  const [newItemType, setNewItemType] = useState<string>(() =>
-    pickDefaultContentTypeId(contentTypeRegistry),
-  );
   const [previewOpen, setPreviewOpen] = useState(false);
   /** Authoring-video playhead position in seconds (drives the timeline). */
   const [currentTime, setCurrentTime] = useState(0);
@@ -417,10 +459,15 @@ export function InterlaceEditor({
   useEffect(() => {
     if (!document) {
       loadedInitialDocRef.current = null;
+      // A fresh authoring session invalidates any pending hook.
+      setPendingHook(null);
       return;
     }
     if (loadedInitialDocRef.current === document) return;
     loadedInitialDocRef.current = document;
+    // Loading a different document starts a new authoring session; a
+    // pending hook from the old one is dropped.
+    setPendingHook(null);
     const { validationErrors, warnings } = loadDocument(
       document,
       registryRef.current,
@@ -455,17 +502,34 @@ export function InterlaceEditor({
   const hasVideo = Boolean(state.videoSrc);
   const showSourceStep = !hasVideo || replaceMode;
 
-  const selectedItem = useMemo(
+  const selectedStoreItem = useMemo(
     () =>
       state.items.find((item) => item.content.getId() === selectedItemId) ??
       null,
     [state.items, selectedItemId],
   );
-  const selectedContent = selectedItem?.content ?? null;
+  const isPendingSelected =
+    !selectedStoreItem &&
+    pendingHook != null &&
+    pendingHook.id === selectedItemId;
+  /** The selected hook's time data — store item or pending, unified. */
+  const selectedHook: Hook | null = isPendingSelected
+    ? (pendingHook?.hook ?? null)
+    : (selectedStoreItem?.hook ?? null);
+  const selectedTitle: string | null = isPendingSelected
+    ? (pendingHook?.title ?? null)
+    : (selectedStoreItem?.content.getTitle() ?? null);
+  /**
+   * `null` for a pending hook (content type not yet chosen) — the
+   * Hook details panel shows the picker in that case, and the inline
+   * content editor is hidden.
+   */
+  const selectedContentTypeId: string | null = isPendingSelected
+    ? null
+    : (selectedStoreItem?.content.getContentTypeId() ?? null);
+  const selectedContent = selectedStoreItem?.content ?? null;
 
-  const slotContentTypeId = selectedContent?.getContentTypeId() ?? null;
-
-  const slotData = useMemo(
+  const selectedData = useMemo(
     () => (selectedContent ? selectedContent.getData() : null),
     [selectedContent],
   );
@@ -475,28 +539,48 @@ export function InterlaceEditor({
     [contentTypeRegistry],
   );
 
-  const timelineEntries = useMemo(
-    () =>
-      state.items.map((item) => {
-        const hook = item.hook;
-        if (hook.type === "blocking") {
-          return {
-            id: item.content.getId(),
-            title: item.content.getTitle(),
-            hookType: "blocking" as const,
-            timestamp: hook.timestamp,
-          };
-        }
+  const timelineEntries = useMemo(() => {
+    const fromStore = state.items.map((item) => {
+      const hook = item.hook;
+      if (hook.type === "blocking") {
         return {
           id: item.content.getId(),
           title: item.content.getTitle(),
-          hookType: "non-blocking" as const,
-          start: hook.start,
-          end: hook.end,
+          hookType: "blocking" as const,
+          timestamp: hook.timestamp,
         };
-      }),
-    [state.items],
-  );
+      }
+      return {
+        id: item.content.getId(),
+        title: item.content.getTitle(),
+        hookType: "non-blocking" as const,
+        start: hook.start,
+        end: hook.end,
+      };
+    });
+    // The pending hook (created at the playhead, content type not yet
+    // chosen) is a first-class timeline entry — it just is not part of
+    // the store until it is materialized.
+    if (!pendingHook) return fromStore;
+    const hook = pendingHook.hook;
+    return [
+      ...fromStore,
+      hook.type === "blocking"
+        ? {
+            id: pendingHook.id,
+            title: pendingHook.title,
+            hookType: "blocking" as const,
+            timestamp: hook.timestamp,
+          }
+        : {
+            id: pendingHook.id,
+            title: pendingHook.title,
+            hookType: "non-blocking" as const,
+            start: hook.start,
+            end: hook.end,
+          },
+    ];
+  }, [state.items, pendingHook]);
 
   /**
    * The serialized document fed to the preview modal. Memoized on the
@@ -533,19 +617,19 @@ export function InterlaceEditor({
   const handleSelectEntry = useCallback(
     (id: string) => {
       setSelectedItemId(id);
-      // Seek the shared authoring video to the hook's anchor time and
-      // open the content editor slot. The slot is opened on every
-      // selection — including a re-click after the user closed it —
-      // so the editor surface always reflects the selected item.
+      // Seek the shared authoring video to the hook's anchor time so
+      // the preview and placement overlay show the frame the hook is
+      // attached to. Pending hooks (no content type yet) are seekable
+      // too — their times live in editor-local state.
       const item = state.items.find((it) => it.content.getId() === id);
-      if (!item) return;
-      const hook = item.content.getHook();
-      const target =
-        hook.type === "blocking" ? hook.timestamp : hook.start;
-      if (!Number.isFinite(target)) {
-        setSlotOpen(true);
-        return;
-      }
+      const hook = item
+        ? item.content.getHook()
+        : pendingHook?.id === id
+          ? pendingHook.hook
+          : null;
+      if (!hook) return;
+      const target = hook.type === "blocking" ? hook.timestamp : hook.start;
+      if (!Number.isFinite(target)) return;
       const video = videoRef.current;
       if (video) {
         try {
@@ -564,50 +648,64 @@ export function InterlaceEditor({
       // Keep the timeline playhead in sync immediately; the video's own
       // `timeupdate` confirms once the seek lands.
       setCurrentTime(Math.max(0, target));
-      setSlotOpen(true);
     },
-    [state.items, setCurrentTime],
+    [state.items, pendingHook, setCurrentTime],
   );
 
   const handleAddEntry = useCallback(
     (hookType: "blocking" | "non-blocking") => {
-      const contentType =
-        contentTypeRegistry.get(newItemType) ??
-        contentTypeRegistry.get(DEFAULT_CONTENT_TYPE_ID) ??
-        contentTypeRegistry.getAll()[0];
-      if (!contentType) return;
-      const id = `new-${nextIdRef.current++}`;
+      const id = `pending-${nextIdRef.current++}`;
       // The keyframe metaphor: new hooks land at the current playhead,
-      // clamped to the video's duration.
+      // clamped to the video's duration. They start WITHOUT a content
+      // type — Hook details picks one and materializes the hook into
+      // the store. Until then the hook is editor-local only and `Save`
+      // does not serialize it.
       const hook = makeHook(hookType, currentTime, state.videoDuration);
-      const item = buildContentInstance(
-        id,
-        `New ${contentType.getId()}`,
-        contentType,
-        hook,
-        makeDefaultData(contentType.getId()),
-      );
-      addItem({ content: item, hook });
+      setPendingHook({ id, title: "New hook", hook });
       setSelectedItemId(id);
-      // Align with `handleSelectEntry`: selecting an item opens the
-      // content editor slot. The instructor typically adds a hook to
-      // immediately fill in its content, so the slot opens here too.
-      setSlotOpen(true);
     },
-    [newItemType, contentTypeRegistry, addItem, currentTime],
+    [currentTime, state.videoDuration],
   );
 
   const handleDeleteEntry = useCallback(
     (id: string) => {
+      if (pendingHook?.id === id) {
+        setPendingHook(null);
+        setSelectedItemId((prev) => (prev === id ? null : prev));
+        return;
+      }
       removeItem(id);
       setSelectedItemId((prev) => (prev === id ? null : prev));
-      setSlotOpen(false);
     },
-    [removeItem],
+    [pendingHook, removeItem],
   );
 
   const handleUpdateEntry = useCallback(
     (id: string, updates: { title?: string; timestamp?: number; start?: number; end?: number }) => {
+      if (pendingHook?.id === id) {
+        // Pending hook: times and title live in editor-local state.
+        setPendingHook((prev) => {
+          if (!prev || prev.id !== id) return prev;
+          const hook = prev.hook;
+          const nextHook =
+            hook.type === "blocking"
+              ? { ...hook, timestamp: updates.timestamp ?? hook.timestamp }
+              : {
+                  ...hook,
+                  start: updates.start ?? hook.start,
+                  end: updates.end ?? hook.end,
+                };
+          return {
+            ...prev,
+            title:
+              typeof updates.title === "string"
+                ? updates.title
+                : prev.title,
+            hook: nextHook,
+          };
+        });
+        return;
+      }
       const current = state.items.find((item) => item.content.getId() === id);
       if (!current) return;
       const contentType = contentTypeRegistry.get(current.content.getContentTypeId());
@@ -633,12 +731,20 @@ export function InterlaceEditor({
         hook,
       });
     },
-    [state.items, contentTypeRegistry, updateItem],
+    [pendingHook, state.items, contentTypeRegistry, updateItem],
   );
 
   const handlePlacementChange = useCallback(
     (nextPlacement: Placement) => {
       if (!selectedItemId) return;
+      if (pendingHook?.id === selectedItemId) {
+        setPendingHook((prev) =>
+          prev && prev.id === selectedItemId
+            ? { ...prev, hook: { ...prev.hook, placement: nextPlacement } }
+            : prev,
+        );
+        return;
+      }
       const current = state.items.find(
         (item) => item.content.getId() === selectedItemId,
       );
@@ -648,10 +754,11 @@ export function InterlaceEditor({
         hook: { ...current.hook, placement: nextPlacement },
       });
     },
-    [selectedItemId, state.items, updateItem],
+    [selectedItemId, pendingHook, state.items, updateItem],
   );
 
-  const handleSlotChange = useCallback(
+  /** Content editor onChange for a materialized (typed) hook. */
+  const handleContentChange = useCallback(
     (newData: unknown) => {
       if (!selectedItemId) return;
       const current = state.items.find(
@@ -674,6 +781,55 @@ export function InterlaceEditor({
     [selectedItemId, state.items, contentTypeRegistry, updateItem],
   );
 
+  /**
+   * Materializes a pending hook into the store once its content type
+   * is chosen in Hook details. A clean store id is generated and
+   * selected so the inline content editor appears immediately.
+   */
+  const handleContentTypeSelect = useCallback(
+    (typeId: string) => {
+      if (!pendingHook || pendingHook.id !== selectedItemId) return;
+      const contentType = contentTypeRegistry.get(typeId);
+      if (!contentType) return;
+      const id = `hook-${nextIdRef.current++}`;
+      const item = buildContentInstance(
+        id,
+        pendingHook.title,
+        contentType,
+        pendingHook.hook,
+        makeDefaultData(contentType.getId()),
+      );
+      addItem({ content: item, hook: pendingHook.hook });
+      setPendingHook(null);
+      setSelectedItemId(id);
+    },
+    [pendingHook, selectedItemId, contentTypeRegistry, addItem],
+  );
+
+  /** Manual time edits from Hook details (clamped, pending-aware). */
+  const handleTimeChange = useCallback(
+    (updates: { timestamp?: number; start?: number; end?: number }) => {
+      if (!selectedItemId) return;
+      const isPending = pendingHook?.id === selectedItemId;
+      const hook = isPending
+        ? pendingHook?.hook
+        : state.items.find((it) => it.content.getId() === selectedItemId)
+            ?.hook;
+      if (!hook) return;
+      const clamped = clampTimeUpdates(hook, updates, state.videoDuration);
+      if (isPending) {
+        setPendingHook((prev) =>
+          prev && prev.id === selectedItemId
+            ? { ...prev, hook: { ...prev.hook, ...clamped } as Hook }
+            : prev,
+        );
+        return;
+      }
+      handleUpdateEntry(selectedItemId, clamped);
+    },
+    [selectedItemId, pendingHook, state.items, state.videoDuration, handleUpdateEntry],
+  );
+
   const handleVideoSourceChange = useCallback(
     (next: { src: string; duration?: number }) => {
       // Same-URL replace: the `<video>`'s `key` is unchanged so
@@ -685,9 +841,9 @@ export function InterlaceEditor({
       const duration = next.duration ?? preserveDuration;
       setVideoMetadata(next.src, duration);
       setReplaceMode(false);
-      setSlotOpen(false);
       // Close any open preview so the user lands on a clean authoring
-      // surface after a replace.
+      // surface after a replace. The pending hook (if any) survives —
+      // it is an un-materialized edit against the authoring session.
       setPreviewOpen(false);
     },
     [setVideoMetadata, state.videoSrc, state.videoDuration],
@@ -942,9 +1098,9 @@ export function InterlaceEditor({
               backgroundColor: "#000",
             }}
           />
-          {selectedItem ? (
+          {selectedHook ? (
             <PlacementEditor
-              placement={selectedItem.hook.placement}
+              placement={selectedHook.placement}
               onPlacementChange={handlePlacementChange}
             />
           ) : null}
@@ -955,14 +1111,8 @@ export function InterlaceEditor({
           onReplaceVideo={handleReplaceVideo}
           onOpenPreview={handleOpenPreview}
           theme={theme}
-          hint={selectedItem ? undefined : strings.noItemSelectedLabel}
+          hint={selectedHook ? undefined : strings.noItemSelectedLabel}
         />
-        {selectedItem ? (
-          <PlacementInputs
-            placement={selectedItem.hook.placement}
-            onPlacementChange={handlePlacementChange}
-          />
-        ) : null}
       </section>
 
       <PreviewModal
@@ -974,24 +1124,6 @@ export function InterlaceEditor({
         onError={onError}
         strings={strings.previewModal}
       />
-
-      <section
-        className="interlace-editor-add-content"
-        style={{
-          ...surfaceStyle,
-          marginTop: 16,
-          padding: 16,
-          borderRadius: 8,
-          border: "1px solid",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>{strings.addContentHeading}</h3>
-        <ContentTypePicker
-          registeredTypes={registeredTypeIds}
-          selectedType={newItemType}
-          onSelect={setNewItemType}
-        />
-      </section>
 
       <section
         className="interlace-editor-timeline"
@@ -1017,36 +1149,75 @@ export function InterlaceEditor({
           onDeleteEntry={handleDeleteEntry}
           onAddEntry={handleAddEntry}
         />
-        {selectedItem ? (
-          <div style={{ marginTop: 12 }}>
-            <InspectorPanel
-              entry={{
-                id: selectedItem.content.getId(),
-                title: selectedItem.content.getTitle(),
-                hookType: selectedItem.hook.type,
-                timeLabel:
-                  selectedItem.hook.type === "blocking"
-                    ? `blocking at ${selectedItem.hook.timestamp}s`
-                    : `non-blocking ${selectedItem.hook.start}s – ${selectedItem.hook.end}s`,
-              }}
-              onTitleChange={(title) =>
-                handleUpdateEntry(selectedItem.content.getId(), { title })
-              }
-              onDelete={() => handleDeleteEntry(selectedItem.content.getId())}
-            />
-          </div>
-        ) : null}
       </section>
 
-      <ContentTypeEditorSlot
-        contentTypeId={slotContentTypeId}
-        isOpen={slotOpen && selectedItem != null}
-        onClose={() => setSlotOpen(false)}
-        onSave={() => setSlotOpen(false)}
-        registry={contentTypeRegistry}
-        data={slotData}
-        onChange={handleSlotChange}
-      />
+      {selectedItemId && selectedHook ? (
+        <section
+          className="interlace-editor-hook"
+          data-testid="interlace-editor-hook"
+          style={{
+            ...surfaceStyle,
+            marginTop: 16,
+            padding: 16,
+            borderRadius: 8,
+            border: "1px solid",
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>{strings.hookHeading}</h3>
+          {/* Hook details: title, type, time/timespan, manual placement
+              inputs, content type selection. */}
+          <InspectorPanel
+            entry={{
+              id: selectedItemId,
+              title: selectedTitle ?? "",
+              hookType: selectedHook.type,
+              timestamp:
+                selectedHook.type === "blocking"
+                  ? selectedHook.timestamp
+                  : undefined,
+              start:
+                selectedHook.type === "non-blocking"
+                  ? selectedHook.start
+                  : undefined,
+              end:
+                selectedHook.type === "non-blocking"
+                  ? selectedHook.end
+                  : undefined,
+              videoDuration: state.videoDuration || 0,
+              contentTypeId: selectedContentTypeId,
+              registeredTypes: registeredTypeIds,
+            }}
+            onTitleChange={(title) => handleUpdateEntry(selectedItemId, { title })}
+            onTimeChange={handleTimeChange}
+            onContentTypeSelect={handleContentTypeSelect}
+            placement={selectedHook.placement}
+            onPlacementChange={handlePlacementChange}
+            onDelete={() => handleDeleteEntry(selectedItemId)}
+          />
+          {/* Content editor: shown once the hook has a content type. A
+              newly created hook (pending) hides it until the type is
+              chosen in Hook details. */}
+          {selectedContentTypeId ? (
+            <div style={{ marginTop: 12 }}>
+              <h4
+                style={{
+                  margin: "0 0 4px 0",
+                  fontSize: 13,
+                  color: theme?.mutedTextColor ?? "#666",
+                }}
+              >
+                {strings.contentEditorHeading}
+              </h4>
+              <ContentTypeEditor
+                contentTypeId={selectedContentTypeId}
+                registry={contentTypeRegistry}
+                data={selectedData}
+                onChange={handleContentChange}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }
