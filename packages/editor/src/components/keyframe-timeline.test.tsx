@@ -380,6 +380,26 @@ describe("KeyframeTimeline", () => {
     expect(track.style.height).toBe("62px");
   });
 
+  it("a blocking keyframe overlapping a range stacks into a lane", () => {
+    // The packer is type-generic: a diamond whose extent overlaps a
+    // range bar claims the next lane, exactly as a range would.
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "Quiz", hookType: "blocking", timestamp: 15 },
+      { id: "r1", title: "Poll", hookType: "non-blocking", start: 10, end: 30 },
+    ];
+    const { container } = renderTimeline({ entries });
+    const diamond = container.querySelector(
+      '[data-testid="timeline-keyframe"]',
+    ) as HTMLElement;
+    const range = container.querySelector(
+      '[data-testid="timeline-range"]',
+    ) as HTMLElement;
+    // The range (anchor 10) takes lane 0; the diamond (anchor 15,
+    // extent 14/8 = 1.75s → [15, 16.75]) overlaps [10, 30] → lane 1.
+    expect(range.style.top).toBe("3px");
+    expect(diamond.style.top).toBe("36px");
+  });
+
   it("non-overlapping keyframes share a lane", () => {
     const entries: KeyframeTimelineEntry[] = [
       { id: "b1", title: "First", hookType: "blocking", timestamp: 10 },

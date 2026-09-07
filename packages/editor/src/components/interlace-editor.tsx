@@ -399,9 +399,11 @@ function EditorVideoToolbar({
  *   `InteractiveVideoPlayer` + a fresh `NativeVideoAdapter` over its
  *   own `<video>`, so the student view and the authoring view are
  *   decoupled.
- * - `Timeline` for CRUD over hooks
+ * - `KeyframeTimeline` for keyframe-style hook CRUD
  * - `PlacementEditor` for the selected item's placement
- * - `ContentTypePicker` + `ContentTypeEditorSlot` for adding/editing hooks
+ * - `InspectorPanel` (Hook details) plus the inline `ContentTypeEditor`
+ *   for editing the selected hook; new hooks are added at the playhead
+ *   and re-typed from Hook details
  *
  * Behavior:
  * - Video duration is captured from the preview `<video>`'s

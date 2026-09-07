@@ -1055,6 +1055,42 @@ describe("InterlaceEditor", () => {
     expect((item?.hook as { timestamp?: number }).timestamp).toBe(10);
   });
 
+  it("re-selecting the current content type is a no-op (data preserved)", async () => {
+    // Phase 6 (Gate 6): re-selecting the current type must not
+    // rebuild the hook with default data — the authored content is
+    // untouched.
+    const onSave = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+
+    // Open the picker (the button shows the current type) and
+    // re-select the SAME type from the dropdown.
+    fireEvent.click(screen.getByText("quiz-editor"));
+    const options = screen.getAllByText("quiz-editor");
+    fireEvent.click(options[options.length - 1]!);
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
+      | SerializedInteractiveMediaDocument
+      | undefined;
+    const item = last?.items?.[0];
+    expect(item?.content?.contentTypeId).toBe("quiz-editor");
+    // The authored data is untouched (no default-data rebuild).
+    expect(item?.content?.data).toEqual({
+      question: "Q1",
+      options: ["a", "b"],
+      correctIndex: 0,
+    });
+  });
+
   it("clicking the timeline track background deselects the selected hook", async () => {
     render(
       <InterlaceEditor
@@ -1076,6 +1112,40 @@ describe("InterlaceEditor", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("interlace-editor-hook")).toBeNull();
     });
+  });
+
+  it("deselecting keeps a pending hook as a re-selectable draft", async () => {
+    // Phase 6 (Gate 6): deselecting clears the selection but a
+    // pending hook survives as a re-selectable draft.
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+
+    // Deselect via the track background: the selection clears (the
+    // Hook section disappears) but the pending draft stays.
+    fireEvent.pointerDown(screen.getByTestId("keyframe-timeline-track"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("interlace-editor-hook")).toBeNull();
+    });
+    expect(
+      (await screen.findAllByText("New hook")).length,
+    ).toBeGreaterThan(0);
+
+    // Re-select: the Hook section returns.
+    fireEvent.click(screen.getAllByText("New hook")[0]!);
+    expect(
+      await screen.findByTestId("interlace-editor-hook"),
+    ).toBeInTheDocument();
   });
 
   it("replace flow: cancel restores the authoring surface and keeps existing items", async () => {
