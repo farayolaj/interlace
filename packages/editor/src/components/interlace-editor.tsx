@@ -11,6 +11,7 @@ import {
   type Strings as CoreStrings,
 } from "@interlace/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
 import { useAuthoringStore } from "../hooks/use-authoring-store";
 import { ContentTypeEditor } from "./content-type-editor";
@@ -329,9 +330,9 @@ function EditorVideoToolbar({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: "8px 0",
-        fontSize: 13,
-        color: theme?.mutedTextColor ?? "#666",
+        padding: `${SPACE[2]}px 0`,
+        fontSize: TYPE.sm,
+        color: theme?.mutedTextColor ?? COLORS.textMuted,
       }}
     >
       <span
@@ -356,12 +357,14 @@ function EditorVideoToolbar({
           onClick={onReplaceVideo}
           data-testid="interlace-editor-replace-video"
           style={{
-            padding: "4px 12px",
+            padding: `${SPACE[1]}px ${SPACE[3]}px`,
             backgroundColor: "transparent",
-            border: "1px solid #ccc",
-            borderRadius: 4,
+            border: `1px solid ${COLORS.borderStrong}`,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
+            color: COLORS.text,
+            transition: "background-color 150ms ease, border-color 150ms ease",
           }}
         >
           {strings.replaceVideoLabel}
@@ -371,14 +374,15 @@ function EditorVideoToolbar({
           onClick={onOpenPreview}
           data-testid="interlace-editor-open-preview"
           style={{
-            padding: "4px 12px",
-            backgroundColor: theme?.accentColor ?? "#0066cc",
-            color: "#fff",
+            padding: `${SPACE[1]}px ${SPACE[3]}px`,
+            backgroundColor: theme?.accentColor ?? COLORS.accent,
+            color: COLORS.white,
             border: "none",
-            borderRadius: 4,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
             fontWeight: 600,
+            transition: "background-color 150ms ease",
           }}
         >
           {strings.previewLabel}
@@ -1065,17 +1069,17 @@ export function InterlaceEditor({
 
   // Styling derived from the optional theme prop.
   const rootStyle: React.CSSProperties = {
-    backgroundColor: theme?.backgroundColor ?? "#fff",
-    color: theme?.textColor ?? "#222",
-    borderColor: theme?.borderColor ?? "#ddd",
+    backgroundColor: theme?.backgroundColor ?? COLORS.surface,
+    color: theme?.textColor ?? COLORS.text,
+    borderColor: theme?.borderColor ?? COLORS.border,
   };
   const saveButtonStyle: React.CSSProperties = {
-    backgroundColor: theme?.accentColor ?? "#0066cc",
-    color: "#fff",
+    backgroundColor: theme?.accentColor ?? COLORS.accent,
+    color: COLORS.white,
   };
   const surfaceStyle: React.CSSProperties = {
-    backgroundColor: theme?.surfaceColor ?? "#fafafa",
-    borderColor: theme?.borderColor ?? "#ddd",
+    backgroundColor: theme?.surfaceColor ?? COLORS.surfaceRaised,
+    borderColor: theme?.borderColor ?? COLORS.border,
   };
 
   if (showSourceStep) {
@@ -1097,19 +1101,30 @@ export function InterlaceEditor({
             marginBottom: 16,
           }}
         >
-          <h2 style={{ margin: 0 }}>{strings.videoSourceInputTitle}</h2>
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: FONTS.display,
+              fontSize: TYPE.lg,
+              fontWeight: 600,
+            }}
+          >
+            {strings.videoSourceInputTitle}
+          </h2>
           {replaceMode ? (
             <button
               type="button"
               onClick={handleCancelReplace}
               data-testid="interlace-editor-cancel-replace"
               style={{
-                padding: "4px 12px",
-                backgroundColor: "#fff",
-                border: "1px solid #ccc",
-                borderRadius: 4,
+                padding: `${SPACE[1]}px ${SPACE[3]}px`,
+                backgroundColor: COLORS.surface,
+                border: `1px solid ${COLORS.borderStrong}`,
+                borderRadius: RADIUS.sm,
                 cursor: "pointer",
-                fontSize: 13,
+                fontSize: TYPE.sm,
+                color: COLORS.text,
+                transition: "background-color 150ms ease",
               }}
             >
               {strings.replaceCancelLabel}
@@ -1148,19 +1163,30 @@ export function InterlaceEditor({
           marginBottom: 16,
         }}
       >
-        <h2 style={{ margin: 0 }}>{strings.previewTitle}</h2>
+        <h2
+          style={{
+            margin: 0,
+            fontFamily: FONTS.display,
+            fontSize: TYPE.lg,
+            fontWeight: 600,
+          }}
+        >
+          {strings.previewTitle}
+        </h2>
         <button
           type="button"
           onClick={handleSave}
           data-testid="interlace-editor-save"
           style={{
             ...saveButtonStyle,
-            padding: "8px 16px",
+            padding: `${SPACE[2]}px ${SPACE[4]}px`,
             border: "none",
-            borderRadius: 4,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 14,
+            fontSize: TYPE.md,
             fontWeight: 600,
+            boxShadow: SHADOWS.sm,
+            transition: "background-color 150ms ease",
           }}
         >
           {strings.saveLabel}
@@ -1242,7 +1268,16 @@ export function InterlaceEditor({
           border: "1px solid",
         }}
       >
-        <h3 style={{ marginTop: 0 }}>{strings.timelineHeading}</h3>
+        <h3
+          style={{
+            marginTop: 0,
+            fontFamily: FONTS.display,
+            fontSize: TYPE.md,
+            fontWeight: 600,
+          }}
+        >
+          {strings.timelineHeading}
+        </h3>
         <KeyframeTimeline
           entries={timelineEntries}
           selectedId={selectedItemId ?? undefined}
@@ -1271,7 +1306,16 @@ export function InterlaceEditor({
             border: "1px solid",
           }}
         >
-          <h3 style={{ marginTop: 0 }}>{strings.hookHeading}</h3>
+          <h3
+            style={{
+              marginTop: 0,
+              fontFamily: FONTS.display,
+              fontSize: TYPE.md,
+              fontWeight: 600,
+            }}
+          >
+            {strings.hookHeading}
+          </h3>
           {/* Hook details: title, type, time/timespan, manual placement
               inputs, content type selection. */}
           <InspectorPanel
@@ -1311,9 +1355,10 @@ export function InterlaceEditor({
             <div style={{ marginTop: 12 }}>
               <h4
                 style={{
-                  margin: "0 0 4px 0",
-                  fontSize: 13,
-                  color: theme?.mutedTextColor ?? "#666",
+                  margin: `0 0 ${SPACE[1]}px 0`,
+                  fontSize: TYPE.sm,
+                  color: theme?.mutedTextColor ?? COLORS.textMuted,
+                  fontWeight: 600,
                 }}
               >
                 {strings.contentEditorHeading}

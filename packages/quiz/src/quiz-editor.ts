@@ -1,6 +1,7 @@
 import { ContentType } from "@interlace/core";
 import { normalizeQuizData } from "./validate";
 import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
+import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "./tokens";
 import type {
   QuizData,
   QuizMediaRef,
@@ -34,6 +35,10 @@ function createPreview(
   const img = document.createElement("img");
   img.className = className;
   img.src = media.src;
+  img.style.maxWidth = "100%";
+  img.style.height = "auto";
+  img.style.borderRadius = `${RADIUS.sm}px`;
+  img.style.marginTop = `${SPACE[1]}px`;
   if (media.alt) img.alt = media.alt;
   return img;
 }
@@ -75,6 +80,9 @@ function createQuizEditorController(
   container.innerHTML = "";
   const root = document.createElement("div");
   root.className = "quiz-editor";
+  root.style.fontFamily = FONTS.body;
+  root.style.color = COLORS.text;
+  root.style.lineHeight = "1.5";
 
   let currentData: QuizData = normalizeQuizData(rawData);
   let currentOnChange = onChange;
@@ -84,6 +92,12 @@ function createQuizEditorController(
   questionInput.className = "quiz-question";
   questionInput.style.display = "block";
   questionInput.style.width = "100%";
+  questionInput.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+  questionInput.style.fontSize = `${TYPE.md}px`;
+  questionInput.style.color = COLORS.text;
+  questionInput.style.border = `1px solid ${COLORS.borderStrong}`;
+  questionInput.style.borderRadius = `${RADIUS.sm}px`;
+  questionInput.style.backgroundColor = COLORS.surface;
   questionInput.addEventListener("input", () => {
     currentOnChange({
       ...currentData,
@@ -92,7 +106,10 @@ function createQuizEditorController(
   });
   const questionLabel = document.createElement("label");
   questionLabel.style.display = "block";
-  questionLabel.style.marginBottom = "8px";
+  questionLabel.style.marginBottom = `${SPACE[3]}px`;
+  questionLabel.style.fontWeight = "600";
+  questionLabel.style.fontSize = `${TYPE.sm}px`;
+  questionLabel.style.color = COLORS.textMuted;
   questionLabel.appendChild(document.createTextNode("Question"));
   questionLabel.appendChild(questionInput);
   root.appendChild(questionLabel);
@@ -100,18 +117,38 @@ function createQuizEditorController(
   // Question media sub-block: src + alt inputs and a live preview.
   const questionMediaBox = document.createElement("div");
   questionMediaBox.className = "quiz-question-media";
+  questionMediaBox.style.padding = `${SPACE[3]}px`;
+  questionMediaBox.style.marginBottom = `${SPACE[4]}px`;
+  questionMediaBox.style.backgroundColor = COLORS.surfaceRaised;
+  questionMediaBox.style.border = `1px solid ${COLORS.border}`;
+  questionMediaBox.style.borderRadius = `${RADIUS.md}px`;
+
   const questionMediaSrc = document.createElement("input");
   questionMediaSrc.type = "text";
   questionMediaSrc.className = "quiz-question-media-src";
   questionMediaSrc.placeholder = "Question media URL";
   questionMediaSrc.style.display = "block";
   questionMediaSrc.style.width = "100%";
+  questionMediaSrc.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+  questionMediaSrc.style.marginBottom = `${SPACE[2]}px`;
+  questionMediaSrc.style.fontSize = `${TYPE.base}px`;
+  questionMediaSrc.style.color = COLORS.text;
+  questionMediaSrc.style.border = `1px solid ${COLORS.borderStrong}`;
+  questionMediaSrc.style.borderRadius = `${RADIUS.sm}px`;
+  questionMediaSrc.style.backgroundColor = COLORS.surface;
+
   const questionMediaAlt = document.createElement("input");
   questionMediaAlt.type = "text";
   questionMediaAlt.className = "quiz-question-media-alt";
   questionMediaAlt.placeholder = "Media alt text";
   questionMediaAlt.style.display = "block";
   questionMediaAlt.style.width = "100%";
+  questionMediaAlt.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+  questionMediaAlt.style.fontSize = `${TYPE.base}px`;
+  questionMediaAlt.style.color = COLORS.text;
+  questionMediaAlt.style.border = `1px solid ${COLORS.borderStrong}`;
+  questionMediaAlt.style.borderRadius = `${RADIUS.sm}px`;
+  questionMediaAlt.style.backgroundColor = COLORS.surface;
   const questionPreviewSlot = document.createElement("div");
   questionPreviewSlot.className = "quiz-question-media-preview-slot";
   const emitQuestionMedia = () => {
@@ -129,15 +166,30 @@ function createQuizEditorController(
 
   const optionsTitle = document.createElement("div");
   optionsTitle.textContent = "Options";
+  optionsTitle.style.marginBottom = `${SPACE[2]}px`;
+  optionsTitle.style.fontWeight = "600";
+  optionsTitle.style.fontSize = `${TYPE.sm}px`;
+  optionsTitle.style.color = COLORS.textMuted;
   root.appendChild(optionsTitle);
   const optionsContainer = document.createElement("div");
+  optionsContainer.style.display = "flex";
+  optionsContainer.style.flexDirection = "column";
+  optionsContainer.style.gap = `${SPACE[2]}px`;
   root.appendChild(optionsContainer);
 
   const addOptionButton = document.createElement("button");
   addOptionButton.type = "button";
   addOptionButton.className = "quiz-add-option";
   addOptionButton.textContent = "Add option";
-  addOptionButton.style.marginTop = "4px";
+  addOptionButton.style.marginTop = `${SPACE[2]}px`;
+  addOptionButton.style.padding = `${SPACE[2]}px ${SPACE[4]}px`;
+  addOptionButton.style.backgroundColor = COLORS.surface;
+  addOptionButton.style.border = `1px solid ${COLORS.borderStrong}`;
+  addOptionButton.style.borderRadius = `${RADIUS.sm}px`;
+  addOptionButton.style.cursor = "pointer";
+  addOptionButton.style.fontSize = `${TYPE.sm}px`;
+  addOptionButton.style.fontWeight = "600";
+  addOptionButton.style.color = COLORS.text;
   addOptionButton.addEventListener("click", () => {
     const nextOptions: QuizOption[] = [
       ...currentData.options,
@@ -161,10 +213,22 @@ function createQuizEditorController(
 
   const correctLabel = document.createElement("label");
   correctLabel.style.display = "block";
-  correctLabel.style.marginTop = "12px";
+  correctLabel.style.marginTop = `${SPACE[4]}px`;
+  correctLabel.style.fontWeight = "600";
+  correctLabel.style.fontSize = `${TYPE.sm}px`;
+  correctLabel.style.color = COLORS.textMuted;
   correctLabel.appendChild(document.createTextNode("Correct answer"));
   const select = document.createElement("select");
   select.className = "quiz-correct-answer";
+  select.style.display = "block";
+  select.style.width = "100%";
+  select.style.marginTop = `${SPACE[1]}px`;
+  select.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+  select.style.fontSize = `${TYPE.base}px`;
+  select.style.color = COLORS.text;
+  select.style.border = `1px solid ${COLORS.borderStrong}`;
+  select.style.borderRadius = `${RADIUS.sm}px`;
+  select.style.backgroundColor = COLORS.surface;
   select.addEventListener("change", () => {
     currentOnChange({
       ...currentData,
@@ -191,13 +255,24 @@ function createQuizEditorController(
     row.className = "quiz-option-row";
     row.style.display = "flex";
     row.style.flexWrap = "wrap";
-    row.style.gap = "8px";
-    row.style.marginBottom = "4px";
+    row.style.gap = `${SPACE[2]}px`;
+    row.style.alignItems = "center";
+    row.style.padding = `${SPACE[2]}px`;
+    row.style.backgroundColor = COLORS.surfaceRaised;
+    row.style.border = `1px solid ${COLORS.border}`;
+    row.style.borderRadius = `${RADIUS.md}px`;
 
     const textInput = document.createElement("input");
     textInput.type = "text";
     textInput.className = "quiz-option-text";
     textInput.style.flex = "1";
+    textInput.style.minWidth = "120px";
+    textInput.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+    textInput.style.fontSize = `${TYPE.base}px`;
+    textInput.style.color = COLORS.text;
+    textInput.style.border = `1px solid ${COLORS.borderStrong}`;
+    textInput.style.borderRadius = `${RADIUS.sm}px`;
+    textInput.style.backgroundColor = COLORS.surface;
     textInput.value = option.text;
     textInput.addEventListener("input", () => {
       const nextOptions = currentData.options.slice();
@@ -210,11 +285,28 @@ function createQuizEditorController(
     mediaSrcInput.className = "quiz-option-media-src";
     mediaSrcInput.placeholder = "Option media URL";
     mediaSrcInput.value = option.media?.src ?? "";
+    mediaSrcInput.style.flex = "1";
+    mediaSrcInput.style.minWidth = "120px";
+    mediaSrcInput.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+    mediaSrcInput.style.fontSize = `${TYPE.base}px`;
+    mediaSrcInput.style.color = COLORS.text;
+    mediaSrcInput.style.border = `1px solid ${COLORS.borderStrong}`;
+    mediaSrcInput.style.borderRadius = `${RADIUS.sm}px`;
+    mediaSrcInput.style.backgroundColor = COLORS.surface;
+
     const mediaAltInput = document.createElement("input");
     mediaAltInput.type = "text";
     mediaAltInput.className = "quiz-option-media-alt";
     mediaAltInput.placeholder = "Option media alt";
     mediaAltInput.value = option.media?.alt ?? "";
+    mediaAltInput.style.flex = "1";
+    mediaAltInput.style.minWidth = "120px";
+    mediaAltInput.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
+    mediaAltInput.style.fontSize = `${TYPE.base}px`;
+    mediaAltInput.style.color = COLORS.text;
+    mediaAltInput.style.border = `1px solid ${COLORS.borderStrong}`;
+    mediaAltInput.style.borderRadius = `${RADIUS.sm}px`;
+    mediaAltInput.style.backgroundColor = COLORS.surface;
     const emitOptionMedia = () => {
       const media = buildMediaRef(mediaSrcInput.value, mediaAltInput.value);
       syncPreview(previewSlot, media, "quiz-option-thumb");
@@ -233,6 +325,14 @@ function createQuizEditorController(
     remove.type = "button";
     remove.className = "quiz-option-remove";
     remove.textContent = "Remove";
+    remove.style.padding = `${SPACE[1]}px ${SPACE[3]}px`;
+    remove.style.backgroundColor = COLORS.errorBg;
+    remove.style.border = `1px solid ${COLORS.errorBorder}`;
+    remove.style.borderRadius = `${RADIUS.sm}px`;
+    remove.style.cursor = "pointer";
+    remove.style.fontSize = `${TYPE.sm}px`;
+    remove.style.fontWeight = "600";
+    remove.style.color = COLORS.errorText;
     remove.addEventListener("click", () => {
       const removed = currentData.options[index];
       const nextOptions = currentData.options.filter((_, i) => i !== index);

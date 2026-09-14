@@ -1,5 +1,6 @@
 import { ContentInstance, ContentType } from "@interlace/core";
 import React, { useCallback, useEffect, useRef } from "react";
+import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 
 export interface BlockingOverlayProps {
   content: ContentInstance;
@@ -135,42 +136,53 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
     >
       <div
         style={{
-          backgroundColor: "#fff",
-          borderRadius: "8px",
-          padding: "24px",
+          backgroundColor: COLORS.surface,
+          borderRadius: `${RADIUS.lg}px`,
+          padding: `${SPACE[5]}px`,
           maxWidth: "500px",
           width: "90%",
           maxHeight: "80vh",
           overflowY: "auto",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
+          boxShadow: "0 16px 48px rgba(0, 0, 0, 0.35)",
         }}
       >
-        <h2 id={`blocking-content-${content.getId()}`} style={{ marginTop: 0 }}>
+        <h2
+          id={`blocking-content-${content.getId()}`}
+          style={{
+            marginTop: 0,
+            fontFamily: FONTS.display,
+            fontSize: TYPE.lg,
+            fontWeight: 600,
+            color: COLORS.text,
+          }}
+        >
           {content.getTitle()}
         </h2>
 
-        <div style={{ margin: "16px 0" }}>
+        <div style={{ margin: `${SPACE[4]}px 0` }}>
           <div ref={bodyRef} />
         </div>
 
         <div
           style={{
             display: "flex",
-            gap: "8px",
+            gap: `${SPACE[2]}px`,
             justifyContent: "flex-end",
-            marginTop: "24px",
+            marginTop: `${SPACE[5]}px`,
           }}
         >
           <button
             type="button"
             onClick={handleClose}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#f0f0f0",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
+              padding: `${SPACE[2]}px ${SPACE[4]}px`,
+              backgroundColor: COLORS.surfaceRaised,
+              border: `1px solid ${COLORS.borderStrong}`,
+              borderRadius: `${RADIUS.sm}px`,
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: TYPE.md,
+              color: COLORS.text,
+              transition: "background-color 150ms ease",
             }}
           >
             Close
@@ -179,14 +191,15 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
             type="button"
             onClick={onClose}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#0066cc",
-              color: "#fff",
+              padding: `${SPACE[2]}px ${SPACE[4]}px`,
+              backgroundColor: COLORS.accent,
+              color: COLORS.white,
               border: "none",
-              borderRadius: "4px",
+              borderRadius: `${RADIUS.sm}px`,
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: TYPE.md,
               fontWeight: 600,
+              transition: "background-color 150ms ease",
             }}
           >
             Continue

@@ -40,8 +40,8 @@ describe("CompletedTag", () => {
 
     const tag = container.firstChild as HTMLElement;
 
-    // Should have green background (rgba(76, 175, 80, 0.9))
-    expect(tag).toHaveStyle("backgroundColor: rgba(76, 175, 80, 0.9)");
+    // Uses the Interlace blue accent instead of an extra green.
+    expect(tag).toHaveStyle("backgroundColor: #0066cc");
     expect(tag).toHaveStyle("color: #fff");
   });
 });

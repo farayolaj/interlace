@@ -7,8 +7,8 @@ import type { SerializedInteractiveMediaDocument } from "@interlace/core";
  */
 export const SAMPLE_DOC: SerializedInteractiveMediaDocument = {
   video: {
-    src: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-    duration: 15,
+    src: "https://samplelib.com/mp4/sample-20s-360p.mp4",
+    duration: 20,
   },
   items: [
     {

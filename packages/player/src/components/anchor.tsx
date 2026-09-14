@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { COLORS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 
 export interface AnchorProps {
   id: string;
@@ -37,16 +38,16 @@ export const Anchor = React.forwardRef<HTMLButtonElement, AnchorProps>(
           height: `${height}%`,
           minWidth: `${minSize}px`,
           minHeight: `${minSize}px`,
-          padding: "8px 12px",
-          fontSize: "14px",
+          padding: `${SPACE[2]}px ${SPACE[3]}px`,
+          fontSize: TYPE.md,
           fontWeight: 600,
-          border: "2px solid #0066cc",
-          borderRadius: "4px",
-          backgroundColor: isOpened ? "#0066cc" : "#fff",
-          color: isOpened ? "#fff" : "#0066cc",
+          border: `2px solid ${COLORS.accent}`,
+          borderRadius: `${RADIUS.sm}px`,
+          backgroundColor: isOpened ? COLORS.accent : COLORS.surface,
+          color: isOpened ? COLORS.white : COLORS.accent,
           cursor: "pointer",
-          transition: "all 0.2s ease",
-          boxShadow: isOpened ? "0 4px 8px rgba(0, 102, 204, 0.3)" : "none",
+          transition: "background-color 150ms ease, color 150ms ease, box-shadow 150ms ease",
+          boxShadow: isOpened ? "0 4px 8px rgba(0, 102, 204, 0.3)" : SHADOWS.sm,
           zIndex: 2,
           // The anchors layer is pointer-transparent; each anchor
           // re-enables pointer events for itself.

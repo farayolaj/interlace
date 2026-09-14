@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { COLORS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 
 /**
  * Localized strings consumed by `KeyframeTimeline`. Extends the core
@@ -483,13 +484,13 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
       className="keyframe-timeline"
       data-testid="keyframe-timeline"
       style={{
-        border: "1px solid #ddd",
-        borderRadius: 8,
-        backgroundColor: "#fafafa",
-        padding: 8,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: RADIUS.md,
+        backgroundColor: COLORS.surfaceRaised,
+        padding: SPACE[2],
         display: "flex",
         flexDirection: "column",
-        gap: 8,
+        gap: SPACE[2],
       }}
     >
       {/* Controls row */}
@@ -497,7 +498,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
         data-testid="keyframe-timeline-controls"
         style={{
           display: "flex",
-          gap: 8,
+          gap: SPACE[2],
           alignItems: "center",
           flexWrap: "wrap",
         }}
@@ -508,14 +509,15 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           data-testid="keyframe-timeline-play"
           aria-label={isPlaying ? strings.pauseLabel : strings.playLabel}
           style={{
-            padding: "4px 12px",
-            backgroundColor: "#0066cc",
-            color: "#fff",
+            padding: `${SPACE[1]}px ${SPACE[3]}px`,
+            backgroundColor: COLORS.accent,
+            color: COLORS.white,
             border: "none",
-            borderRadius: 4,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
             fontWeight: 600,
+            transition: "background-color 150ms ease",
           }}
         >
           {isPlaying ? strings.pauseLabel : strings.playLabel}
@@ -525,14 +527,15 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           onClick={() => onAddEntry("blocking")}
           data-testid="keyframe-timeline-add-blocking"
           style={{
-            padding: "4px 12px",
-            backgroundColor: "#4CAF50",
-            color: "#fff",
+            padding: `${SPACE[1]}px ${SPACE[3]}px`,
+            backgroundColor: COLORS.accent,
+            color: COLORS.white,
             border: "none",
-            borderRadius: 4,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
             fontWeight: 600,
+            transition: "background-color 150ms ease",
           }}
         >
           {strings.addBlockingLabel}
@@ -542,14 +545,15 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           onClick={() => onAddEntry("non-blocking")}
           data-testid="keyframe-timeline-add-non-blocking"
           style={{
-            padding: "4px 12px",
-            backgroundColor: "#2196F3",
-            color: "#fff",
+            padding: `${SPACE[1]}px ${SPACE[3]}px`,
+            backgroundColor: COLORS.accent,
+            color: COLORS.white,
             border: "none",
-            borderRadius: 4,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
             fontWeight: 600,
+            transition: "background-color 150ms ease",
           }}
         >
           {strings.addNonBlockingLabel}
@@ -561,12 +565,14 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           data-testid="keyframe-timeline-zoom-out"
           aria-label={strings.zoomOutLabel}
           style={{
-            padding: "4px 10px",
-            backgroundColor: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 4,
+            padding: `${SPACE[1]}px 10px`,
+            backgroundColor: COLORS.surface,
+            border: `1px solid ${COLORS.borderStrong}`,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
+            color: COLORS.text,
+            transition: "background-color 150ms ease",
           }}
         >
           −
@@ -577,12 +583,14 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           data-testid="keyframe-timeline-zoom-in"
           aria-label={strings.zoomInLabel}
           style={{
-            padding: "4px 10px",
-            backgroundColor: "#fff",
-            border: "1px solid #ccc",
-            borderRadius: 4,
+            padding: `${SPACE[1]}px 10px`,
+            backgroundColor: COLORS.surface,
+            border: `1px solid ${COLORS.borderStrong}`,
+            borderRadius: RADIUS.sm,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
+            color: COLORS.text,
+            transition: "background-color 150ms ease",
           }}
         >
           +
@@ -617,8 +625,8 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
             style={{
               position: "relative",
               height: 24,
-              backgroundColor: "#eef2f7",
-              borderBottom: "1px solid #d5dde6",
+              backgroundColor: COLORS.surfaceRaised,
+              borderBottom: `1px solid ${COLORS.border}`,
               cursor: "pointer",
               userSelect: "none",
               touchAction: "none",
@@ -633,10 +641,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                   left: t * zoom,
                   top: 0,
                   bottom: 0,
-                  borderLeft: "1px solid #c3cfdc",
-                  paddingLeft: 4,
-                  fontSize: 10,
-                  color: "#5a6b7d",
+                  borderLeft: `1px solid ${COLORS.borderStrong}`,
+                  paddingLeft: SPACE[1],
+                  fontSize: TYPE.xs,
+                  color: COLORS.textMuted,
                   lineHeight: "24px",
                   whiteSpace: "nowrap",
                 }}
@@ -668,8 +676,8 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                 style={{
                   margin: 0,
                   padding: "14px 12px",
-                  color: "#999",
-                  fontSize: 13,
+                  color: COLORS.textMuted,
+                  fontSize: TYPE.sm,
                 }}
               >
                 {strings.emptyLabel}
@@ -677,7 +685,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
             ) : (
               entries.map((entry) => {
                 const selected = entry.id === selectedId;
-                const accent = selected ? "#e65100" : "#0066cc";
+                const accent = COLORS.accent;
                 // Lane assignment from the greedy interval packing:
                 // overlapping entries stack into successive rows.
                 const lane = layout.lanes.get(entry.id) ?? 0;
@@ -700,12 +708,13 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                         width: 14,
                         height: 14,
                         transform: "rotate(45deg)",
-                        backgroundColor: selected ? accent : "#fff",
+                        backgroundColor: selected ? accent : COLORS.surface,
                         border: `2px solid ${accent}`,
                         borderRadius: 2,
                         cursor: "grab",
                         padding: 0,
                         touchAction: "none",
+                        boxShadow: selected ? SHADOWS.sm : "none",
                       }}
                       onPointerDown={beginKeyframeDrag(
                         entry.id,
@@ -718,8 +727,8 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                           left: 16,
                           top: -2,
                           transform: "rotate(-45deg)",
-                          fontSize: 11,
-                          color: "#334",
+                          fontSize: TYPE.xs,
+                          color: selected ? COLORS.accent : COLORS.text,
                           whiteSpace: "nowrap",
                           fontWeight: selected ? 700 : 400,
                         }}
@@ -746,10 +755,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       top: laneTop,
                       height: LANE_HEIGHT - 4,
                       backgroundColor: selected
-                        ? "rgba(230, 81, 0, 0.25)"
-                        : "rgba(33, 150, 243, 0.25)",
-                      border: `2px solid ${selected ? "#e65100" : "#2196F3"}`,
-                      borderRadius: 4,
+                        ? COLORS.accentLight
+                        : COLORS.accentLighter,
+                      border: `2px solid ${COLORS.accent}`,
+                      borderRadius: RADIUS.sm,
                       boxSizing: "border-box",
                       display: "flex",
                       alignItems: "center",
@@ -768,64 +777,64 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                         entry.start ?? 0,
                         entry.end ?? 0,
                       )}
-                      style={{
-                        width: 8,
-                        alignSelf: "stretch",
-                        cursor: "ew-resize",
-                        backgroundColor: selected ? "#e65100" : "#2196F3",
-                        touchAction: "none",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      data-testid="timeline-keyframe"
-                      data-content-id={entry.id}
-                      aria-label={`${entry.title} — ${strings.nonBlockingRangeLabel} ${formatTick(Math.round(entry.start ?? 0))} to ${formatTick(Math.round(entry.end ?? 0))}`}
-                      onClick={() => onSelectEntry(entry.id)}
-                      onKeyDown={handleKeyframeKeyDown(entry)}
-                      onPointerDown={beginRangeDrag(
-                        entry.id,
-                        "body",
-                        entry.start ?? 0,
-                        entry.end ?? 0,
-                      )}
-                      style={{
-                        flex: 1,
-                        alignSelf: "stretch",
-                        backgroundColor: "transparent",
-                        border: "none",
-                        cursor: "grab",
-                        fontSize: 11,
-                        color: "#223",
-                        padding: "0 4px",
-                        textAlign: "left",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        fontWeight: selected ? 700 : 400,
-                        touchAction: "none",
-                      }}
-                    >
-                      {entry.title}
-                    </button>
-                    {/* end edge */}
-                    <div
-                      role="separator"
-                      aria-label={`${entry.title} — resize end`}
-                      data-testid="timeline-range-end"
-                      onPointerDown={beginRangeDrag(
-                        entry.id,
-                        "end",
-                        entry.start ?? 0,
-                        entry.end ?? 0,
-                      )}
-                      style={{
-                        width: 8,
-                        alignSelf: "stretch",
-                        cursor: "ew-resize",
-                        backgroundColor: selected ? "#e65100" : "#2196F3",
-                        touchAction: "none",
-                      }}
+                        style={{
+                          width: 8,
+                          alignSelf: "stretch",
+                          cursor: "ew-resize",
+                          backgroundColor: COLORS.accent,
+                          touchAction: "none",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        data-testid="timeline-keyframe"
+                        data-content-id={entry.id}
+                        aria-label={`${entry.title} — ${strings.nonBlockingRangeLabel} ${formatTick(Math.round(entry.start ?? 0))} to ${formatTick(Math.round(entry.end ?? 0))}`}
+                        onClick={() => onSelectEntry(entry.id)}
+                        onKeyDown={handleKeyframeKeyDown(entry)}
+                        onPointerDown={beginRangeDrag(
+                          entry.id,
+                          "body",
+                          entry.start ?? 0,
+                          entry.end ?? 0,
+                        )}
+                        style={{
+                          flex: 1,
+                          alignSelf: "stretch",
+                          backgroundColor: "transparent",
+                          border: "none",
+                          cursor: "grab",
+                          fontSize: TYPE.xs,
+                          color: COLORS.text,
+                          padding: `0 ${SPACE[1]}px`,
+                          textAlign: "left",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          fontWeight: selected ? 700 : 400,
+                          touchAction: "none",
+                        }}
+                      >
+                        {entry.title}
+                      </button>
+                      {/* end edge */}
+                      <div
+                        role="separator"
+                        aria-label={`${entry.title} — resize end`}
+                        data-testid="timeline-range-end"
+                        onPointerDown={beginRangeDrag(
+                          entry.id,
+                          "end",
+                          entry.start ?? 0,
+                          entry.end ?? 0,
+                        )}
+                        style={{
+                          width: 8,
+                          alignSelf: "stretch",
+                          cursor: "ew-resize",
+                          backgroundColor: COLORS.accent,
+                          touchAction: "none",
+                        }}
                     />
                   </div>
                 );
@@ -842,7 +851,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
               top: 0,
               bottom: 0,
               width: 0,
-              borderLeft: "2px solid #e65100",
+              borderLeft: `2px solid ${COLORS.accent}`,
               pointerEvents: "none",
             }}
           >
@@ -863,7 +872,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                 top: 0,
                 width: 12,
                 height: 14,
-                backgroundColor: "#e65100",
+                backgroundColor: COLORS.accent,
                 borderRadius: "2px 2px 4px 4px",
                 cursor: "ew-resize",
                 pointerEvents: "auto",

@@ -8,6 +8,7 @@ import {
 import { InteractiveVideoPlayer } from "@interlace/player";
 import { NativeVideoAdapter } from "@interlace/native-adapter";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 
 /**
  * Localized strings consumed by `PreviewModal`. Extends the core
@@ -207,14 +208,15 @@ export function PreviewModal({
         onClick={handleBackdropClick}
         style={{
           position: "relative",
-          backgroundColor: "#000",
-          borderRadius: 8,
-          padding: 16,
+          backgroundColor: COLORS.black,
+          borderRadius: RADIUS.lg,
+          padding: SPACE[4],
           maxWidth: "90vw",
           maxHeight: "90vh",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: SPACE[2],
+          boxShadow: "0 16px 48px rgba(0, 0, 0, 0.35)",
         }}
       >
         <div
@@ -222,10 +224,19 @@ export function PreviewModal({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            color: "#fff",
+            color: COLORS.white,
           }}
         >
-          <h3 style={{ margin: 0, fontSize: 16 }}>{strings.title}</h3>
+          <h3
+            style={{
+              margin: 0,
+              fontFamily: FONTS.display,
+              fontSize: TYPE.md,
+              fontWeight: 600,
+            }}
+          >
+            {strings.title}
+          </h3>
           <button
             ref={closeButtonRef}
             type="button"
@@ -233,13 +244,14 @@ export function PreviewModal({
             data-testid="preview-modal-close"
             aria-label={strings.closeLabel}
             style={{
-              padding: "4px 12px",
+              padding: `${SPACE[1]}px ${SPACE[3]}px`,
               backgroundColor: "transparent",
-              border: "1px solid #fff",
-              color: "#fff",
-              borderRadius: 4,
+              border: `1px solid ${COLORS.borderStrong}`,
+              color: COLORS.white,
+              borderRadius: RADIUS.sm,
               cursor: "pointer",
-              fontSize: 13,
+              fontSize: TYPE.sm,
+              transition: "background-color 150ms ease, border-color 150ms ease",
             }}
           >
             {strings.closeLabel}
@@ -306,8 +318,8 @@ export function PreviewModal({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#999",
-                fontSize: 13,
+                color: COLORS.textMuted,
+                fontSize: TYPE.sm,
               }}
             >
               {strings.loadingLabel}

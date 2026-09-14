@@ -4,6 +4,7 @@ import {
   type Strings,
 } from "@interlace/core";
 import React, { useCallback, useRef } from "react";
+import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 import { ContentTypePicker } from "./content-type-picker";
 import { PlacementInputs } from "./placement-editor";
 
@@ -91,10 +92,11 @@ export interface InspectorPanelProps {
 
 const INPUT_STYLE: React.CSSProperties = {
   width: "70px",
-  padding: "4px 6px",
-  border: "1px solid #ccc",
-  borderRadius: 4,
-  fontSize: 13,
+  padding: `${SPACE[1]}px ${SPACE[2]}px`,
+  border: `1px solid ${COLORS.borderStrong}`,
+  borderRadius: RADIUS.sm,
+  fontSize: TYPE.sm,
+  color: COLORS.text,
 };
 
 /**
@@ -150,17 +152,27 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       tabIndex={0}
       onKeyDown={handleKeyDown}
       style={{
-        border: "1px solid #ddd",
-        borderRadius: 8,
-        backgroundColor: "#fafafa",
-        padding: 12,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: RADIUS.md,
+        backgroundColor: COLORS.surfaceRaised,
+        padding: SPACE[3],
         display: "flex",
         flexDirection: "column",
-        gap: 8,
-        fontSize: 13,
+        gap: SPACE[2],
+        fontSize: TYPE.sm,
       }}
     >
-      <h4 style={{ margin: 0, fontSize: 14 }}>{strings.inspectorHeading}</h4>
+      <h4
+        style={{
+          margin: 0,
+          fontFamily: FONTS.display,
+          fontSize: TYPE.md,
+          fontWeight: 600,
+          color: COLORS.text,
+        }}
+      >
+        {strings.inspectorHeading}
+      </h4>
       <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {strings.titleLabel}
         <input
@@ -170,14 +182,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           onChange={(e) => onTitleChange(e.target.value)}
           aria-label={strings.titleLabel}
           style={{
-            padding: "6px 8px",
-            border: "1px solid #ccc",
-            borderRadius: 4,
-            fontSize: 13,
+            padding: `${SPACE[2]}px ${SPACE[2]}px`,
+            border: `1px solid ${COLORS.borderStrong}`,
+            borderRadius: RADIUS.sm,
+            fontSize: TYPE.sm,
+            color: COLORS.text,
           }}
         />
       </label>
-      <div style={{ display: "flex", gap: 16, color: "#556" }}>
+      <div style={{ display: "flex", gap: 16, color: COLORS.textMuted }}>
         <span>
           {strings.hookTypeLabel}:{" "}
           <strong data-testid="inspector-panel-type">
@@ -234,7 +247,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
       {/* Manual placement inputs */}
       {placement && onPlacementChange ? (
         <div>
-          <div style={{ color: "#556", marginBottom: 4 }}>
+          <div
+            style={{
+              color: COLORS.textMuted,
+              marginBottom: SPACE[1],
+              fontWeight: 600,
+            }}
+          >
             {strings.placementLabel}
           </div>
           <PlacementInputs
@@ -248,7 +267,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           typed hooks (re-typing resets the content data to the new
           type's default shape). */}
       <div>
-        <div style={{ color: "#556", marginBottom: 4 }}>
+        <div
+          style={{
+            color: COLORS.textMuted,
+            marginBottom: SPACE[1],
+            fontWeight: 600,
+          }}
+        >
           {strings.contentTypeLabel}
         </div>
         <ContentTypePicker
@@ -264,14 +289,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           onClick={onDelete}
           data-testid="inspector-panel-delete"
           style={{
-            padding: "4px 12px",
-            backgroundColor: "#fee",
-            border: "1px solid #c33",
-            borderRadius: 4,
-            color: "#c33",
+            padding: `${SPACE[1]}px ${SPACE[3]}px`,
+            backgroundColor: COLORS.errorBg,
+            border: `1px solid ${COLORS.errorBorder}`,
+            borderRadius: RADIUS.sm,
+            color: COLORS.errorText,
             cursor: "pointer",
-            fontSize: 13,
+            fontSize: TYPE.sm,
             fontWeight: 600,
+            transition: "background-color 150ms ease",
           }}
         >
           {strings.deleteLabel}

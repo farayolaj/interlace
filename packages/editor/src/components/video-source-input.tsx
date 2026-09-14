@@ -1,5 +1,6 @@
 import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
 
 /**
  * The current video source value held by `VideoSourceInput`. `duration` is
@@ -191,29 +192,47 @@ export function VideoSourceInput({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "16px",
-        padding: "16px",
-        border: "1px solid #ddd",
-        borderRadius: "8px",
-        backgroundColor: "#fafafa",
+        gap: `${SPACE[4]}px`,
+        padding: `${SPACE[4]}px`,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: `${RADIUS.md}px`,
+        backgroundColor: COLORS.surfaceRaised,
       }}
     >
       {value?.src ? (
-        <div>
-          <strong>{strings.currentSourceLabel}:</strong>{" "}
+        <div
+          style={{
+            padding: `${SPACE[3]}px ${SPACE[4]}px`,
+            backgroundColor: COLORS.surface,
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: `${RADIUS.sm}px`,
+            fontSize: TYPE.sm,
+            color: COLORS.text,
+          }}
+        >
+          <span style={{ color: COLORS.textMuted }}>
+            {strings.currentSourceLabel}:
+          </span>{" "}
           <code data-testid="video-source-input-current-src">{value.src}</code>
         </div>
       ) : (
         <p
           data-testid="video-source-input-empty"
-          style={{ margin: 0, color: "#666" }}
+          style={{ margin: 0, color: COLORS.textMuted }}
         >
           {strings.noVideoSelectedLabel}
         </p>
       )}
 
       <div>
-        <h4 style={{ margin: "0 0 8px 0", fontSize: "14px" }}>
+        <h4
+          style={{
+            margin: `0 0 ${SPACE[2]}px 0`,
+            fontSize: TYPE.md,
+            fontWeight: 600,
+            color: COLORS.text,
+          }}
+        >
           {strings.uploadLabel}
         </h4>
         <input
@@ -231,14 +250,15 @@ export function VideoSourceInput({
           disabled={isDisabled}
           data-testid="video-source-input-file-button"
           style={{
-            padding: "8px 16px",
-            backgroundColor: isDisabled ? "#ccc" : "#0066cc",
-            color: "#fff",
+            padding: `${SPACE[2]}px ${SPACE[4]}px`,
+            backgroundColor: isDisabled ? COLORS.borderStrong : COLORS.accent,
+            color: COLORS.white,
             border: "none",
-            borderRadius: "4px",
+            borderRadius: `${RADIUS.sm}px`,
             cursor: isDisabled ? "not-allowed" : "pointer",
-            fontSize: "14px",
+            fontSize: TYPE.md,
             fontWeight: 600,
+            transition: "background-color 150ms ease",
           }}
         >
           {isUploading
@@ -248,7 +268,7 @@ export function VideoSourceInput({
         {isUploading ? (
           <span
             data-testid="video-source-input-uploading"
-            style={{ marginLeft: "8px", color: "#666", fontSize: "13px" }}
+            style={{ marginLeft: `${SPACE[2]}px`, color: COLORS.textMuted, fontSize: TYPE.sm }}
             aria-live="polite"
           >
             {strings.uploadingLabel}
@@ -259,12 +279,13 @@ export function VideoSourceInput({
             data-testid="video-source-input-error"
             role="alert"
             style={{
-              marginTop: "8px",
-              color: "#c33",
-              backgroundColor: "#fee",
-              padding: "8px",
-              borderRadius: "4px",
-              fontSize: "13px",
+              marginTop: `${SPACE[2]}px`,
+              color: COLORS.errorText,
+              backgroundColor: COLORS.errorBg,
+              padding: `${SPACE[2]}px`,
+              borderRadius: `${RADIUS.sm}px`,
+              border: `1px solid ${COLORS.errorBorder}`,
+              fontSize: TYPE.sm,
             }}
           >
             <strong>{strings.uploadFailedLabel}</strong>{" "}
@@ -274,14 +295,15 @@ export function VideoSourceInput({
               onClick={handleRetryUpload}
               data-testid="video-source-input-retry"
               style={{
-                marginLeft: "8px",
-                padding: "4px 8px",
-                backgroundColor: "#fff",
-                border: "1px solid #c33",
-                color: "#c33",
-                borderRadius: "4px",
+                marginLeft: `${SPACE[2]}px`,
+                padding: `${SPACE[1]}px ${SPACE[2]}px`,
+                backgroundColor: COLORS.surface,
+                border: `1px solid ${COLORS.errorBorder}`,
+                color: COLORS.errorText,
+                borderRadius: `${RADIUS.sm}px`,
                 cursor: "pointer",
-                fontSize: "12px",
+                fontSize: TYPE.xs,
+                fontWeight: 600,
               }}
             >
               {strings.retryLabel}
@@ -294,9 +316,10 @@ export function VideoSourceInput({
         <label
           style={{
             display: "block",
-            fontSize: "14px",
+            fontSize: TYPE.md,
             fontWeight: 600,
-            marginBottom: "4px",
+            marginBottom: `${SPACE[1]}px`,
+            color: COLORS.text,
           }}
         >
           {strings.urlLabel}
@@ -311,10 +334,11 @@ export function VideoSourceInput({
             data-testid="video-source-input-url"
             style={{
               flex: 1,
-              padding: "8px 12px",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              fontSize: "14px",
+              padding: `${SPACE[2]}px ${SPACE[3]}px`,
+              border: `1px solid ${COLORS.borderStrong}`,
+              borderRadius: `${RADIUS.sm}px`,
+              fontSize: TYPE.md,
+              color: COLORS.text,
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !applyDisabled) {
@@ -329,14 +353,15 @@ export function VideoSourceInput({
             disabled={applyDisabled}
             data-testid="video-source-input-apply"
             style={{
-              padding: "8px 16px",
-              backgroundColor: applyDisabled ? "#ccc" : "#4CAF50",
-              color: "#fff",
+              padding: `${SPACE[2]}px ${SPACE[4]}px`,
+              backgroundColor: applyDisabled ? COLORS.borderStrong : COLORS.accent,
+              color: COLORS.white,
               border: "none",
-              borderRadius: "4px",
+              borderRadius: `${RADIUS.sm}px`,
               cursor: applyDisabled ? "not-allowed" : "pointer",
-              fontSize: "14px",
+              fontSize: TYPE.md,
               fontWeight: 600,
+              transition: "background-color 150ms ease",
             }}
           >
             {strings.applyUrlLabel}

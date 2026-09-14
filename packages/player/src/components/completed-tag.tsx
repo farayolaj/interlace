@@ -1,4 +1,5 @@
 import React from "react";
+import { COLORS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 
 export interface CompletedTagProps {
   id: string;
@@ -27,14 +28,15 @@ export const CompletedTag: React.FC<CompletedTagProps> = ({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "rgba(76, 175, 80, 0.9)",
-        color: "#fff",
-        fontSize: "12px",
+        backgroundColor: COLORS.accent,
+        color: COLORS.white,
+        fontSize: TYPE.xs,
         fontWeight: 700,
-        borderRadius: "4px",
-        padding: "4px 8px",
+        borderRadius: `${RADIUS.sm}px`,
+        padding: `${SPACE[1]}px ${SPACE[2]}px`,
         textAlign: "center",
         zIndex: 4,
+        boxShadow: SHADOWS.sm,
       }}
     >
       ✓ {title}

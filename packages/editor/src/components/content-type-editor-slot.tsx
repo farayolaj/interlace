@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import { ContentTypeRegistry } from "@interlace/core";
+import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 import { useContentTypeEditorMount } from "./content-type-editor-mount";
 
 export interface ContentTypeEditorSlotProps<TData = unknown> {
@@ -56,7 +57,7 @@ export function ContentTypeEditorSlot<TData = unknown>({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "rgba(15, 23, 42, 0.5)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -66,17 +67,25 @@ export function ContentTypeEditorSlot<TData = unknown>({
       <div
         className="content-type-editor-container"
         style={{
-          backgroundColor: "#fff",
-          borderRadius: "8px",
-          padding: "24px",
+          backgroundColor: COLORS.surface,
+          borderRadius: `${RADIUS.lg}px`,
+          padding: `${SPACE[5]}px`,
           maxWidth: "600px",
           width: "90%",
           maxHeight: "80vh",
           overflowY: "auto",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
+          boxShadow: SHADOWS.md,
         }}
       >
-        <h2 className="content-type-editor-title" style={{ marginTop: 0 }}>
+        <h2
+          className="content-type-editor-title"
+          style={{
+            marginTop: 0,
+            fontFamily: FONTS.display,
+            fontSize: TYPE.lg,
+            fontWeight: 600,
+          }}
+        >
           Edit {contentTypeId}
         </h2>
 
@@ -87,7 +96,7 @@ export function ContentTypeEditorSlot<TData = unknown>({
           {contentType ? (
             <div ref={containerRef} />
           ) : (
-            <p style={{ color: "#999" }}>
+            <p style={{ color: COLORS.textMuted }}>
               Content type &quot;{contentTypeId}&quot; is not registered
             </p>
           )}
@@ -97,21 +106,23 @@ export function ContentTypeEditorSlot<TData = unknown>({
           className="content-type-editor-footer"
           style={{
             display: "flex",
-            gap: "8px",
+            gap: `${SPACE[2]}px`,
             justifyContent: "flex-end",
-            marginTop: "24px",
+            marginTop: `${SPACE[5]}px`,
           }}
         >
           <button
             className="content-type-editor-cancel-button"
             onClick={onClose}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#f0f0f0",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
+              padding: `${SPACE[2]}px ${SPACE[4]}px`,
+              backgroundColor: COLORS.surfaceRaised,
+              border: `1px solid ${COLORS.borderStrong}`,
+              borderRadius: `${RADIUS.sm}px`,
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: TYPE.md,
+              color: COLORS.text,
+              transition: "background-color 150ms ease",
             }}
           >
             Cancel
@@ -123,14 +134,15 @@ export function ContentTypeEditorSlot<TData = unknown>({
               onClose();
             }}
             style={{
-              padding: "8px 16px",
-              backgroundColor: "#0066cc",
-              color: "#fff",
+              padding: `${SPACE[2]}px ${SPACE[4]}px`,
+              backgroundColor: COLORS.accent,
+              color: COLORS.white,
               border: "none",
-              borderRadius: "4px",
+              borderRadius: `${RADIUS.sm}px`,
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: TYPE.md,
               fontWeight: 600,
+              transition: "background-color 150ms ease",
             }}
           >
             Save

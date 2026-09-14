@@ -1,5 +1,6 @@
 import { Placement } from "@interlace/core";
 import React, { useCallback, useEffect, useRef } from "react";
+import { COLORS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 
 /**
  * PlacementEditor - an overlay for positioning a hook's placement
@@ -368,13 +369,15 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
           top: `${placement.y}%`,
           width: `${placement.width}%`,
           height: `${placement.height}%`,
-          backgroundColor: "rgba(0, 102, 204, 0.2)",
-          border: "2px solid #0066cc",
-          borderRadius: "4px",
+          backgroundColor: COLORS.accentLight,
+          border: `2px solid ${COLORS.accent}`,
+          borderRadius: `${RADIUS.sm}px`,
           boxSizing: "border-box",
           cursor: "move",
           pointerEvents: "auto",
           touchAction: "none",
+          transition: "box-shadow 150ms ease",
+          boxShadow: SHADOWS.sm,
         }}
       >
         {HANDLE_DEFS.map((handle) => (
@@ -389,9 +392,9 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
               position: "absolute",
               width: HANDLE_SIZE,
               height: HANDLE_SIZE,
-              backgroundColor: "#fff",
-              border: "2px solid #0066cc",
-              borderRadius: "2px",
+              backgroundColor: COLORS.surface,
+              border: `2px solid ${COLORS.accent}`,
+              borderRadius: `${RADIUS.sm}px`,
               boxSizing: "border-box",
               cursor: handle.cursor,
               pointerEvents: "auto",
@@ -412,7 +415,11 @@ export interface PlacementInputsProps {
 
 const PLACEMENT_INPUT_STYLE: React.CSSProperties = {
   width: "60px",
-  padding: "2px",
+  padding: `${SPACE[1]}px`,
+  border: `1px solid ${COLORS.borderStrong}`,
+  borderRadius: RADIUS.sm,
+  fontSize: TYPE.sm,
+  color: COLORS.text,
 };
 
 /**
@@ -452,11 +459,12 @@ export const PlacementInputs: React.FC<PlacementInputsProps> = ({
       data-testid="placement-editor-inputs"
       style={{
         display: "flex",
-        gap: 8,
-        padding: "8px 0",
-        fontSize: 12,
+        gap: SPACE[2],
+        padding: `${SPACE[2]}px 0`,
+        fontSize: TYPE.xs,
         alignItems: "center",
         flexWrap: "wrap",
+        color: COLORS.textMuted,
       }}
     >
       <label>

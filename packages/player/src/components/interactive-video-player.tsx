@@ -5,6 +5,7 @@ import {
   VideoAdapter,
 } from "@interlace/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
 import { useInteractiveMedia } from "../hooks/use-interactive-media";
 import { BlockingOverlay } from "./blocking-overlay";
 import { ContentErrorBoundary } from "./content-error-boundary";
@@ -89,10 +90,13 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     return (
       <div
         style={{
-          padding: "16px",
-          color: "#c33",
-          backgroundColor: "#fee",
-          borderRadius: "4px",
+          padding: `${SPACE[4]}px`,
+          color: COLORS.errorText,
+          backgroundColor: COLORS.errorBg,
+          border: `1px solid ${COLORS.errorBorder}`,
+          borderRadius: `${RADIUS.md}px`,
+          fontSize: TYPE.md,
+          lineHeight: 1.5,
         }}
       >
         <strong>Player Error:</strong> {error.message}
@@ -102,7 +106,15 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
 
   if (!initialized || !controller) {
     return (
-      <div style={{ padding: "16px", color: "#666" }}>Loading player...</div>
+      <div
+      style={{
+        padding: `${SPACE[4]}px`,
+        color: COLORS.textMuted,
+        fontSize: TYPE.md,
+      }}
+    >
+      Loading player…
+    </div>
     );
   }
 

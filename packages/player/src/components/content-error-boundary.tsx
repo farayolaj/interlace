@@ -1,4 +1,5 @@
 import React, { ReactNode } from "react";
+import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
 
 export interface ContentErrorBoundaryProps {
   children: ReactNode;
@@ -38,15 +39,19 @@ export class ContentErrorBoundary extends React.Component<
         this.props.fallback || (
           <div
             style={{
-              padding: "16px",
-              backgroundColor: "#fee",
-              color: "#c33",
-              borderRadius: "4px",
-              fontSize: "14px",
+              padding: `${SPACE[4]}px`,
+              backgroundColor: COLORS.errorBg,
+              color: COLORS.errorText,
+              border: `1px solid ${COLORS.errorBorder}`,
+              borderRadius: `${RADIUS.md}px`,
+              fontSize: TYPE.md,
+              lineHeight: 1.5,
             }}
           >
             <strong>Content Error</strong>
-            <p>{this.state.error?.message}</p>
+            <p style={{ margin: `${SPACE[1]}px 0 0 0` }}>
+              {this.state.error?.message}
+            </p>
           </div>
         )
       );
