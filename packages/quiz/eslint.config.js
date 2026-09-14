@@ -1,4 +1,4 @@
-import { config as baseConfig } from "@repo/eslint-config/react-internal";
+import { config as baseConfig } from "@repo/eslint-config/base";
 
 /**
  * A custom ESLint configuration for libraries that use React.

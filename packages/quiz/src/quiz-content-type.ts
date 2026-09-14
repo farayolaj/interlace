@@ -1,7 +1,7 @@
 import { ContentType } from "@interlace/core";
 import { QuizEditorType, unmountQuizEditor } from "./quiz-editor";
 import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
-import type { QuizData, RawQuizData } from "./schema";
+import type { QuizData } from "./schema";
 
 /**
  * Built-in Quiz content type for Interlace. Authors the canonical
