@@ -43,7 +43,7 @@ export const QuizContentType: ContentType<QuizData> = {
     data: QuizData,
     callbacks: { onComplete(score?: number): void },
   ): void {
-    renderQuizPlayback(container, data as unknown as RawQuizData, callbacks);
+    renderQuizPlayback(container, data, callbacks);
   },
 
   unmountPlayback(container: HTMLElement): void {

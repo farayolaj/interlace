@@ -31,5 +31,5 @@ export interface RawQuizData {
   question: string | QuizQuestion;
   options: Array<string | QuizOption>;
   correctIndex?: number;
-  correctOptionId?: string;
+  correctOptionId?: string | null;
 }

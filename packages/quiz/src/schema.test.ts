@@ -65,6 +65,19 @@ describe("normalizeQuizData", () => {
     });
   });
 
+  it("round-trips: normalized canonical output type-checks as raw input", () => {
+    const legacy: RawQuizData = {
+      question: "Q?",
+      options: ["a", "b"],
+      correctIndex: 0,
+    };
+
+    // Compile-time pin: canonical output is assignable to RawQuizData.
+    const round: RawQuizData = normalizeQuizData(legacy);
+
+    expect(normalizeQuizData(round)).toEqual(normalizeQuizData(legacy));
+  });
+
   it("prefers correctOptionId over a legacy correctIndex", () => {
     const raw: RawQuizData = {
       question: "Q",

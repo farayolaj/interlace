@@ -349,7 +349,7 @@ export const QuizEditorType: ContentType<QuizData> = {
     data: QuizData,
     onChange: (newData: QuizData) => void,
   ): void {
-    const raw = data as unknown as RawQuizData;
+    const raw = data;
     getOrCreateQuizEditorController(container, raw, onChange).syncTo(
       raw,
       onChange,
@@ -361,7 +361,7 @@ export const QuizEditorType: ContentType<QuizData> = {
     data: QuizData,
     onChange: (newData: QuizData) => void,
   ): void {
-    const raw = data as unknown as RawQuizData;
+    const raw = data;
     getOrCreateQuizEditorController(container, raw, onChange).syncTo(
       raw,
       onChange,
