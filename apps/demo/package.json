@@ -13,6 +13,7 @@
   "dependencies": {
     "@interlace/core": "workspace:*",
     "@interlace/editor": "workspace:*",
+    "@interlace/native-adapter": "workspace:*",
     "@interlace/player": "workspace:*",
     "@interlace/quiz": "workspace:*",
     "react": "^19.0.0",

@@ -29,6 +29,9 @@ importers:
       '@interlace/editor':
         specifier: workspace:*
         version: link:../../packages/editor
+      '@interlace/native-adapter':
+        specifier: workspace:*
+        version: link:../../packages/native-adapter
       '@interlace/player':
         specifier: workspace:*
         version: link:../../packages/player

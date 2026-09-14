@@ -3,8 +3,13 @@ import { QuizContentType } from "@interlace/quiz";
 
 /**
  * Registry backing the demo's content surfaces. The quiz content type is
- * registered now so Phase 2's author/watch wiring can resolve it; the
- * placeholders stay static until then.
+ * registered once and shared by the author (editor) and watch (player)
+ * modes.
  */
 export const registry = new ContentTypeRegistry();
 registry.register(QuizContentType);
+
+/** Returns the shared demo registry (created once at module load). */
+export function getRegistry(): ContentTypeRegistry {
+  return registry;
+}
