@@ -88,6 +88,48 @@ describe("QuizContentType", () => {
     expect(container.querySelector(".quiz-playback-question")).not.toBeNull();
   });
 
+  it("renders defensively when correctIndex is unset (every answer scores 0)", () => {
+    // The load-bearing compatibility case with editor documents that
+    // predate an authored answer: unset correctIndex means no option
+    // is correct and every answer scores 0.
+    const data: QuizData = { question: "Legacy import", options: ["a", "b"] };
+    const { onComplete, options } = renderIntoContainer(data);
+    options[1]!.click();
+    expect(onComplete).toHaveBeenCalledWith(0);
+    expect(
+      options.every(
+        (option) => !option.classList.contains("quiz-playback-option-correct"),
+      ),
+    ).toBe(true);
+  });
+
+  it("renders zero options for non-array data without throwing", () => {
+    const bad: QuizData = {
+      question: "Broken",
+      options: undefined as unknown as string[],
+      correctIndex: 1,
+    };
+    const { onComplete, options } = renderIntoContainer(bad);
+    expect(options.length).toBe(0);
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it("marks no correct option for an out-of-range correctIndex", () => {
+    const data: QuizData = {
+      question: "Q",
+      options: ["a", "b"],
+      correctIndex: 7,
+    };
+    const { onComplete, options } = renderIntoContainer(data);
+    options[0]!.click();
+    expect(onComplete).toHaveBeenCalledWith(0);
+    expect(
+      options.every(
+        (option) => !option.classList.contains("quiz-playback-option-correct"),
+      ),
+    ).toBe(true);
+  });
+
   it("renderEditor produces a fallback question input that reports changes", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

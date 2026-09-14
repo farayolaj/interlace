@@ -12,11 +12,6 @@ export interface QuizData {
   correctIndex?: number;
 }
 
-export interface QuizResult {
-  score: number;
-  answered: boolean;
-}
-
 /** Shared maximum score for quiz content. */
 const QUIZ_MAX_SCORE = 100;
 
@@ -46,6 +41,11 @@ export function renderQuizPlayback(
   data: QuizData,
   callbacks: QuizPlaybackCallbacks,
 ): void {
+  // Destroy any session already mounted in this container: Phase 2's
+  // overlay lifecycle may re-render without an intervening unmount,
+  // and overwriting the WeakMap entry would leak the first root (and
+  // its click listeners) in the DOM.
+  unmountQuizPlayback(container);
   const root = document.createElement("div");
   root.className = "quiz-playback";
 
