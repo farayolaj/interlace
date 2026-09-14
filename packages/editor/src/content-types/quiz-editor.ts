@@ -1,4 +1,5 @@
 import { ContentType } from "@interlace/core";
+import { renderQuizPlayback } from "@interlace/player";
 
 /**
  * Data shape for quiz content authored through the editor.
@@ -262,7 +263,7 @@ export const QuizEditor: ContentType<QuizData> = {
     data: QuizData,
     callbacks: { onComplete(score?: number): void },
   ): void {
-    // Player is out of scope for this phase; no-op stub.
+    renderQuizPlayback(container, data, callbacks);
   },
 
   unmount(container: HTMLElement): void {
