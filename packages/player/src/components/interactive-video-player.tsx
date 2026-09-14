@@ -77,8 +77,12 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
       const item = (items ?? []).find((it) => it.getId() === activeContentId);
       item?.complete(score ?? 0);
       setActiveContentId(null);
+      // Completion unblocks playback: the overlay tear-down happens after
+      // the handler returns, so resuming here is safe (the paused video
+      // walks out of the blocking frame on the next ticks).
+      void adapter.play();
     },
-    [controller, items, activeContentId],
+    [controller, items, activeContentId, adapter],
   );
 
   if (error) {

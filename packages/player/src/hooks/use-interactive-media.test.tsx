@@ -1,13 +1,13 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ContentTypeRegistry,
   SerializedInteractiveMediaDocument,
-  VideoAdapter,
   VideoAdapterEvent,
   VideoAdapterEventType,
 } from "@interlace/core";
 import { QuizContentType } from "../content-types/quiz";
+import { InteractiveVideoPlayer } from "../components/interactive-video-player";
 import { useInteractiveMedia } from "./use-interactive-media";
 
 /**
@@ -311,5 +311,123 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     ];
     expect(eventPayload.aggregatedResult.numerator).toBe(100);
     expect(eventPayload.aggregatedResult.denominator).toBe(100);
+  });
+
+  it("keeps a non-blocking anchor visible across its whole window and swaps it for a completed tag", () => {
+    const { adapter } = makeManualClockAdapter();
+    const registry = new ContentTypeRegistry();
+    registry.register(QuizContentType);
+    const { result } = renderHook((props) => useInteractiveMedia(props), {
+      initialProps: {
+        adapter,
+        document: {
+          video: { src: "https://example.com/video.mp4", duration: 40 },
+          items: [
+            {
+              id: "anchor-1",
+              title: "Side note",
+              hook: {
+                type: "non-blocking",
+                start: 2,
+                end: 8,
+                placement: { x: 60, y: 60, width: 20, height: 20 },
+                revealBehavior: "click",
+              },
+              content: {
+                contentTypeId: "quiz-editor",
+                version: 1,
+                data: {
+                  question: "What is 3 + 3?",
+                  options: ["5", "6"],
+                  correctIndex: 1,
+                },
+              },
+            },
+          ],
+        } as SerializedInteractiveMediaDocument,
+        registry,
+      },
+    });
+    tick(adapter);
+
+    // Top of the window: opens on the very first in-frame tick.
+    act(() => void adapter.play());
+    adapter.currentTime = 2;
+    tick(adapter);
+    expect(
+      (
+        result.current.controller?.getRenderState(2.5) as {
+          visibleAnchorIds: string[];
+        }
+      ).visibleAnchorIds,
+    ).toContain("anchor-1");
+
+    // The anchor stays visible through the whole window (mid and tail).
+    adapter.currentTime = 5;
+    tick(adapter);
+    expect(
+      (
+        result.current.controller?.getRenderState(5) as {
+          visibleAnchorIds: string[];
+        }
+      ).visibleAnchorIds,
+    ).toContain("anchor-1");
+    adapter.currentTime = 7.9;
+    tick(adapter);
+    expect(
+      (
+        result.current.controller?.getRenderState(7.9) as {
+          visibleAnchorIds: string[];
+        }
+      ).visibleAnchorIds,
+    ).toContain("anchor-1");
+
+    // Taken in-window (the anchor click path opens the hook), then
+    // completed: the hook is indicated, and can no longer be taken — the
+    // anchor id leaves the visible set and only the completed tag remains.
+    const item = result.current.items?.find((i) => i.getId() === "anchor-1");
+    expect(item?.getState()).toBe("visible");
+    act(() => void item?.open());
+    act(() => void item?.complete(100));
+    const after = result.current.controller?.getRenderState(7.9) as {
+      visibleAnchorIds: string[];
+      completedTagIds: string[];
+    };
+    expect(after.visibleAnchorIds).not.toContain("anchor-1");
+    expect(after.completedTagIds).toContain("anchor-1");
+
+    // Replaying the window later never resurrects the anchor.
+    adapter.currentTime = 2;
+    tick(adapter);
+    act(() => void adapter.play());
+    adapter.currentTime = 5;
+    tick(adapter);
+    const replay = result.current.controller?.getRenderState(5) as {
+      visibleAnchorIds: string[];
+      completedTagIds: string[];
+    };
+    expect(replay.visibleAnchorIds).not.toContain("anchor-1");
+    expect(replay.completedTagIds).toContain("anchor-1");
+  });
+
+  it("is done: completes the quiz and resumes playback through the full component", async () => {
+    const harness = makeHarness(10);
+    const { adapter } = harness;
+    const playSpy = vi.spyOn(adapter, "play");
+    render(<InteractiveVideoPlayer {...harness.props} />);
+    act(() => void vi.advanceTimersByTime(TICK_MS));
+
+    walkIntoBlockingWindow(adapter, 10);
+    expect(adapter.isPlaying).toBe(false); // paused at the hook
+
+    // The user answers the quiz in the overlay.
+    const option = screen.getByRole("button", { name: "4" });
+    act(() => void fireEvent.click(option));
+
+    // Completion unblocks playback and dismisses the overlay.
+    await act(() => Promise.resolve());
+    expect(playSpy).toHaveBeenCalled();
+    expect(adapter.isPlaying).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
