@@ -1,6 +1,27 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
-import { ContentTypePicker } from "./content-type-picker";
+import {
+  ContentTypePicker,
+  ContentTypePickerProps,
+} from "./content-type-picker";
+
+function RenderContentTypePicker(args: ContentTypePickerProps) {
+  const [selectedType, setSelectedType] = useState<string | null>(
+    args.selectedType,
+  );
+
+  return (
+    <div style={{ width: 320 }}>
+      <ContentTypePicker
+        {...args}
+        selectedType={selectedType}
+        onSelect={(value) => {
+          setSelectedType(value);
+        }}
+      />
+    </div>
+  );
+}
 
 const meta = {
   title: "Editor/ContentTypePicker",
@@ -10,23 +31,7 @@ const meta = {
     selectedType: null,
     onSelect: () => {},
   },
-  render: (args) => {
-    const [selectedType, setSelectedType] = useState<string | null>(
-      args.selectedType,
-    );
-
-    return (
-      <div style={{ width: 320 }}>
-        <ContentTypePicker
-          {...args}
-          selectedType={selectedType}
-          onSelect={(value) => {
-            setSelectedType(value);
-          }}
-        />
-      </div>
-    );
-  },
+  render: RenderContentTypePicker,
 } satisfies Meta<typeof ContentTypePicker>;
 
 export default meta;

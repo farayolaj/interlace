@@ -14,10 +14,6 @@ interface QuizData {
   correctIndex: number;
 }
 
-interface Sections {
-  overlayBody: HTMLDivElement;
-}
-
 /** Demo content type that renders an interactive true/false choice. */
 function createDemoContentType(): ContentType<QuizData> {
   return {
@@ -53,7 +49,6 @@ function createDemoContentType(): ContentType<QuizData> {
 
 function createContentInstance(): ContentInstance<QuizData> {
   const contentType = createDemoContentType();
-  contentType.renderEditor; // touched to satisfy no-unused in strict late reads
 
   const record: ContentRecord<QuizData> = {
     id: "blocking-quiz",

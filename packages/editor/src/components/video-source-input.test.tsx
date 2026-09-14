@@ -1,6 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_VIDEO_SOURCE_INPUT_STRINGS,
   VideoSourceInput,
@@ -53,9 +59,9 @@ describe("VideoSourceInput", () => {
       />,
     );
 
-    expect(screen.getByTestId("video-source-input-current-src").textContent).toBe(
-      "https://example.com/existing.mp4",
-    );
+    expect(
+      screen.getByTestId("video-source-input-current-src").textContent,
+    ).toBe("https://example.com/existing.mp4");
   });
 
   it("commits the URL draft when the user clicks apply", () => {
@@ -70,7 +76,9 @@ describe("VideoSourceInput", () => {
     const urlInput = screen.getByTestId(
       "video-source-input-url",
     ) as HTMLInputElement;
-    fireEvent.change(urlInput, { target: { value: "  https://example.com/x.mp4  " } });
+    fireEvent.change(urlInput, {
+      target: { value: "  https://example.com/x.mp4  " },
+    });
 
     fireEvent.click(screen.getByTestId("video-source-input-apply"));
 
@@ -89,7 +97,9 @@ describe("VideoSourceInput", () => {
     );
 
     const urlInput = screen.getByTestId("video-source-input-url");
-    fireEvent.change(urlInput, { target: { value: "https://example.com/x.mp4" } });
+    fireEvent.change(urlInput, {
+      target: { value: "https://example.com/x.mp4" },
+    });
     fireEvent.keyDown(urlInput, { key: "Enter" });
 
     expect(onChange).toHaveBeenCalledWith({
@@ -106,7 +116,9 @@ describe("VideoSourceInput", () => {
       />,
     );
 
-    const apply = screen.getByTestId("video-source-input-apply") as HTMLButtonElement;
+    const apply = screen.getByTestId(
+      "video-source-input-apply",
+    ) as HTMLButtonElement;
     expect(apply.disabled).toBe(true);
 
     fireEvent.click(apply);
@@ -123,9 +135,7 @@ describe("VideoSourceInput", () => {
     );
     const onChange = vi.fn();
 
-    render(
-      <VideoSourceInput onChange={onChange} onUpload={onUpload} />,
-    );
+    render(<VideoSourceInput onChange={onChange} onUpload={onUpload} />);
 
     const fileInput = screen.getByTestId(
       "video-source-input-file",
@@ -135,7 +145,9 @@ describe("VideoSourceInput", () => {
 
     // The onChange must not fire until the host resolves the upload.
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByTestId("video-source-input-uploading")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("video-source-input-uploading"),
+    ).toBeInTheDocument();
 
     resolveUpload?.("https://cdn.example.com/lecture.mp4");
 
@@ -167,7 +179,9 @@ describe("VideoSourceInput", () => {
     dispatchFileChange(fileInput, makeFile("lecture.mp4"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("video-source-input-error")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("video-source-input-error"),
+      ).toBeInTheDocument();
     });
     expect(screen.getByTestId("video-source-input-error")).toHaveTextContent(
       "network unreachable",
@@ -177,9 +191,7 @@ describe("VideoSourceInput", () => {
     expect(onChange).not.toHaveBeenCalled();
 
     // The component must still be mounted and renderable; the host flow is intact.
-    expect(
-      screen.getByTestId("video-source-input-apply"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("video-source-input-apply")).toBeInTheDocument();
   });
 
   it("retry re-opens the file picker after a failure", async () => {
@@ -203,11 +215,12 @@ describe("VideoSourceInput", () => {
     dispatchFileChange(fileInput, makeFile("lecture.mp4"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("video-source-input-error")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("video-source-input-error"),
+      ).toBeInTheDocument();
     });
 
     // Clicking retry clears the error and re-fires the file picker.
-    const fileButton = screen.getByTestId("video-source-input-file-button");
     const clickSpy = vi.spyOn(fileInput, "click");
     fireEvent.click(screen.getByTestId("video-source-input-retry"));
     expect(clickSpy).toHaveBeenCalled();
@@ -230,12 +243,7 @@ describe("VideoSourceInput", () => {
         }),
     );
 
-    render(
-      <VideoSourceInput
-        onChange={vi.fn()}
-        onUpload={onUpload}
-      />,
-    );
+    render(<VideoSourceInput onChange={vi.fn()} onUpload={onUpload} />);
 
     const fileInput = screen.getByTestId(
       "video-source-input-file",
@@ -304,9 +312,9 @@ describe("VideoSourceInput", () => {
     expect(screen.getByTestId("video-source-input-empty")).toHaveTextContent(
       "Pick a video to start.",
     );
-    expect(screen.getByTestId("video-source-input-file-button")).toHaveTextContent(
-      "Pick file",
-    );
+    expect(
+      screen.getByTestId("video-source-input-file-button"),
+    ).toHaveTextContent("Pick file");
   });
 
   it("ignores a stale upload resolution after a newer selection starts", async () => {
@@ -351,7 +359,6 @@ describe("VideoSourceInput", () => {
     const onChange = vi.fn();
     // Hosts hand-write onUpload; rejecting with a non-Error value is realistic.
     const onUpload = vi.fn(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-throw-literal
       throw "boom: 503 from CDN";
     });
 
@@ -369,7 +376,9 @@ describe("VideoSourceInput", () => {
     dispatchFileChange(fileInput, makeFile("lecture.mp4"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("video-source-input-error")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("video-source-input-error"),
+      ).toBeInTheDocument();
     });
     expect(onError).toHaveBeenCalledTimes(1);
     const reported = onError.mock.calls[0]?.[0] as unknown;

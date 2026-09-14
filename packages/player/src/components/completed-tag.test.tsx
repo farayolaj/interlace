@@ -39,7 +39,6 @@ describe("CompletedTag", () => {
     );
 
     const tag = container.firstChild as HTMLElement;
-    const styles = window.getComputedStyle(tag);
 
     // Should have green background (rgba(76, 175, 80, 0.9))
     expect(tag).toHaveStyle("backgroundColor: rgba(76, 175, 80, 0.9)");

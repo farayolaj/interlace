@@ -1,14 +1,14 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Placement } from "@interlace/core";
-import {
-  PlacementEditor,
-  PlacementInputs,
-  PLACEMENT_MIN_SIZE,
-  clampPlacement,
-} from "./placement-editor";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { firePointer, stubPointerCapture } from "../test-utils/pointer";
 import { stubRect } from "../test-utils/stub-rect";
+import {
+  PLACEMENT_MIN_SIZE,
+  PlacementEditor,
+  PlacementInputs,
+  clampPlacement,
+} from "./placement-editor";
 
 afterEach(() => {
   cleanup();
@@ -27,8 +27,13 @@ const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
 function renderEditor(placement: Placement = DEFAULT_PLACEMENT) {
   const onPlacementChange = vi.fn();
   const { container } = render(
-    <div style={{ position: "relative", width: FRAME.width, height: FRAME.height }}>
-      <PlacementEditor placement={placement} onPlacementChange={onPlacementChange} />
+    <div
+      style={{ position: "relative", width: FRAME.width, height: FRAME.height }}
+    >
+      <PlacementEditor
+        placement={placement}
+        onPlacementChange={onPlacementChange}
+      />
     </div>,
   );
   const frame = container.querySelector(
@@ -39,9 +44,7 @@ function renderEditor(placement: Placement = DEFAULT_PLACEMENT) {
 }
 
 /** Last placement emitted through onPlacementChange. */
-function lastPlacement(
-  onPlacementChange: ReturnType<typeof vi.fn>,
-): Placement {
+function lastPlacement(onPlacementChange: ReturnType<typeof vi.fn>): Placement {
   const calls = onPlacementChange.mock.calls;
   const last = calls[calls.length - 1];
   if (!last) throw new Error("expected onPlacementChange to have been called");
@@ -64,14 +67,6 @@ function handleEl(container: HTMLElement, id: string): HTMLElement {
   return el;
 }
 
-function inputEl(container: HTMLElement, axis: "x" | "y" | "w" | "h"): HTMLInputElement {
-  const el = container.querySelector(
-    `[data-testid="placement-editor-input-${axis}"]`,
-  ) as HTMLInputElement | null;
-  if (!el) throw new Error(`expected ${axis} input`);
-  return el;
-}
-
 describe("clampPlacement", () => {
   it("move policy keeps the rectangle fully inside the frame", () => {
     const clamped = clampPlacement(
@@ -83,7 +78,10 @@ describe("clampPlacement", () => {
   });
 
   it("move policy enforces the minimum size first", () => {
-    const clamped = clampPlacement({ x: 99, y: 99, width: 0, height: 0 }, "move");
+    const clamped = clampPlacement(
+      { x: 99, y: 99, width: 0, height: 0 },
+      "move",
+    );
     expect(clamped.width).toBe(PLACEMENT_MIN_SIZE);
     expect(clamped.height).toBe(PLACEMENT_MIN_SIZE);
     // x clamps to 100 - 1 = 99 → unchanged; y likewise.
@@ -92,7 +90,10 @@ describe("clampPlacement", () => {
   });
 
   it("resize policy keeps the origin anchored and clamps size to the frame", () => {
-    const clamped = clampPlacement({ x: 50, y: 40, width: 200, height: -10 }, "resize");
+    const clamped = clampPlacement(
+      { x: 50, y: 40, width: 200, height: -10 },
+      "resize",
+    );
     expect(clamped.x).toBe(50);
     expect(clamped.y).toBe(40);
     expect(clamped.width).toBe(50); // 100 - x
@@ -102,7 +103,10 @@ describe("clampPlacement", () => {
   it("resize policy repairs an out-of-range origin so both invariants can hold", () => {
     // x=99.5 with MIN=1: the origin is repaired down to 99 so a
     // minimum-size rectangle still fits inside the frame.
-    const clamped = clampPlacement({ x: 99.5, y: 99.5, width: 5, height: 5 }, "resize");
+    const clamped = clampPlacement(
+      { x: 99.5, y: 99.5, width: 5, height: 5 },
+      "resize",
+    );
     expect(clamped.x).toBe(99);
     expect(clamped.y).toBe(99);
     expect(clamped.width).toBe(PLACEMENT_MIN_SIZE);
@@ -122,7 +126,9 @@ describe("PlacementEditor", () => {
 
   it("renders 8 handles with distinct aria-labels and cursor styles", () => {
     const { container } = renderEditor();
-    const handles = container.querySelectorAll("[data-testid^='placement-editor-handle-']");
+    const handles = container.querySelectorAll(
+      "[data-testid^='placement-editor-handle-']",
+    );
     expect(handles.length).toBe(8);
     const labels = Array.from(handles).map((h) => h.getAttribute("aria-label"));
     expect(new Set(labels).size).toBe(8);
@@ -162,7 +168,12 @@ describe("PlacementEditor", () => {
   });
 
   it("resize via the east handle changes width only", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 10, y: 10, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+    });
     const handle = handleEl(container, "e");
     // East edge starts at 30% (192px); drag to 50% (320px) → width 40%.
     firePointer(handle, "pointerdown", 192, 100);
@@ -177,7 +188,12 @@ describe("PlacementEditor", () => {
   });
 
   it("resize via the west handle keeps the right edge anchored", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 20, y: 10, width: 30, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 20,
+      y: 10,
+      width: 30,
+      height: 20,
+    });
     const handle = handleEl(container, "w");
     // West edge starts at 20% (128px); drag to 60% (384px) — past the
     // right edge (50%). Raw width would be negative; the anchored
@@ -196,7 +212,12 @@ describe("PlacementEditor", () => {
   });
 
   it("resize via the south handle changes height only", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 10, y: 10, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+    });
     const handle = handleEl(container, "s");
     // South edge starts at 30% of 360 = 108px; drag to 180px (50%).
     firePointer(handle, "pointerdown", 100, 108);
@@ -211,7 +232,12 @@ describe("PlacementEditor", () => {
   });
 
   it("resize via the north handle keeps the bottom edge anchored", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 10, y: 20, width: 20, height: 30 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 10,
+      y: 20,
+      width: 20,
+      height: 30,
+    });
     const handle = handleEl(container, "n");
     // North edge starts at 20% of 360 = 72px; drag below the bottom
     // edge (50% of 360 = 180px). Raw height would be negative; the
@@ -230,7 +256,12 @@ describe("PlacementEditor", () => {
   });
 
   it("resize via the south-east corner changes width and height, origin anchored", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 10, y: 10, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+    });
     const handle = handleEl(container, "se");
     // SE corner starts at (30%, 30%) → (192px, 108px); drag to (80%, 80%).
     firePointer(handle, "pointerdown", 192, 108);
@@ -245,7 +276,12 @@ describe("PlacementEditor", () => {
   });
 
   it("overshoot: the drag survives the pointer leaving the frame and the clamp still applies", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 0, y: 0, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+    });
     const handle = handleEl(container, "e");
     const capture = stubPointerCapture(handle);
     // East edge at 20% (128px); drag far past the right edge of the
@@ -262,7 +298,12 @@ describe("PlacementEditor", () => {
   });
 
   it("enforces the minimum size when resizing below it", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
     const handle = handleEl(container, "e");
     // East edge at 70% (448px); drag left past the west edge (to 40%).
     // Raw width would be negative; the min size clamps it to 1%.
@@ -275,7 +316,12 @@ describe("PlacementEditor", () => {
   });
 
   it("arrow keys nudge by 1% and clamp through the move policy", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
     const rect = rectEl(container);
     fireEvent.keyDown(rect, { key: "ArrowRight" });
     expect(lastPlacement(onPlacementChange).x).toBe(51);
@@ -284,14 +330,24 @@ describe("PlacementEditor", () => {
   });
 
   it("shift + arrow keys nudge by 5%", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 50, y: 50, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 50,
+      y: 50,
+      width: 20,
+      height: 20,
+    });
     const rect = rectEl(container);
     fireEvent.keyDown(rect, { key: "ArrowRight", shiftKey: true });
     expect(lastPlacement(onPlacementChange).x).toBe(55);
   });
 
   it("arrow-key nudge clamps at the frame boundary", () => {
-    const { container, onPlacementChange } = renderEditor({ x: 80, y: 80, width: 20, height: 20 });
+    const { container, onPlacementChange } = renderEditor({
+      x: 80,
+      y: 80,
+      width: 20,
+      height: 20,
+    });
     const rect = rectEl(container);
     fireEvent.keyDown(rect, { key: "ArrowRight" });
     expect(lastPlacement(onPlacementChange).x).toBe(80); // 100 - 20
@@ -304,7 +360,10 @@ describe("PlacementInputs", () => {
   function renderInputs(placement: Placement = DEFAULT_PLACEMENT) {
     const onPlacementChange = vi.fn();
     const utils = render(
-      <PlacementInputs placement={placement} onPlacementChange={onPlacementChange} />,
+      <PlacementInputs
+        placement={placement}
+        onPlacementChange={onPlacementChange}
+      />,
     );
     return { ...utils, onPlacementChange };
   }
@@ -314,7 +373,8 @@ describe("PlacementInputs", () => {
   ): Placement {
     const calls = onPlacementChange.mock.calls;
     const last = calls[calls.length - 1];
-    if (!last) throw new Error("expected onPlacementChange to have been called");
+    if (!last)
+      throw new Error("expected onPlacementChange to have been called");
     return last[0] as Placement;
   }
 

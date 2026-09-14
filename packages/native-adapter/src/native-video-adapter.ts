@@ -72,7 +72,7 @@ export class NativeVideoAdapter implements VideoAdapter {
         this.guard.markAsTriggered("seek");
         return;
       }
-      this.emit("seek", { type: "seek" } as any);
+      this.emit("seek", { type: "seek" });
     });
 
     this.videoElement.addEventListener("waiting", () => {
@@ -166,15 +166,7 @@ export class NativeVideoAdapter implements VideoAdapter {
    */
   async requestFullscreen(): Promise<void> {
     try {
-      if (this.wrapperDiv.requestFullscreen) {
-        await this.wrapperDiv.requestFullscreen();
-      } else if ((this.wrapperDiv as any).webkitRequestFullscreen) {
-        (this.wrapperDiv as any).webkitRequestFullscreen();
-      } else if ((this.wrapperDiv as any).mozRequestFullScreen) {
-        (this.wrapperDiv as any).mozRequestFullScreen();
-      } else if ((this.wrapperDiv as any).msRequestFullscreen) {
-        (this.wrapperDiv as any).msRequestFullscreen();
-      }
+      await this.wrapperDiv.requestFullscreen();
     } catch (err) {
       console.error("Fullscreen request failed:", err);
     }
@@ -187,14 +179,6 @@ export class NativeVideoAdapter implements VideoAdapter {
     try {
       if (document.fullscreenElement === this.wrapperDiv) {
         await document.exitFullscreen();
-      } else if (
-        (document as any).webkitFullscreenElement === this.wrapperDiv
-      ) {
-        (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozFullScreenElement === this.wrapperDiv) {
-        (document as any).mozCancelFullScreen();
-      } else if ((document as any).msFullscreenElement === this.wrapperDiv) {
-        (document as any).msExitFullscreen();
       }
     } catch (err) {
       console.error("Fullscreen exit failed:", err);

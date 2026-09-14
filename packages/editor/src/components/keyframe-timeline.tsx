@@ -1,5 +1,11 @@
 import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 /**
  * Localized strings consumed by `KeyframeTimeline`. Extends the core
@@ -170,7 +176,6 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   onTogglePlay,
   onSelectEntry,
   onUpdateEntry,
-  onDeleteEntry,
   onAddEntry,
   onDeselect,
   strings: stringsOverride,
@@ -252,7 +257,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
       beginDrag(e, (ev, stripRect) => {
         const t = pxToTime(ev.clientX, stripRect);
         onSeek(
-          snapTime(clampValue(t, 0, propsRef.current.videoDuration), ev.shiftKey),
+          snapTime(
+            clampValue(t, 0, propsRef.current.videoDuration),
+            ev.shiftKey,
+          ),
         );
       });
     },
@@ -260,18 +268,17 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   );
 
   const beginKeyframeDrag = useCallback(
-    (id: string, startTime: number) =>
-      (e: React.PointerEvent<HTMLElement>) => {
-        const startX = e.clientX;
-        beginDrag(e, (ev, stripRect) => {
-          const dt = (ev.clientX - startX) / propsRef.current.zoom;
-          const t = snapTime(
-            clampValue(startTime + dt, 0, propsRef.current.videoDuration),
-            ev.shiftKey,
-          );
-          onUpdateEntry(id, { timestamp: t });
-        });
-      },
+    (id: string, startTime: number) => (e: React.PointerEvent<HTMLElement>) => {
+      const startX = e.clientX;
+      beginDrag(e, (ev) => {
+        const dt = (ev.clientX - startX) / propsRef.current.zoom;
+        const t = snapTime(
+          clampValue(startTime + dt, 0, propsRef.current.videoDuration),
+          ev.shiftKey,
+        );
+        onUpdateEntry(id, { timestamp: t });
+      });
+    },
     [beginDrag, onUpdateEntry],
   );
 
@@ -285,11 +292,15 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
       (e: React.PointerEvent<HTMLElement>) => {
         const startX = e.clientX;
         const duration = startEnd - startStart;
-        beginDrag(e, (ev, stripRect) => {
+        beginDrag(e, (ev) => {
           const dt = (ev.clientX - startX) / propsRef.current.zoom;
           if (edge === "body") {
             const nextStart = snapTime(
-              clampValue(startStart + dt, 0, propsRef.current.videoDuration - duration),
+              clampValue(
+                startStart + dt,
+                0,
+                propsRef.current.videoDuration - duration,
+              ),
               ev.shiftKey,
             );
             onUpdateEntry(id, {
@@ -304,7 +315,11 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
             onUpdateEntry(id, { start: nextStart });
           } else {
             const nextEnd = snapTime(
-              clampValue(startEnd + dt, startStart + MIN_RANGE, propsRef.current.videoDuration),
+              clampValue(
+                startEnd + dt,
+                startStart + MIN_RANGE,
+                propsRef.current.videoDuration,
+              ),
               ev.shiftKey,
             );
             onUpdateEntry(id, { end: nextEnd });
@@ -332,39 +347,62 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   }, []);
 
   const handleZoom = useCallback((direction: 1 | -1) => {
-    setZoom((z) => clampValue(direction > 0 ? z * 1.5 : z / 1.5, MIN_ZOOM, MAX_ZOOM));
+    setZoom((z) =>
+      clampValue(direction > 0 ? z * 1.5 : z / 1.5, MIN_ZOOM, MAX_ZOOM),
+    );
   }, []);
 
   const handleKeyframeKeyDown = useCallback(
-    (entry: KeyframeTimelineEntry) =>
-      (e: React.KeyboardEvent<HTMLElement>) => {
-        const step = e.shiftKey ? 5 : 1;
-        let updates: { timestamp?: number; start?: number; end?: number } | null =
-          null;
-        // Round the nudge base so keyboard nudges re-align to the
-        // seconds grid even after a Shift-bypass drag left a float.
-        if (entry.hookType === "blocking") {
-          const base = Math.round(entry.timestamp ?? 0);
-          if (e.key === "ArrowLeft") updates = { timestamp: clampValue(base - step, 0, propsRef.current.videoDuration) };
-          if (e.key === "ArrowRight") updates = { timestamp: clampValue(base + step, 0, propsRef.current.videoDuration) };
-        } else {
-          const s = Math.round(entry.start ?? 0);
-          const en = Math.round(entry.end ?? 0);
-          const dur = en - s;
-          if (e.key === "ArrowLeft") {
-            const next = clampValue(s - step, 0, propsRef.current.videoDuration - dur);
-            updates = { start: next, end: next + dur };
-          }
-          if (e.key === "ArrowRight") {
-            const next = clampValue(s + step, 0, propsRef.current.videoDuration - dur);
-            updates = { start: next, end: next + dur };
-          }
+    (entry: KeyframeTimelineEntry) => (e: React.KeyboardEvent<HTMLElement>) => {
+      const step = e.shiftKey ? 5 : 1;
+      let updates: { timestamp?: number; start?: number; end?: number } | null =
+        null;
+      // Round the nudge base so keyboard nudges re-align to the
+      // seconds grid even after a Shift-bypass drag left a float.
+      if (entry.hookType === "blocking") {
+        const base = Math.round(entry.timestamp ?? 0);
+        if (e.key === "ArrowLeft")
+          updates = {
+            timestamp: clampValue(
+              base - step,
+              0,
+              propsRef.current.videoDuration,
+            ),
+          };
+        if (e.key === "ArrowRight")
+          updates = {
+            timestamp: clampValue(
+              base + step,
+              0,
+              propsRef.current.videoDuration,
+            ),
+          };
+      } else {
+        const s = Math.round(entry.start ?? 0);
+        const en = Math.round(entry.end ?? 0);
+        const dur = en - s;
+        if (e.key === "ArrowLeft") {
+          const next = clampValue(
+            s - step,
+            0,
+            propsRef.current.videoDuration - dur,
+          );
+          updates = { start: next, end: next + dur };
         }
-        if (!updates) return;
-        e.preventDefault();
-        e.stopPropagation();
-        onUpdateEntry(entry.id, updates);
-      },
+        if (e.key === "ArrowRight") {
+          const next = clampValue(
+            s + step,
+            0,
+            propsRef.current.videoDuration - dur,
+          );
+          updates = { start: next, end: next + dur };
+        }
+      }
+      if (!updates) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onUpdateEntry(entry.id, updates);
+    },
     [onUpdateEntry],
   );
 
@@ -372,8 +410,18 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
     (e: React.KeyboardEvent<HTMLElement>) => {
       const step = e.shiftKey ? 5 : 1;
       let t: number | null = null;
-      if (e.key === "ArrowLeft") t = clampValue(propsRef.current.currentTime - step, 0, propsRef.current.videoDuration);
-      if (e.key === "ArrowRight") t = clampValue(propsRef.current.currentTime + step, 0, propsRef.current.videoDuration);
+      if (e.key === "ArrowLeft")
+        t = clampValue(
+          propsRef.current.currentTime - step,
+          0,
+          propsRef.current.videoDuration,
+        );
+      if (e.key === "ArrowRight")
+        t = clampValue(
+          propsRef.current.currentTime + step,
+          0,
+          propsRef.current.videoDuration,
+        );
       if (t == null) return;
       e.preventDefault();
       e.stopPropagation();
@@ -390,7 +438,9 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
       const stripRect = strip.getBoundingClientRect();
       if (stripRect.width <= 0) return;
       const t = (e.clientX - stripRect.left) / propsRef.current.zoom;
-      onSeek(snapTime(clampValue(t, 0, propsRef.current.videoDuration), e.shiftKey));
+      onSeek(
+        snapTime(clampValue(t, 0, propsRef.current.videoDuration), e.shiftKey),
+      );
     },
     [onSeek],
   );
@@ -445,7 +495,12 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
       {/* Controls row */}
       <div
         data-testid="keyframe-timeline-controls"
-        style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
       >
         <button
           type="button"
@@ -652,7 +707,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                         padding: 0,
                         touchAction: "none",
                       }}
-                      onPointerDown={beginKeyframeDrag(entry.id, entry.timestamp ?? 0)}
+                      onPointerDown={beginKeyframeDrag(
+                        entry.id,
+                        entry.timestamp ?? 0,
+                      )}
                     >
                       <span
                         style={{
@@ -672,7 +730,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                   );
                 }
                 const startPx = (entry.start ?? 0) * zoom;
-                const widthPx = Math.max(((entry.end ?? 0) - (entry.start ?? 0)) * zoom, 12);
+                const widthPx = Math.max(
+                  ((entry.end ?? 0) - (entry.start ?? 0)) * zoom,
+                  12,
+                );
                 return (
                   <div
                     key={entry.id}
@@ -701,7 +762,12 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       role="separator"
                       aria-label={`${entry.title} — resize start`}
                       data-testid="timeline-range-start"
-                      onPointerDown={beginRangeDrag(entry.id, "start", entry.start ?? 0, entry.end ?? 0)}
+                      onPointerDown={beginRangeDrag(
+                        entry.id,
+                        "start",
+                        entry.start ?? 0,
+                        entry.end ?? 0,
+                      )}
                       style={{
                         width: 8,
                         alignSelf: "stretch",
@@ -717,7 +783,12 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       aria-label={`${entry.title} — ${strings.nonBlockingRangeLabel} ${formatTick(Math.round(entry.start ?? 0))} to ${formatTick(Math.round(entry.end ?? 0))}`}
                       onClick={() => onSelectEntry(entry.id)}
                       onKeyDown={handleKeyframeKeyDown(entry)}
-                      onPointerDown={beginRangeDrag(entry.id, "body", entry.start ?? 0, entry.end ?? 0)}
+                      onPointerDown={beginRangeDrag(
+                        entry.id,
+                        "body",
+                        entry.start ?? 0,
+                        entry.end ?? 0,
+                      )}
                       style={{
                         flex: 1,
                         alignSelf: "stretch",
@@ -742,7 +813,12 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       role="separator"
                       aria-label={`${entry.title} — resize end`}
                       data-testid="timeline-range-end"
-                      onPointerDown={beginRangeDrag(entry.id, "end", entry.start ?? 0, entry.end ?? 0)}
+                      onPointerDown={beginRangeDrag(
+                        entry.id,
+                        "end",
+                        entry.start ?? 0,
+                        entry.end ?? 0,
+                      )}
                       style={{
                         width: 8,
                         alignSelf: "stretch",

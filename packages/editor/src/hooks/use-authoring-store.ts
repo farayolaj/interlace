@@ -1,11 +1,11 @@
+import type { SerializedInteractiveMediaDocument } from "@interlace/core";
 import {
   ContentInstance,
   ContentTypeRegistry,
   Hook,
-  deserialize,
   serialize as coreSerialize,
+  deserialize,
 } from "@interlace/core";
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
 import { useCallback, useState } from "react";
 
 /**
@@ -87,7 +87,7 @@ export function useAuthoringStore(
   );
 
   const doSerialize = useCallback(
-    (_adapterType?: unknown) =>
+    () =>
       coreSerialize(
         state.items.map((item) => item.content),
         state.videoSrc,

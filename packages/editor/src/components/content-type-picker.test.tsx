@@ -60,7 +60,7 @@ describe("ContentTypePicker", () => {
   });
 
   it("toggles dropdown on button click", () => {
-    const { container } = render(
+    render(
       <ContentTypePicker
         registeredTypes={["quiz", "survey"]}
         selectedType={null}

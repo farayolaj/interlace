@@ -1,12 +1,12 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { firePointer, stubPointerCapture } from "../test-utils/pointer";
+import { stubRect } from "../test-utils/stub-rect";
 import {
   KeyframeTimeline,
   type KeyframeTimelineEntry,
   type KeyframeTimelineProps,
 } from "./keyframe-timeline";
-import { firePointer, stubPointerCapture } from "../test-utils/pointer";
-import { stubRect } from "../test-utils/stub-rect";
 
 afterEach(() => {
   cleanup();
@@ -43,9 +43,7 @@ function baseProps(): KeyframeTimelineProps {
  * (jsdom returns zeros) so the px↔time math is deterministic:
  * 60s × 8px/s = 480px.
  */
-function renderTimeline(
-  overrides: Partial<KeyframeTimelineProps> = {},
-) {
+function renderTimeline(overrides: Partial<KeyframeTimelineProps> = {}) {
   const props = { ...baseProps(), ...overrides };
   const utils = render(<KeyframeTimeline {...props} />);
   const strip = utils.container.querySelector(
@@ -53,13 +51,6 @@ function renderTimeline(
   ) as HTMLDivElement;
   const restore = stubRect(strip, { width: DURATION * ZOOM, height: 72 });
   return { ...props, ...utils, strip, restore };
-}
-
-function lastCall<T>(mock: unknown): T {
-  const calls = (mock as ReturnType<typeof vi.fn>).mock.calls;
-  const last = calls[calls.length - 1];
-  if (!last) throw new Error("expected mock to have been called");
-  return last[0] as T;
 }
 
 function keyframeEl(container: HTMLElement, id: string): HTMLElement {

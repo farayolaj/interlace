@@ -37,7 +37,6 @@ const meta: Meta<typeof KeyframeTimeline> = {
     onTogglePlay: fn(),
     onSelectEntry: fn(),
     onUpdateEntry: fn(),
-    onDeleteEntry: fn(),
     onAddEntry: fn(),
   },
 };
@@ -80,7 +79,8 @@ export const StringsOverride: Story = {
 
 /** Fully interactive: drag keyframes, scrub the playhead, zoom. */
 export function Interactive() {
-  const [entries, setEntries] = useState<KeyframeTimelineEntry[]>(makeEntries());
+  const [entries, setEntries] =
+    useState<KeyframeTimelineEntry[]>(makeEntries());
   const [currentTime, setCurrentTime] = useState(18);
   return (
     <>
@@ -103,8 +103,8 @@ export function Interactive() {
                       start: updates.start ?? e.start,
                       end: updates.end ?? e.end,
                     }
-                : e
-            )
+                : e,
+            ),
           )
         }
         onDeleteEntry={(id) =>

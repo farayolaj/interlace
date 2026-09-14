@@ -10,25 +10,17 @@ import {
   SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
 } from "@interlace/core";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { useAuthoringStore } from "../hooks/use-authoring-store";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
+import { useAuthoringStore } from "../hooks/use-authoring-store";
 import { ContentTypeEditor } from "./content-type-editor";
 import { InspectorPanel } from "./inspector-panel";
 import { KeyframeTimeline } from "./keyframe-timeline";
 import { PlacementEditor } from "./placement-editor";
-import { PreviewModal } from "./preview-modal";
 import type { PreviewModalStrings } from "./preview-modal";
+import { PreviewModal } from "./preview-modal";
+import type { VideoSourceInputStrings } from "./video-source-input";
 import { VideoSourceInput } from "./video-source-input";
-import type {
-  VideoSourceInputStrings,
-} from "./video-source-input";
 
 /**
  * Editor-local strings layered on top of the core `Strings`. Hosts pass
@@ -354,7 +346,9 @@ function EditorVideoToolbar({
             ? strings.durationUnknownLabel
             : `${duration.toFixed(1)}s`}
         </span>
-        {hint ? <span data-testid="interlace-editor-selection-hint">{hint}</span> : null}
+        {hint ? (
+          <span data-testid="interlace-editor-selection-hint">{hint}</span>
+        ) : null}
       </span>
       <div style={{ display: "flex", gap: 8 }}>
         <button
@@ -432,14 +426,20 @@ export function InterlaceEditor({
   strings: stringsOverride,
   theme,
   onError,
-  adapterType = "native",
 }: InterlaceEditorProps) {
   const strings = { ...DEFAULT_EDITOR_STRINGS, ...stringsOverride };
-  const { state, addItem, removeItem, updateItem, loadDocument, serialize, setVideoMetadata } =
-    useAuthoringStore(
-      document?.video?.src ?? "",
-      document?.video?.duration ?? 0,
-    );
+  const {
+    state,
+    addItem,
+    removeItem,
+    updateItem,
+    loadDocument,
+    serialize,
+    setVideoMetadata,
+  } = useAuthoringStore(
+    document?.video?.src ?? "",
+    document?.video?.duration ?? 0,
+  );
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   /**
@@ -458,7 +458,9 @@ export function InterlaceEditor({
   const nextIdRef = useRef(1);
   const registryRef = useRef(contentTypeRegistry);
   registryRef.current = contentTypeRegistry;
-  const loadedInitialDocRef = useRef<SerializedInteractiveMediaDocument | null>(null);
+  const loadedInitialDocRef = useRef<SerializedInteractiveMediaDocument | null>(
+    null,
+  );
   const videoRef = useRef<HTMLVideoElement | null>(null);
   /**
    * Last reported duration for the *current* `videoSrc`. When the load
@@ -466,7 +468,10 @@ export function InterlaceEditor({
    * stale value (cached video fires `loadedmetadata` before the load
    * commits), a follow-up effect re-pushes this value.
    */
-  const lastDurationForSrcRef = useRef<{ src: string; duration: number } | null>(null);
+  const lastDurationForSrcRef = useRef<{
+    src: string;
+    duration: number;
+  } | null>(null);
   /**
    * Pending seek target. Set when `handleSelectEntry`'s `video.currentTime`
    * setter throws (the video has not loaded metadata yet) and consumed by
@@ -503,7 +508,9 @@ export function InterlaceEditor({
       registryRef.current,
     );
     if (validationErrors.length > 0) {
-      onError?.(new Error(`${strings.loadErrorTitle}: ${validationErrors.join("; ")}`));
+      onError?.(
+        new Error(`${strings.loadErrorTitle}: ${validationErrors.join("; ")}`),
+      );
     }
     // Warnings are *not* cosmetic: `deserialize` skips items that produce
     // them (unrecognized content type, invalid hook, version mismatch
@@ -716,7 +723,15 @@ export function InterlaceEditor({
   );
 
   const handleUpdateEntry = useCallback(
-    (id: string, updates: { title?: string; timestamp?: number; start?: number; end?: number }) => {
+    (
+      id: string,
+      updates: {
+        title?: string;
+        timestamp?: number;
+        start?: number;
+        end?: number;
+      },
+    ) => {
       if (pendingHook?.id === id) {
         // Pending hook: times and title live in editor-local state.
         setPendingHook((prev) => {
@@ -733,9 +748,7 @@ export function InterlaceEditor({
           return {
             ...prev,
             title:
-              typeof updates.title === "string"
-                ? updates.title
-                : prev.title,
+              typeof updates.title === "string" ? updates.title : prev.title,
             hook: nextHook,
           };
         });
@@ -743,7 +756,9 @@ export function InterlaceEditor({
       }
       const current = state.items.find((item) => item.content.getId() === id);
       if (!current) return;
-      const contentType = contentTypeRegistry.get(current.content.getContentTypeId());
+      const contentType = contentTypeRegistry.get(
+        current.content.getContentTypeId(),
+      );
       if (!contentType) return;
       const title =
         typeof updates.title === "string"
@@ -808,7 +823,9 @@ export function InterlaceEditor({
         (item) => item.content.getId() === selectedItemId,
       );
       if (!current) return;
-      const contentType = contentTypeRegistry.get(current.content.getContentTypeId());
+      const contentType = contentTypeRegistry.get(
+        current.content.getContentTypeId(),
+      );
       if (!contentType) return;
       const updatedContent = rebuildContentInstance(
         current.content,
@@ -866,7 +883,14 @@ export function InterlaceEditor({
       );
       updateItem(selectedItemId, { content: rebuilt, hook: current.hook });
     },
-    [pendingHook, selectedItemId, contentTypeRegistry, addItem, state.items, updateItem],
+    [
+      pendingHook,
+      selectedItemId,
+      contentTypeRegistry,
+      addItem,
+      state.items,
+      updateItem,
+    ],
   );
 
   /** Manual time edits from Hook details (clamped, pending-aware). */
@@ -876,8 +900,7 @@ export function InterlaceEditor({
       const isPending = pendingHook?.id === selectedItemId;
       const hook = isPending
         ? pendingHook?.hook
-        : state.items.find((it) => it.content.getId() === selectedItemId)
-            ?.hook;
+        : state.items.find((it) => it.content.getId() === selectedItemId)?.hook;
       if (!hook) return;
       const clamped = clampTimeUpdates(hook, updates, state.videoDuration);
       if (isPending) {
@@ -890,7 +913,13 @@ export function InterlaceEditor({
       }
       handleUpdateEntry(selectedItemId, clamped);
     },
-    [selectedItemId, pendingHook, state.items, state.videoDuration, handleUpdateEntry],
+    [
+      selectedItemId,
+      pendingHook,
+      state.items,
+      state.videoDuration,
+      handleUpdateEntry,
+    ],
   );
 
   const handleVideoSourceChange = useCallback(
@@ -1053,7 +1082,12 @@ export function InterlaceEditor({
     return (
       <div
         className="interlace-editor"
-        style={{ ...rootStyle, padding: 16, borderRadius: 8, border: "1px solid" }}
+        style={{
+          ...rootStyle,
+          padding: 16,
+          borderRadius: 8,
+          border: "1px solid",
+        }}
       >
         <div
           style={{
@@ -1083,7 +1117,10 @@ export function InterlaceEditor({
           ) : null}
         </div>
         <VideoSourceInput
-          value={{ src: state.videoSrc || undefined, duration: state.videoDuration || undefined }}
+          value={{
+            src: state.videoSrc || undefined,
+            duration: state.videoDuration || undefined,
+          }}
           onChange={handleVideoSourceChange}
           onUpload={onUpload}
           onError={onError}
@@ -1096,7 +1133,12 @@ export function InterlaceEditor({
   return (
     <div
       className="interlace-editor"
-      style={{ ...rootStyle, padding: 16, borderRadius: 8, border: "1px solid" }}
+      style={{
+        ...rootStyle,
+        padding: 16,
+        borderRadius: 8,
+        border: "1px solid",
+      }}
     >
       <header
         style={{
@@ -1253,7 +1295,9 @@ export function InterlaceEditor({
               contentTypeId: selectedContentTypeId,
               registeredTypes: registeredTypeIds,
             }}
-            onTitleChange={(title) => handleUpdateEntry(selectedItemId, { title })}
+            onTitleChange={(title) =>
+              handleUpdateEntry(selectedItemId, { title })
+            }
             onTimeChange={handleTimeChange}
             onContentTypeSelect={handleContentTypeSelect}
             placement={selectedHook.placement}

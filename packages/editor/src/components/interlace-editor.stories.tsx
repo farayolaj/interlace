@@ -1,15 +1,15 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "@storybook/test";
-import { useState } from "react";
 import {
   ContentTypeRegistry,
   type ContentType,
   type SerializedInteractiveMediaDocument,
 } from "@interlace/core";
+import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "@storybook/test";
+import { useState } from "react";
 import { InterlaceEditor } from "./interlace-editor";
 
 const VIDEO_SRC = "https://samplelib.com/mp4/sample-20s-360p.mp4";
-const VIDEO_DURATION = 60;
+const VIDEO_DURATION = 20;
 
 function makeQuizContentType(): ContentType<{
   question: string;
@@ -101,8 +101,9 @@ const meta: Meta<typeof InterlaceEditor> = {
   component: InterlaceEditor,
   args: {
     contentTypeRegistry: makeDefaultRegistry(),
-    onUpload: fn(async (file: File) =>
-      `https://cdn.example.com/${encodeURIComponent(file.name)}`,
+    onUpload: fn(
+      async (file: File) =>
+        `https://cdn.example.com/${encodeURIComponent(file.name)}`,
     ),
     onSave: fn(),
   },
@@ -157,9 +158,8 @@ export const ThemeOverride: Story = {
 };
 
 export function WithSaveLogging() {
-  const [savedDoc, setSavedDoc] = useState<SerializedInteractiveMediaDocument | null>(
-    null,
-  );
+  const [savedDoc, setSavedDoc] =
+    useState<SerializedInteractiveMediaDocument | null>(null);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
       <InterlaceEditor
