@@ -116,12 +116,10 @@ function walkIntoBlockingWindow(
 function makeHarness(timestamp: number) {
   const { adapter } = makeManualClockAdapter();
   const registry = new ContentTypeRegistry();
-    registry.register(QuizContentType);
+  registry.register(QuizContentType);
   const states: unknown[] = [];
   return {
     adapter,
-    doc: blockingDoc(timestamp),
-    registry,
     states,
     props: {
       adapter,
@@ -155,12 +153,6 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
-
-  function renderRuntime(harness: ReturnType<typeof makeHarness>) {
-    return renderHook((props) => useInteractiveMedia(props), {
-      initialProps: harness.props,
-    });
-  }
 
   it("plays a blocking quiz to completion through the full runtime loop", () => {
     const harness = makeHarness(10);
