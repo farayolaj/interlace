@@ -91,6 +91,27 @@ const blockingDoc = (
   ],
 });
 
+/** Canonical rich-media quiz data for the Phase 3 runtime flow. */
+const CANONICAL_RICH_DATA = {
+  question: {
+    text: "Which option has media?",
+    media: { src: "https://example.com/q.png", alt: "quiz question art" },
+  },
+  options: [
+    {
+      id: "o-1",
+      text: "Plain",
+      media: { src: "https://example.com/o1.png", alt: "opt one art" },
+    },
+    {
+      id: "o-2",
+      text: "Media option",
+      media: { src: "https://example.com/o2.png", alt: "opt two art" },
+    },
+  ],
+  correctOptionId: "o-2",
+};
+
 /** Runs one rAF frame of the hook's runtime loop (fake timers). */
 function tick(adapter: { currentTime: number }, frames = 1) {
   act(() => void vi.advanceTimersByTime(TICK_MS * frames));
@@ -124,6 +145,44 @@ function makeHarness(timestamp: number) {
     props: {
       adapter,
       document: blockingDoc(timestamp) as SerializedInteractiveMediaDocument,
+      registry,
+      onRenderStateChange: (state: unknown) => {
+        states.push(state);
+      },
+    },
+  };
+}
+
+/** Same runtime wiring as `makeHarness`, with caller-supplied content data. */
+function makeHarnessWithData(data: unknown, timestamp = 10) {
+  const { adapter } = makeManualClockAdapter();
+  const registry = new ContentTypeRegistry();
+  registry.register(QuizContentType);
+  const states: unknown[] = [];
+  return {
+    adapter,
+    states,
+    props: {
+      adapter,
+      document: {
+        video: { src: "https://example.com/video.mp4", duration: 40 },
+        items: [
+          {
+            id: "quiz-block",
+            title: "Pause and answer",
+            hook: {
+              type: "blocking",
+              timestamp,
+              placement: { x: 10, y: 10, width: 40, height: 40 },
+            },
+            content: {
+              contentTypeId: "quiz-editor",
+              version: 1,
+              data,
+            },
+          },
+        ],
+      } as SerializedInteractiveMediaDocument,
       registry,
       onRenderStateChange: (state: unknown) => {
         states.push(state);
@@ -429,5 +488,68 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(playSpy).toHaveBeenCalled();
     expect(adapter.isPlaying).toBe(true);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("plays a canonical rich-media quiz through the full component", async () => {
+    const harness = makeHarnessWithData(CANONICAL_RICH_DATA, 10);
+    const { adapter } = harness;
+    const playSpy = vi.spyOn(adapter, "play");
+    render(<InteractiveVideoPlayer {...harness.props} />);
+    act(() => void vi.advanceTimersByTime(TICK_MS));
+
+    walkIntoBlockingWindow(adapter, 10);
+    expect(adapter.isPlaying).toBe(false); // paused at the hook
+
+    // The canonical rich shape renders its media in the overlay: the
+    // question image and both option thumbnails.
+    expect(screen.getByAltText("quiz question art")).toBeInTheDocument();
+    expect(screen.getByAltText("opt one art")).toBeInTheDocument();
+    expect(screen.getByAltText("opt two art")).toBeInTheDocument();
+
+    // The user answers the quiz in the overlay by its option id.
+    const option = screen.getByRole("button", { name: /Media option/ });
+    act(() => void fireEvent.click(option));
+
+    // Completion unblocks playback and dismisses the overlay.
+    await act(() => Promise.resolve());
+    expect(playSpy).toHaveBeenCalled();
+    expect(adapter.isPlaying).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("registers the canonical quiz type id and normalizes a legacy document", () => {
+    // Hook-level: a legacy document deserializes and triggers with no error.
+    const harness = makeHarness(10);
+    const { adapter } = harness;
+    const hook = renderHook((props) => useInteractiveMedia(props), {
+      initialProps: harness.props,
+    });
+    tick(adapter);
+    expect(hook.result.current.initialized).toBe(true);
+    expect(hook.result.current.error).toBeNull();
+
+    walkIntoBlockingWindow(adapter, 10);
+    expect(adapter.isPlaying).toBe(false);
+    expect(
+      (
+        hook.result.current.controller?.getRenderState(adapter.currentTime) as {
+          activeBlockingContentId?: string;
+        }
+      ).activeBlockingContentId,
+    ).toBe("quiz-block");
+
+    hook.unmount();
+
+    // The mounted overlay renders the legacy document through normalization:
+    // its string options surface as the canonical option labels.
+    const overlayHarness = makeHarness(10);
+    render(<InteractiveVideoPlayer {...overlayHarness.props} />);
+    act(() => void vi.advanceTimersByTime(TICK_MS));
+    walkIntoBlockingWindow(overlayHarness.adapter, 10);
+
+    expect(screen.getByRole("button", { name: "3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "4" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "5" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "6" })).toBeInTheDocument();
   });
 });
