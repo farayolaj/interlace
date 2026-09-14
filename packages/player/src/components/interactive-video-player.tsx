@@ -57,12 +57,17 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
 
   // Auto-open the blocking overlay when the controller pauses for blocking
   // content. The ref guard keeps a manually closed overlay closed instead of
-  // reopening it on every render state update.
+  // reopening it on every render state update; the ref re-arms when the
+  // controller leaves the blocking frame (scrub, settle, or completion), so
+  // re-seeking a dismissed hook re-opens it instead of leaving the player
+  // stuck with a paused video and no overlay.
   useEffect(() => {
     const blockingId = renderState.activeBlockingContentId;
     if (blockingId && blockingId !== lastAutoOpenedBlockingIdRef.current) {
       lastAutoOpenedBlockingIdRef.current = blockingId;
       setActiveContentId(blockingId);
+    } else if (!blockingId && lastAutoOpenedBlockingIdRef.current) {
+      lastAutoOpenedBlockingIdRef.current = null;
     }
   }, [renderState.activeBlockingContentId]);
 

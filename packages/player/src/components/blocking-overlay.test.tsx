@@ -50,7 +50,10 @@ function makeContentType() {
   return { contentType, renderPlayback, unmountPlayback };
 }
 
-function makeContent(data: DemoData): ContentInstance<DemoData> {
+function makeContent(
+  data: DemoData,
+  contentType: ContentType<DemoData> = makeContentType().contentType,
+): ContentInstance<DemoData> {
   const record: ContentRecord<DemoData> = {
     id: "blocking-1",
     title: "Pause and answer",
@@ -63,12 +66,12 @@ function makeContent(data: DemoData): ContentInstance<DemoData> {
       placement: { x: 10, y: 10, width: 20, height: 10 },
     },
   };
-  return new ContentInstance(record, makeContentType().contentType);
+  return new ContentInstance(record, contentType);
 }
 
 function renderOverlay(data: DemoData = { question: "What is 2 + 2?" }) {
   const { contentType, renderPlayback, unmountPlayback } = makeContentType();
-  const content = makeContent(data);
+  const content = makeContent(data, contentType);
   const onClose = vi.fn();
   const onContentComplete = vi.fn();
   const utils = render(

@@ -35,7 +35,6 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
   onContentComplete,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // Mount/unmount the content type's playback session. The same body
@@ -177,7 +176,6 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
             Close
           </button>
           <button
-            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             style={{
