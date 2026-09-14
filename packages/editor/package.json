@@ -54,6 +54,7 @@
   "dependencies": {
     "@interlace/core": "workspace:*",
     "@interlace/native-adapter": "workspace:*",
-    "@interlace/player": "workspace:*"
+    "@interlace/player": "workspace:*",
+    "@interlace/quiz": "workspace:*"
   }
 }

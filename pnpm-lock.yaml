@@ -96,6 +96,9 @@ importers:
       '@interlace/player':
         specifier: workspace:*
         version: link:../player
+      '@interlace/quiz':
+        specifier: workspace:*
+        version: link:../quiz
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:^
@@ -200,6 +203,9 @@ importers:
       '@interlace/core':
         specifier: workspace:*
         version: link:../core
+      '@interlace/quiz':
+        specifier: workspace:*
+        version: link:../quiz
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:^

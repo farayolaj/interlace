@@ -1,12 +1,14 @@
 import { ContentType } from "@interlace/core";
-import type { QuizData } from "./schema";
+import { QuizEditorType, unmountQuizEditor } from "./quiz-editor";
+import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
+import type { QuizData, RawQuizData } from "./schema";
 
 /**
- * Built-in Quiz content type for Interlace.
- *
- * Phase 1 skeleton; rich authoring/playback land in Phase 2. Registered id is
- * `quiz-editor` — the id `@interlace/editor`'s built-in QuizEditor authors
- * with — so editor-authored documents resolve without extra registry wiring.
+ * Built-in Quiz content type for Interlace. Authors the canonical
+ * {@link QuizData} shape with rich media and plays it back with immediate
+ * scoring. Registered id is `quiz-editor` — the id the editor's built-in
+ * quiz type authors with — so authored documents resolve without extra
+ * registry wiring.
  */
 export const QuizContentType: ContentType<QuizData> = {
   getId: () => "quiz-editor",
@@ -20,26 +22,35 @@ export const QuizContentType: ContentType<QuizData> = {
     // No preload needed for quiz content.
   },
 
-  // Phase 2 will fill the real surfaces; Phase-1 stubs.
-  renderEditor(): void {
-    // Phase 2.
+  renderEditor(
+    container: HTMLElement,
+    data: QuizData,
+    onChange: (newData: QuizData) => void,
+  ): void {
+    QuizEditorType.renderEditor(container, data, onChange);
   },
 
-  updateEditor(): void {
-    // Phase 2.
+  updateEditor(
+    container: HTMLElement,
+    data: QuizData,
+    onChange: (newData: QuizData) => void,
+  ): void {
+    QuizEditorType.updateEditor?.(container, data, onChange);
   },
 
-  renderPlayback(): void {
-    // Phase 2.
+  renderPlayback(
+    container: HTMLElement,
+    data: QuizData,
+    callbacks: { onComplete(score?: number): void },
+  ): void {
+    renderQuizPlayback(container, data as unknown as RawQuizData, callbacks);
   },
 
   unmountPlayback(container: HTMLElement): void {
-    // Phase 2.
-    void container;
+    unmountQuizPlayback(container);
   },
 
   unmount(container: HTMLElement): void {
-    // Phase 2.
-    void container;
+    unmountQuizEditor(container);
   },
 };

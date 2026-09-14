@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ContentTypeEditorSlot } from "../components/content-type-editor-slot";
 import { ContentTypeRegistry } from "@interlace/core";
 import { QuizEditor } from "./quiz-editor";
-import type { QuizData } from "./quiz-editor";
+import type { QuizData, RawQuizData } from "./quiz-editor";
 
 afterEach(() => {
   cleanup();
@@ -11,25 +11,26 @@ afterEach(() => {
 });
 
 /**
- * The QuizEditor tests were originally colocated with
- * `InteractiveMediaAuthoring`. When that component is removed in Phase 3,
- * these tests would be orphaned, so they are ported here and mounted
- * directly through `ContentTypeEditorSlot` — which is exactly how the
- * editor composes the content type in production.
+ * The QuizEditor tests mount directly through `ContentTypeEditorSlot` —
+ * which is exactly how the editor composes the content type in production.
+ * The editor accepts either the canonical shape or a legacy raw document
+ * (normalized on mount); every emitted edit is canonical.
  */
+type AuthoringData = QuizData | RawQuizData;
+
 function mountQuizEditor({
   data,
   onChange,
 }: {
-  data: QuizData;
-  onChange?: Mock<(next: QuizData) => void>;
+  data: AuthoringData;
+  onChange?: Mock<(next: AuthoringData) => void>;
 }) {
   const registry = new ContentTypeRegistry();
   registry.register(QuizEditor);
-  const handleChange: Mock<(next: QuizData) => void> =
-    onChange ?? vi.fn<(next: QuizData) => void>();
+  const handleChange: Mock<(next: AuthoringData) => void> =
+    onChange ?? vi.fn<(next: AuthoringData) => void>();
   const result = render(
-    <ContentTypeEditorSlot
+    <ContentTypeEditorSlot<AuthoringData>
       contentTypeId="quiz-editor"
       isOpen={true}
       onClose={vi.fn()}
@@ -39,6 +40,12 @@ function mountQuizEditor({
     />,
   );
   return { ...result, onChange: handleChange };
+}
+
+function lastEmitted(onChange: Mock<(next: AuthoringData) => void>): QuizData {
+  const call = onChange.mock.calls[onChange.mock.calls.length - 1];
+  if (!call) throw new Error("expected at least one onChange call");
+  return call[0] as QuizData;
 }
 
 describe("QuizEditor", () => {
@@ -54,9 +61,9 @@ describe("QuizEditor", () => {
       throw new Error("expected question input");
     }
     expect(question.value).toBe("What?");
-    const options = editor.querySelectorAll('input[type="text"]');
-    // The question input + two option inputs.
-    expect(options.length).toBe(3);
+    // One option text input per option (media inputs are separate).
+    const optionTexts = editor.querySelectorAll(".quiz-option-text");
+    expect(optionTexts.length).toBe(2);
     const select = editor.querySelector("select");
     if (!(select instanceof HTMLSelectElement)) {
       throw new Error("expected select");
@@ -64,7 +71,7 @@ describe("QuizEditor", () => {
     expect(select.options.length).toBe(2);
   });
 
-  it("reports question edits through onChange", () => {
+  it("reports question edits through onChange with canonical emission", () => {
     const { container, onChange } = mountQuizEditor({
       data: { question: "", options: ["a", "b"], correctIndex: 0 },
     });
@@ -74,7 +81,7 @@ describe("QuizEditor", () => {
     fireEvent.input(question, { target: { value: "Hello" } });
     expect(onChange).toHaveBeenCalled();
     const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-    expect(lastCall?.[0]).toMatchObject({ question: "Hello" });
+    expect(lastCall?.[0]).toMatchObject({ question: { text: "Hello" } });
   });
 
   it("keeps focus in the question input across keystrokes", () => {
@@ -90,19 +97,30 @@ describe("QuizEditor", () => {
     expect(document.activeElement).toBe(question);
   });
 
-  it("clamps correctIndex to the valid option range on sync", () => {
-    // A 2-option document with correctIndex=5 is invalid; the controller
-    // must clamp it to 0 so the emitted data never points at a missing
-    // option.
-    const { container } = mountQuizEditor({
-      data: { question: "Q", options: ["a", "b"], correctIndex: 5 },
+  it("edits a legacy raw document through normalization and emits canonical data", () => {
+    // Legacy v1 document (string options + numeric correctIndex) mounts
+    // through the normalization path; the select reflects the mapped id.
+    const { container, onChange } = mountQuizEditor({
+      data: { question: "Q", options: ["a", "b"], correctIndex: 1 },
     });
     const select = container.querySelector("select") as HTMLSelectElement | null;
     if (!select) throw new Error("expected select");
-    expect(select.selectedIndex).toBe(0);
+    expect(select.selectedOptions[0]?.value).toBe("opt-1");
+
+    const question = container.querySelector(".quiz-question") as HTMLInputElement | null;
+    if (!question) throw new Error("expected question input");
+    fireEvent.input(question, { target: { value: "Edited" } });
+
+    const data = lastEmitted(onChange);
+    expect(data.question).toEqual({ text: "Edited" });
+    expect(data.options).toEqual([
+      { id: "opt-0", text: "a" },
+      { id: "opt-1", text: "b" },
+    ]);
+    expect(data.correctOptionId).toBe("opt-1");
   });
 
-  it("adds a new option via the Add option button", () => {
+  it("adds a new option via the Add option button with a generated id", () => {
     const { container, onChange } = mountQuizEditor({
       data: { question: "Q", options: ["a", "b"], correctIndex: 0 },
     });
@@ -114,14 +132,16 @@ describe("QuizEditor", () => {
     if (!add) throw new Error("expected Add option button");
     fireEvent.click(add);
     expect(onChange).toHaveBeenCalled();
-    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-    const data = lastCall?.[0] as QuizData | undefined;
-    expect(data?.options).toEqual(["a", "b", ""]);
+    const data = lastEmitted(onChange);
+    expect(data.options).toEqual([
+      { id: "opt-0", text: "a" },
+      { id: "opt-1", text: "b" },
+      { id: "opt-2", text: "" },
+    ]);
+    expect(data.correctOptionId).toBe("opt-0");
   });
 
-  it("adjusts correctIndex when an option is removed", async () => {
-    // Start with 3 options, correctIndex=2 (the third). Remove the first
-    // option; the correct answer shifts down to index 1, not 2.
+  it("removing a non-correct option keeps the remaining options and correctness", async () => {
     const { container, onChange } = mountQuizEditor({
       data: { question: "Q", options: ["a", "b", "c"], correctIndex: 2 },
     });
@@ -133,17 +153,15 @@ describe("QuizEditor", () => {
     if (removeButtons[0]) fireEvent.click(removeButtons[0]);
 
     await waitFor(() => {
-      const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-      const data = lastCall?.[0] as QuizData | undefined;
-      expect(data?.options).toEqual(["b", "c"]);
-      expect(data?.correctIndex).toBe(1);
+      const data = lastEmitted(onChange);
+      expect(data.options.map((o) => o.text)).toEqual(["b", "c"]);
+      // Ids are preserved; the correct option (the third originally) keeps
+      // its id rather than being shifted.
+      expect(data.correctOptionId).toBe("opt-2");
     });
   });
 
-  it("clamps correctIndex to 0 when the removed option was the correct one", async () => {
-    // Start with 3 options, correctIndex=0 (the first). Remove the first
-    // option; the correct answer was removed, so the controller must
-    // clamp to 0 (the new first option) rather than leaving a stale -1.
+  it("removing the correct option clears correctOptionId", async () => {
     const { container, onChange } = mountQuizEditor({
       data: { question: "Q", options: ["a", "b", "c"], correctIndex: 0 },
     });
@@ -155,26 +173,30 @@ describe("QuizEditor", () => {
     if (removeButtons[0]) fireEvent.click(removeButtons[0]);
 
     await waitFor(() => {
-      const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-      const data = lastCall?.[0] as QuizData | undefined;
-      expect(data?.options).toEqual(["b", "c"]);
-      expect(data?.correctIndex).toBe(0);
+      const data = lastEmitted(onChange);
+      expect(data.options.map((o) => o.text)).toEqual(["b", "c"]);
+      expect(data.correctOptionId).toBeNull();
     });
   });
 
-  it("reports the correctIndex change via the select", () => {
+  it("reports the correct-answer change via the select", () => {
     const { container, onChange } = mountQuizEditor({
       data: { question: "Q", options: ["a", "b", "c"], correctIndex: 0 },
     });
     const select = container.querySelector("select") as HTMLSelectElement | null;
     if (!select) throw new Error("expected select");
-    fireEvent.change(select, { target: { value: "2" } });
+    fireEvent.change(select, { target: { value: "opt-2" } });
     expect(onChange).toHaveBeenCalled();
-    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-    expect(lastCall?.[0]).toMatchObject({ correctIndex: 2 });
+    expect(lastEmitted(onChange).correctOptionId).toBe("opt-2");
   });
 
   it("returns getMaximumScore() = 100", () => {
-    expect(QuizEditor.getMaximumScore({ question: "", options: [] })).toBe(100);
+    expect(
+      QuizEditor.getMaximumScore({
+        question: { text: "" },
+        options: [],
+        correctOptionId: null,
+      }),
+    ).toBe(100);
   });
 });

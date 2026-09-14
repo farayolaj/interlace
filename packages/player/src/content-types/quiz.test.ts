@@ -16,6 +16,18 @@ const QUIZ_DATA: QuizData = {
   correctIndex: 1,
 };
 
+/** Canonical-shaped data for the content-type-level surface (`getMaximumScore`, `renderEditor`). */
+type CanonicalQuizData = Parameters<typeof QuizContentType.renderEditor>[1];
+const CANONICAL_QUIZ_DATA: CanonicalQuizData = {
+  question: { text: "What is 2 + 2?" },
+  options: [
+    { id: "opt-0", text: "3" },
+    { id: "opt-1", text: "4" },
+    { id: "opt-2", text: "5" },
+  ],
+  correctOptionId: "opt-1",
+};
+
 function renderIntoContainer(data: QuizData = QUIZ_DATA) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -32,7 +44,7 @@ function renderIntoContainer(data: QuizData = QUIZ_DATA) {
 
 describe("QuizContentType", () => {
   it("getMaximumScore returns the maximum quiz score", () => {
-    expect(QuizContentType.getMaximumScore(QUIZ_DATA)).toBe(100);
+    expect(QuizContentType.getMaximumScore(CANONICAL_QUIZ_DATA)).toBe(100);
   });
 
   it("is registered as quiz-editor (the editor package's authoring id)", () => {
@@ -135,7 +147,7 @@ describe("QuizContentType", () => {
     document.body.appendChild(container);
     const onChange = vi.fn();
 
-    QuizContentType.renderEditor(container, QUIZ_DATA, onChange);
+    QuizContentType.renderEditor(container, CANONICAL_QUIZ_DATA, onChange);
 
     const input = container.querySelector(
       ".quiz-question",
@@ -144,7 +156,7 @@ describe("QuizContentType", () => {
     input.value = "New question";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ question: "New question" }),
+      expect.objectContaining({ question: { text: "New question" } }),
     );
 
     QuizContentType.unmount?.(container);
