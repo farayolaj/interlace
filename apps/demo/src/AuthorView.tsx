@@ -20,21 +20,27 @@ export function AuthorView({ initialDocument, onSaved }: AuthorViewProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   return (
-    <div>
+    <section className="demo-panel">
+      <header className="demo-panel-header">
+        <h2 className="demo-panel-title">Create an interactive video</h2>
+        <p className="demo-panel-subtitle">
+          Add a video, place hooks on the timeline, then save to play it back.
+        </p>
+      </header>
+
       {errorMessage && (
-        <div
-          role="alert"
-          style={{
-            padding: "8px 12px",
-            marginBottom: 12,
-            background: "#fee",
-            color: "#c33",
-            borderRadius: 4,
-          }}
-        >
-          {errorMessage}
+        <div className="demo-alert" role="alert">
+          <span className="demo-alert-message">{errorMessage}</span>
+          <button
+            type="button"
+            className="demo-alert-dismiss"
+            onClick={() => setErrorMessage(null)}
+          >
+            Dismiss
+          </button>
         </div>
       )}
+
       <InterlaceEditor
         contentTypeRegistry={getRegistry()}
         document={initialDocument ?? undefined}
@@ -45,6 +51,6 @@ export function AuthorView({ initialDocument, onSaved }: AuthorViewProps) {
         }}
         onError={(error) => setErrorMessage(error.message)}
       />
-    </div>
+    </section>
   );
 }

@@ -49,20 +49,12 @@ function VideoPlayer({
   }, []);
 
   return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        aspectRatio: "16 / 9",
-        backgroundColor: "#000",
-      }}
-    >
+    <div className="watch-stage">
       <video
         ref={videoRef}
         src={doc.video.src}
         controls
         preload="metadata"
-        style={{ width: "100%", height: "100%", display: "block" }}
       />
       {adapter ? (
         <div
@@ -83,18 +75,7 @@ function VideoPlayer({
           />
         </div>
       ) : (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#999",
-          }}
-        >
-          Loading player...
-        </div>
+        <div className="watch-loading">Loading player…</div>
       )}
     </div>
   );
@@ -112,32 +93,24 @@ export function WatchView({ doc, onResetToSample, onError }: WatchViewProps) {
     onResetToSample();
   };
 
+  const isSample = doc === SAMPLE_DOC;
+
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>Watch</span>
-        <button
-          type="button"
-          onClick={handleReset}
-          style={{
-            padding: "6px 14px",
-            borderRadius: 6,
-            border: "1px solid #cbd5e1",
-            background: "#ffffff",
-            cursor: "pointer",
-          }}
-        >
+    <section className="demo-panel">
+      <div className="watch-header">
+        <div>
+          <h2 className="watch-title">Watch</h2>
+          <p className="watch-hint">
+            {isSample
+              ? "Playing: sample trailer"
+              : "Playing: your saved document"}
+          </p>
+        </div>
+        <button type="button" className="demo-btn" onClick={handleReset}>
           Reset to sample
         </button>
       </div>
       <VideoPlayer key={remountKey} doc={doc} onError={onError} />
-    </div>
+    </section>
   );
 }

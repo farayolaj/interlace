@@ -38,65 +38,52 @@ function App() {
     setDoc(SAMPLE_DOC);
   };
 
+  const dismissError = () => setErrorMessage(null);
+
   return (
-    <div style={{ minHeight: "100vh" }}>
-      <header
-        style={{
-          padding: "16px 24px",
-          borderBottom: "1px solid #e2e8f0",
-          background: "#f8fafc",
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Interlace demo</h1>
+    <div className="demo-app">
+      <header className="demo-header">
+        <div className="demo-header-inner">
+          <h1 className="demo-wordmark">Interlace</h1>
+          <p className="demo-tagline">
+            A demo of interactive video authoring and playback.
+          </p>
+        </div>
       </header>
 
-      <nav
-        role="tablist"
-        aria-label="Demo views"
-        style={{
-          display: "flex",
-          gap: 8,
-          padding: "12px 24px",
-          borderBottom: "1px solid #e2e8f0",
-        }}
-      >
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={mode === tab.id}
-            onClick={() => setMode(tab.id)}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "1px solid #cbd5e1",
-              background: mode === tab.id ? "#0f172a" : "#ffffff",
-              color: mode === tab.id ? "#ffffff" : "#0f172a",
-              cursor: "pointer",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <nav className="demo-nav" role="tablist" aria-label="Demo views">
+        <div className="demo-nav-inner">
+          <div className="demo-tabs">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={mode === tab.id}
+                className="demo-tab"
+                onClick={() => setMode(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </nav>
 
-      {errorMessage && (
-        <div
-          role="alert"
-          style={{
-            margin: "12px 24px 0",
-            padding: "8px 12px",
-            background: "#fee",
-            color: "#c33",
-            borderRadius: 4,
-          }}
-        >
-          {errorMessage}
-        </div>
-      )}
+      <main className="demo-main">
+        {errorMessage && (
+          <div className="demo-alert" role="alert">
+            <span className="demo-alert-message">{errorMessage}</span>
+            <button
+              type="button"
+              className="demo-alert-dismiss"
+              onClick={dismissError}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
-      <main style={{ padding: 24 }}>
         {mode === "author" ? (
           <AuthorView initialDocument={doc} onSaved={handleAuthorSaved} />
         ) : (
@@ -107,6 +94,14 @@ function App() {
           />
         )}
       </main>
+
+      <footer className="demo-footer">
+        <p>
+          <strong>Author:</strong> build an interactive video ·{" "}
+          <strong>Watch:</strong> play it back · Save in Author to switch to
+          Watch.
+        </p>
+      </footer>
     </div>
   );
 }
