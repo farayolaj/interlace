@@ -8,7 +8,7 @@ import {
 } from "@interlace/core";
 import { InterlaceEditor } from "./interlace-editor";
 
-const VIDEO_SRC = "https://example.com/lecture.mp4";
+const VIDEO_SRC = "https://samplelib.com/mp4/sample-20s-360p.mp4";
 const VIDEO_DURATION = 60;
 
 function makeQuizContentType(): ContentType<{
