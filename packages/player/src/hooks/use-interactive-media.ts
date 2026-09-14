@@ -1,4 +1,5 @@
 import {
+  ContentInstance,
   ContentTypeRegistry,
   deserialize,
   InteractiveMediaController,
@@ -34,6 +35,7 @@ export function useInteractiveMedia(options: UseInteractiveMediaOptions) {
   const isPlayingRef = useRef(false);
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [items, setItems] = useState<ContentInstance[] | null>(null);
 
   // Initialize controller from document
   useEffect(() => {
@@ -51,10 +53,14 @@ export function useInteractiveMedia(options: UseInteractiveMediaOptions) {
         result.videoDuration,
       );
       controllerRef.current = controller;
+      // Expose the deserialized instances so consumers complete items
+      // without reaching into the controller's private state.
+      setItems(result.items);
       setInitialized(true);
 
       return () => {
         controllerRef.current = null;
+        setItems(null);
       };
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -129,6 +135,8 @@ export function useInteractiveMedia(options: UseInteractiveMediaOptions) {
 
   return {
     controller: controllerRef.current,
+    /** The deserialized content instances backing the controller. */
+    items,
     initialized,
     error,
   };

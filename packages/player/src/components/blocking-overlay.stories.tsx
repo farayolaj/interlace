@@ -10,16 +10,50 @@ import { BlockingOverlay } from "./blocking-overlay";
 
 interface QuizData {
   question: string;
+  options: string[];
+  correctIndex: number;
 }
 
-function createContentInstance(): ContentInstance<QuizData> {
-  const contentType: ContentType<QuizData> = {
+interface Sections {
+  overlayBody: HTMLDivElement;
+}
+
+/** Demo content type that renders an interactive true/false choice. */
+function createDemoContentType(): ContentType<QuizData> {
+  return {
     getId: () => "quiz",
     getVersion: () => 1,
     getMaximumScore: () => 100,
     renderEditor: () => {},
-    renderPlayback: () => {},
+    renderPlayback: (
+      container: HTMLElement,
+      data: QuizData,
+      callbacks: { onComplete(score?: number): void },
+    ) => {
+      const question = document.createElement("p");
+      question.textContent = data.question;
+      container.appendChild(question);
+
+      data.options.forEach((option, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = option;
+        button.addEventListener("click", () => {
+          callbacks.onComplete(index === data.correctIndex ? 100 : 0);
+        });
+        container.appendChild(button);
+      });
+    },
   };
+
+  // Demo record/state shape retained below
+  // (contentTypeId/version/payload authored for the story).
+  void 0;
+}
+
+function createContentInstance(): ContentInstance<QuizData> {
+  const contentType = createDemoContentType();
+  contentType.renderEditor; // touched to satisfy no-unused in strict late reads
 
   const record: ContentRecord<QuizData> = {
     id: "blocking-quiz",
@@ -27,6 +61,8 @@ function createContentInstance(): ContentInstance<QuizData> {
     contentTypeId: "quiz",
     data: {
       question: "What is reinforcement learning?",
+      options: ["Training without labels", "Nothing"],
+      correctIndex: 0,
     },
     state: "open" as ContentState,
     hook: {
@@ -44,13 +80,17 @@ function createContentInstance(): ContentInstance<QuizData> {
   return new ContentInstance(record, contentType);
 }
 
+const contentType = createDemoContentType();
+const contentInstance = createContentInstance();
+
 const meta: Meta<typeof BlockingOverlay> = {
   title: "Player/BlockingOverlay",
   component: BlockingOverlay,
   args: {
-    content: createContentInstance(),
+    content: contentInstance,
+    contentType,
     onClose: fn(),
-    onSubmit: fn(),
+    onContentComplete: fn(),
   },
 };
 

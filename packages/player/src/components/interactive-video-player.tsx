@@ -39,7 +39,7 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   const [activeContentId, setActiveContentId] = useState<string | null>(null);
   const lastAutoOpenedBlockingIdRef = useRef<string | null>(null);
 
-  const { controller, initialized, error } = useInteractiveMedia({
+  const { controller, items, initialized, error } = useInteractiveMedia({
     adapter,
     document: doc,
     registry,
@@ -66,21 +66,14 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     }
   }, [renderState.activeBlockingContentId]);
 
-  const handleBlockingSubmit = useCallback(
-    (result: any) => {
+  const handleContentComplete = useCallback(
+    (score?: number) => {
       if (!controller || !activeContentId) return;
-
-      // Find the content instance and mark it complete
-      for (const item of (controller as any).items || []) {
-        if (item.getId() === activeContentId) {
-          item.complete(result.score || 0);
-          break;
-        }
-      }
-
+      const item = (items ?? []).find((it) => it.getId() === activeContentId);
+      item?.complete(score ?? 0);
       setActiveContentId(null);
     },
-    [controller, activeContentId],
+    [controller, items, activeContentId],
   );
 
   if (error) {
@@ -106,28 +99,32 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
 
   // Controller stores plain ContentInstance[]; overlay components expect
   // { content, hook } pairs.
-  const items = ((controller as any).items || []).map((content: any) => ({
+  const overlayItems = (items ?? []).map((content) => ({
     content,
     hook: content.getHook(),
   }));
-  const activeItem = items.find(
-    (item: any) => item.content.getId() === activeContentId,
+  const activeItem = overlayItems.find(
+    (item) => item.content.getId() === activeContentId,
   );
+  const activeContentType = activeItem
+    ? registry.get(activeItem.content.getContentTypeId())
+    : undefined;
 
   return (
     <ContentErrorBoundary onError={onError}>
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
         <OverlayLayer
           renderState={renderState}
-          items={items}
+          items={overlayItems}
           onAnchorClick={handleAnchorClick}
         />
 
-        {activeItem && (
+        {activeItem && activeContentType && (
           <BlockingOverlay
             content={activeItem.content}
+            contentType={activeContentType}
             onClose={handleBlockingClose}
-            onSubmit={handleBlockingSubmit}
+            onContentComplete={handleContentComplete}
           />
         )}
       </div>

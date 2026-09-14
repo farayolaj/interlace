@@ -48,6 +48,9 @@ export const Anchor = React.forwardRef<HTMLButtonElement, AnchorProps>(
           transition: "all 0.2s ease",
           boxShadow: isOpened ? "0 4px 8px rgba(0, 102, 204, 0.3)" : "none",
           zIndex: 2,
+          // The anchors layer is pointer-transparent; each anchor
+          // re-enables pointer events for itself.
+          pointerEvents: "auto",
         }}
       >
         {title}

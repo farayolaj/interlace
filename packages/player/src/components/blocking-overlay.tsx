@@ -1,24 +1,71 @@
-import { ContentInstance } from "@interlace/core";
+import { ContentInstance, ContentType } from "@interlace/core";
 import React, { useCallback, useEffect, useRef } from "react";
 
 export interface BlockingOverlayProps {
   content: ContentInstance;
+  /**
+   * The content type owning `content` — its `renderPlayback` mounts
+   * into the overlay body and its `unmountPlayback` tears it down on
+   * close/unmount.
+   */
+  contentType: ContentType;
   onClose: () => void;
-  onSubmit?: (result: any) => void;
+  /**
+   * Called with the reported score when the content's playback
+   * completes itself via `callbacks.onComplete` (the parent then
+   * completes the item through the controller).
+   */
+  onContentComplete?: (score?: number) => void;
 }
 
 /**
  * BlockingOverlay - modal overlay for blocking content.
  * Implements focus trap to keep focus within the overlay.
  * Pauses video while open.
+ *
+ * Playback mounting (container-identity contract): the content type's
+ * `renderPlayback`/`unmountPlayback` receive the same body container
+ * element for the overlay's lifetime; React holds the ref stable while
+ * the overlay is open.
  */
 export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
   content,
+  contentType,
   onClose,
-  onSubmit,
+  onContentComplete,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Mount/unmount the content type's playback session. The same body
+  // completion callback is ref-stabilized so identity churn cannot
+  // tear the session down.
+  const onContentCompleteRef = useRef(onContentComplete);
+  onContentCompleteRef.current = onContentComplete;
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || !contentType) return;
+
+    try {
+      contentType.renderPlayback(body, content.getData(), {
+        onComplete: (score) => {
+          onContentCompleteRef.current?.(score);
+        },
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      // Render failures surface through the overlay's own body rather
+      // than crashing the player: show the error in place.
+      body.textContent = error.message;
+      return;
+    }
+
+    return () => {
+      contentType.unmountPlayback?.(body);
+    };
+  }, [contentType, content]);
 
   // Focus trap: keep focus within overlay
   useEffect(() => {
@@ -64,11 +111,6 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
     onClose();
   }, [onClose]);
 
-  const handleSubmit = useCallback(() => {
-    onSubmit?.({}); // Content-specific result should be passed here
-    onClose();
-  }, [onClose, onSubmit]);
-
   return (
     <div
       ref={overlayRef}
@@ -83,6 +125,10 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
         justifyContent: "center",
         backgroundColor: "rgba(0, 0, 0, 0.7)",
         zIndex: 1000,
+        // Re-enable pointer events explicitly: the editor's preview
+        // modal mounts the player inside a `pointerEvents: "none"`
+        // container, and a descendant with `auto` re-enables it.
+        pointerEvents: "auto",
       }}
       role="dialog"
       aria-modal="true"
@@ -105,8 +151,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
         </h2>
 
         <div style={{ margin: "16px 0" }}>
-          {/* Content will be rendered here by parent component */}
-          <p style={{ color: "#666" }}>Content rendering placeholder</p>
+          <div ref={bodyRef} />
         </div>
 
         <div
@@ -118,6 +163,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           }}
         >
           <button
+            type="button"
             onClick={handleClose}
             style={{
               padding: "8px 16px",
@@ -132,7 +178,8 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           </button>
           <button
             ref={closeButtonRef}
-            onClick={handleSubmit}
+            type="button"
+            onClick={onClose}
             style={{
               padding: "8px 16px",
               backgroundColor: "#0066cc",
@@ -144,7 +191,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
               fontWeight: 600,
             }}
           >
-            Submit
+            Continue
           </button>
         </div>
       </div>

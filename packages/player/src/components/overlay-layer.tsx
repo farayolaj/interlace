@@ -43,13 +43,15 @@ export const OverlayLayer: React.FC<OverlayLayerProps> = ({
         pointerEvents: "none",
       }}
     >
-      {/* Layer 1: Anchors (z-index 11) */}
+      {/* Layer 1: Anchors (z-index 11) — the layer itself is
+          click-transparent so native video controls beneath it stay
+          reachable; individual anchors re-enable pointer events. */}
       <div
         style={{
           position: "relative",
           width: "100%",
           height: "100%",
-          pointerEvents: "auto",
+          pointerEvents: "none",
         }}
       >
         {renderState.visibleAnchorIds?.map((contentId) => {
