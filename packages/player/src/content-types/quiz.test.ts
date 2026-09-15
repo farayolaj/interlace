@@ -19,13 +19,18 @@ const QUIZ_DATA: QuizData = {
 /** Canonical-shaped data for the content-type-level surface (`getMaximumScore`, `renderEditor`). */
 type CanonicalQuizData = Parameters<typeof QuizContentType.renderEditor>[1];
 const CANONICAL_QUIZ_DATA: CanonicalQuizData = {
-  question: { text: "What is 2 + 2?" },
-  options: [
-    { id: "opt-0", text: "3" },
-    { id: "opt-1", text: "4" },
-    { id: "opt-2", text: "5" },
+  questions: [
+    {
+      id: "q-0",
+      text: "What is 2 + 2?",
+      options: [
+        { id: "opt-0", text: "3" },
+        { id: "opt-1", text: "4" },
+        { id: "opt-2", text: "5" },
+      ],
+      correctOptionId: "opt-1",
+    },
   ],
-  correctOptionId: "opt-1",
 };
 
 function renderIntoContainer(data: QuizData = QUIZ_DATA) {
@@ -156,7 +161,9 @@ describe("QuizContentType", () => {
     input.value = "New question";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({ question: { text: "New question" } }),
+      expect.objectContaining({
+        questions: [expect.objectContaining({ text: "New question" })],
+      }),
     );
 
     QuizContentType.unmount?.(container);

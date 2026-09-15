@@ -1,9 +1,11 @@
 import type { SerializedInteractiveMediaDocument } from "@interlace/core";
 
 /**
- * The built-in sample document: a short trailer with one blocking quiz and
- * one non-blocking anchor quiz, both authored in the canonical rich shape
- * (text-only media-free data keeps the sample resilient).
+ * The built-in sample document: a short trailer with one multi-question
+ * blocking quiz and one single-question non-blocking anchor quiz, both in
+ * the canonical rich shape (text-only media-free data keeps the sample
+ * resilient). The mixed shapes exercise the normalizer's multi and
+ * flat→single paths.
  */
 export const SAMPLE_DOC: SerializedInteractiveMediaDocument = {
   video: {
@@ -23,13 +25,27 @@ export const SAMPLE_DOC: SerializedInteractiveMediaDocument = {
         contentTypeId: "quiz-editor",
         version: 1,
         data: {
-          question: { text: "What does the demo plug on this trailer?" },
-          options: [
-            { id: "plug-blazes", text: "For Bigger Blazes" },
-            { id: "plug-safety", text: "A fire safety lesson" },
-            { id: "plug-nothing", text: "Nothing in particular" },
+          questions: [
+            {
+              id: "q-1",
+              text: "What does the demo plug on this trailer?",
+              options: [
+                { id: "plug-blazes", text: "For Bigger Blazes" },
+                { id: "plug-safety", text: "A fire safety lesson" },
+                { id: "plug-nothing", text: "Nothing in particular" },
+              ],
+              correctOptionId: "plug-blazes",
+            },
+            {
+              id: "q-2",
+              text: "Which part of this trailer is the interactive demo?",
+              options: [
+                { id: "feature-hook", text: "The quiz that pauses the video" },
+                { id: "feature-credits", text: "The end credits" },
+              ],
+              correctOptionId: "feature-hook",
+            },
           ],
-          correctOptionId: "plug-blazes",
         },
       },
     },

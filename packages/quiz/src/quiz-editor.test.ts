@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { QuizEditorType } from "./quiz-editor";
-import type { QuizData, RawQuizData } from "./schema";
+import type { QuizData, QuizQuestionSpec, RawQuizData } from "./schema";
 
 afterEach(() => {
   document.body.innerHTML = "";
 });
 
-const CANONICAL: QuizData = {
+/** Flat canonical single-question input (normalizes to one question). */
+const CANONICAL: RawQuizData = {
   question: { text: "What?" },
   options: [
     { id: "a", text: "Alpha" },
@@ -14,6 +15,27 @@ const CANONICAL: QuizData = {
     { id: "c", text: "Gamma" },
   ],
   correctOptionId: "c",
+};
+
+/** Multi-question canonical input. */
+const MULTI: QuizData = {
+  questions: [
+    {
+      id: "q-1",
+      text: "First",
+      options: [
+        { id: "f-a", text: "F A" },
+        { id: "f-b", text: "F B" },
+      ],
+      correctOptionId: "f-b",
+    },
+    {
+      id: "q-2",
+      text: "Second",
+      options: [{ id: "s-a", text: "S A" }],
+      correctOptionId: "s-a",
+    },
+  ],
 };
 
 function query<T extends Element>(container: HTMLElement, selector: string): T {
@@ -46,7 +68,7 @@ function type(el: HTMLInputElement | HTMLSelectElement, value: string): void {
 }
 
 describe("QuizEditorType", () => {
-  it("mounts the question input, option text inputs, media inputs, and correct-answer select", () => {
+  it("mounts the question tabs, question input, option text inputs, media inputs, and correct-answer select", () => {
     const { container } = mountEditor(CANONICAL);
 
     const question = query<HTMLInputElement>(container, ".quiz-question");
@@ -65,17 +87,23 @@ describe("QuizEditorType", () => {
     const select = query<HTMLSelectElement>(container, ".quiz-correct-answer");
     expect(select.options.length).toBe(3);
     expect(select.selectedOptions[0]?.value).toBe("c");
+
+    // Flat input normalizes to a single question tab.
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    expect(tabs.length).toBe(1);
+    expect(tabs[0]?.textContent).toBe("Question 1");
   });
 
-  it("emits canonical QuizData when the question text changes", () => {
+  it("emits canonical multi-question QuizData when the question text changes", () => {
     const { container, onChange } = mountEditor(CANONICAL);
     const question = query<HTMLInputElement>(container, ".quiz-question");
     type(question, "New Q");
 
     const data = lastEmitted(onChange);
-    expect(data.question).toMatchObject({ text: "New Q" });
-    expect(data.options).toEqual(CANONICAL.options);
-    expect(data.correctOptionId).toBe("c");
+    expect(data.questions.length).toBe(1);
+    expect(data.questions[0]).toMatchObject({ text: "New Q" });
+    expect(data.questions[0]?.options).toEqual(CANONICAL.options);
+    expect(data.questions[0]?.correctOptionId).toBe("c");
   });
 
   it("keeps focus in the question input across keystrokes", () => {
@@ -104,12 +132,89 @@ describe("QuizEditorType", () => {
 
     type(question, "Edited");
     const data = lastEmitted(onChange);
-    expect(data.question).toEqual({ text: "Edited" });
-    expect(data.options).toEqual([
-      { id: "opt-0", text: "a" },
-      { id: "opt-1", text: "b" },
-    ]);
-    expect(data.correctOptionId).toBe("opt-1");
+    expect(data.questions.length).toBe(1);
+    expect(data.questions[0]).toEqual({
+      id: "q-0",
+      text: "Edited",
+      options: [
+        { id: "opt-0", text: "a" },
+        { id: "opt-1", text: "b" },
+      ],
+      correctOptionId: "opt-1",
+    });
+  });
+
+  it("adds a question with a generated id and selects it", () => {
+    const { container, onChange } = mountEditor(MULTI);
+    const add = query<HTMLButtonElement>(container, ".quiz-add-question");
+    add.click();
+
+    const data = lastEmitted(onChange);
+    expect(data.questions.length).toBe(3);
+    expect(data.questions[2]).toEqual({
+      id: "q-3",
+      text: "",
+      options: [],
+      correctOptionId: null,
+    });
+    expect(data.questions[0]?.id).toBe("q-1");
+    expect(data.questions[1]?.id).toBe("q-2");
+
+    // The newly added (now selected) question's empty body is shown.
+    const question = query<HTMLInputElement>(container, ".quiz-question");
+    expect(question.value).toBe("");
+  });
+
+  it("switching the selected question preserves each question's values", () => {
+    const { container, onChange } = mountEditor(MULTI);
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    (tabs[1] as HTMLButtonElement).click();
+
+    const question = query<HTMLInputElement>(container, ".quiz-question");
+    expect(question.value).toBe("Second");
+    const optionTexts = container.querySelectorAll(".quiz-option-text");
+    expect(optionTexts.length).toBe(1);
+    expect((optionTexts[0] as HTMLInputElement).value).toBe("S A");
+
+    type(question, "Second edited");
+    const data = lastEmitted(onChange);
+    expect(data.questions[0]?.text).toBe("First"); // untouched
+    expect(data.questions[1]?.text).toBe("Second edited");
+
+    // Switch back: first question's values intact.
+    const tabsAfter = container.querySelectorAll(".quiz-question-tab");
+    (tabsAfter[0] as HTMLButtonElement).click();
+    expect(
+      (query<HTMLInputElement>(container, ".quiz-question")).value,
+    ).toBe("First");
+  });
+
+  it("removes the selected question and selects the first remaining", () => {
+    const { container, onChange } = mountEditor(MULTI);
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    (tabs[1] as HTMLButtonElement).click(); // select "Second"
+    const removeButtons = container.querySelectorAll(".quiz-question-remove");
+    (removeButtons[1] as HTMLButtonElement).click();
+
+    const data = lastEmitted(onChange);
+    expect(data.questions.map((q) => q.id)).toEqual(["q-1"]);
+    // First remaining question is now active.
+    expect(query<HTMLInputElement>(container, ".quiz-question").value).toBe(
+      "First",
+    );
+  });
+
+  it("never leaves the form without a question (last remove keeps a stub)", () => {
+    const { container, onChange } = mountEditor(CANONICAL);
+    const removeButtons = container.querySelectorAll(".quiz-question-remove");
+    (removeButtons[0] as HTMLButtonElement).click();
+
+    const data = lastEmitted(onChange);
+    expect(data.questions.length).toBe(1);
+    expect(data.questions[0]).toMatchObject({ text: "", options: [] });
+
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    expect(tabs.length).toBe(1);
   });
 
   it("adds an option with a generated id via the Add option button", () => {
@@ -118,9 +223,10 @@ describe("QuizEditorType", () => {
     add.click();
 
     const data = lastEmitted(onChange);
-    expect(data.options.length).toBe(4);
-    expect(data.options[3]).toEqual({ id: "opt-3", text: "" });
-    expect(data.correctOptionId).toBe("c");
+    const active = data.questions[0]!;
+    expect(active.options.length).toBe(4);
+    expect(active.options[3]).toEqual({ id: "opt-3", text: "" });
+    expect(active.correctOptionId).toBe("c");
   });
 
   it("defaults the first added option to correct when no correctness exists", () => {
@@ -133,8 +239,8 @@ describe("QuizEditorType", () => {
     add.click();
 
     const data = lastEmitted(onChange);
-    expect(data.options).toEqual([{ id: "opt-0", text: "" }]);
-    expect(data.correctOptionId).toBe("opt-0");
+    expect(data.questions[0]?.options).toEqual([{ id: "opt-0", text: "" }]);
+    expect(data.questions[0]?.correctOptionId).toBe("opt-0");
   });
 
   it("reports correct-answer changes through the select", () => {
@@ -143,7 +249,7 @@ describe("QuizEditorType", () => {
     select.value = "a";
     select.dispatchEvent(new Event("change", { bubbles: true }));
 
-    expect(lastEmitted(onChange).correctOptionId).toBe("a");
+    expect(lastEmitted(onChange).questions[0]?.correctOptionId).toBe("a");
   });
 
   it("removing a non-correct option keeps the remaining options and correctness", () => {
@@ -152,9 +258,10 @@ describe("QuizEditorType", () => {
     (removeButtons[0] as HTMLButtonElement).click();
 
     const data = lastEmitted(onChange);
-    expect(data.options.map((o) => o.id)).toEqual(["b", "c"]);
-    expect(data.options.map((o) => o.text)).toEqual(["Beta", "Gamma"]);
-    expect(data.correctOptionId).toBe("c");
+    const active = data.questions[0]!;
+    expect(active.options.map((o) => o.id)).toEqual(["b", "c"]);
+    expect(active.options.map((o) => o.text)).toEqual(["Beta", "Gamma"]);
+    expect(active.correctOptionId).toBe("c");
   });
 
   it("removing the correct option clears correctOptionId instead of shifting it", () => {
@@ -163,8 +270,9 @@ describe("QuizEditorType", () => {
     (removeButtons[2] as HTMLButtonElement).click();
 
     const data = lastEmitted(onChange);
-    expect(data.options.map((o) => o.id)).toEqual(["a", "b"]);
-    expect(data.correctOptionId).toBeNull();
+    const active = data.questions[0]!;
+    expect(active.options.map((o) => o.id)).toEqual(["a", "b"]);
+    expect(active.correctOptionId).toBeNull();
   });
 
   it("preserves custom option ids across text edits", () => {
@@ -173,9 +281,10 @@ describe("QuizEditorType", () => {
     type(optionTexts[0] as HTMLInputElement, "AlphaPrime");
 
     const data = lastEmitted(onChange);
-    expect(data.options[0]).toEqual({ id: "a", text: "AlphaPrime" });
-    expect(data.options[1]?.id).toBe("b");
-    expect(data.options[2]?.id).toBe("c");
+    const active = data.questions[0]!;
+    expect(active.options[0]).toEqual({ id: "a", text: "AlphaPrime" });
+    expect(active.options[1]?.id).toBe("b");
+    expect(active.options[2]?.id).toBe("c");
   });
 
   it("renders a live question media preview and removes it on empty src", () => {
@@ -198,18 +307,18 @@ describe("QuizEditorType", () => {
     );
     expect(preview.getAttribute("src")).toBe("https://example.com/q.png");
     expect(preview.getAttribute("alt")).toBe("Question art");
-    expect(lastEmitted(onChange).question.media).toEqual({
+    expect(lastEmitted(onChange).questions[0]?.media).toEqual({
       src: "https://example.com/q.png",
       alt: "Question art",
     });
 
     type(srcInput, "");
     expect(container.querySelector(".quiz-question-media-preview")).toBeNull();
-    expect(lastEmitted(onChange).question.media).toBeUndefined();
+    expect(lastEmitted(onChange).questions[0]?.media).toBeUndefined();
   });
 
   it("renders an option thumbnail preview on mount and drops it on empty src", () => {
-    const withMedia: QuizData = {
+    const withMedia: RawQuizData = {
       question: { text: "Q" },
       options: [
         { id: "a", text: "A", media: { src: "thumb.png", alt: "T" } },
@@ -243,21 +352,47 @@ describe("QuizEditorType", () => {
     expect(updatedRow?.querySelector(".quiz-option-thumb")).toBeNull();
   });
 
-  it("updateEditor patches in place and preserves focus", () => {
-    const { container, onChange } = mountEditor(CANONICAL);
+  it("updateEditor patches in place and preserves focus within the active question", () => {
+    const { container, onChange } = mountEditor(MULTI);
     const question = query<HTMLInputElement>(container, ".quiz-question");
     question.focus();
 
-    QuizEditorType.updateEditor?.(
-      container,
-      { ...CANONICAL, options: [{ ...CANONICAL.options[0]!, text: "Updated" }] },
-      onChange,
-    );
+    // Patch the ACTIVE question's first option text in place.
+    const updated: QuizData = {
+      questions: [
+        {
+          ...MULTI.questions[0]!,
+          options: [
+            { ...MULTI.questions[0]!.options[0]!, text: "Updated" },
+            MULTI.questions[0]!.options[1]!,
+          ],
+        } as QuizQuestionSpec,
+        MULTI.questions[1]!,
+      ],
+    };
+    QuizEditorType.updateEditor?.(container, updated, onChange);
 
-    // Focus survives the patch (the input is updated in place, not rebuilt).
+    // Focus survives the patch (the active input is updated in place).
     expect(document.activeElement).toBe(question);
     const optionTexts = container.querySelectorAll(".quiz-option-text");
     expect((optionTexts[0] as HTMLInputElement).value).toBe("Updated");
-    expect(question.value).toBe("What?");
+    expect(question.value).toBe("First");
+  });
+
+  it("emits canonical multi through onChange when a non-active question is untouched by edits", () => {
+    const { container, onChange } = mountEditor(MULTI);
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    (tabs[1] as HTMLButtonElement).click();
+
+    const add = query<HTMLButtonElement>(container, ".quiz-add-option");
+    add.click();
+
+    const data = lastEmitted(onChange);
+    expect(data.questions[0]?.options).toEqual(MULTI.questions[0]?.options);
+    expect(data.questions[1]?.options).toEqual([
+      { id: "s-a", text: "S A" },
+      { id: "opt-1", text: "" },
+    ]);
+    expect(data.questions[1]?.correctOptionId).toBe("s-a");
   });
 });

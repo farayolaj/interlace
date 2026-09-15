@@ -6,6 +6,7 @@ import type {
   QuizData,
   QuizMediaRef,
   QuizOption,
+  QuizQuestionSpec,
   RawQuizData,
 } from "./schema";
 
@@ -43,17 +44,6 @@ function createPreview(
   return img;
 }
 
-/** Generates an option id that does not collide with existing ids. */
-function nextOptionId(options: QuizOption[], index: number): string {
-  const base = `opt-${index}`;
-  if (!options.some((option) => option.id === base)) return base;
-  let candidate = index + 1;
-  while (options.some((option) => option.id === `opt-${candidate}`)) {
-    candidate += 1;
-  }
-  return `opt-${candidate}`;
-}
-
 /** Renders `media` into `slot`, replacing any previous preview. */
 function syncPreview(
   slot: HTMLElement,
@@ -65,12 +55,50 @@ function syncPreview(
   if (img) slot.appendChild(img);
 }
 
+/** Generates an option id that does not collide with existing ids. */
+function nextOptionId(options: QuizOption[], index: number): string {
+  const base = `opt-${index}`;
+  if (!options.some((option) => option.id === base)) return base;
+  let candidate = index + 1;
+  while (options.some((option) => option.id === `opt-${candidate}`)) {
+    candidate += 1;
+  }
+  return `opt-${candidate}`;
+}
+
+/** Generates a question id that does not collide with existing ids. */
+function nextQuestionId(questions: QuizQuestionSpec[], index: number): string {
+  const base = `q-${index}`;
+  if (!questions.some((question) => question.id === base)) return base;
+  let candidate = index + 1;
+  while (questions.some((question) => question.id === `q-${candidate}`)) {
+    candidate += 1;
+  }
+  return `q-${candidate}`;
+}
+
+/** An empty question stub so the form is never without a question. */
+function emptyQuestion(id: string): QuizQuestionSpec {
+  return { id, text: "", options: [], correctOptionId: null };
+}
+
+interface OptionRow {
+  row: HTMLDivElement;
+  textInput: HTMLInputElement;
+  mediaSrcInput: HTMLInputElement;
+  mediaAltInput: HTMLInputElement;
+  previewSlot: HTMLDivElement;
+}
+
 /**
  * Builds the quiz authoring form once and returns a controller whose
- * `syncTo` patches existing inputs in place (preserving focus) instead of
- * rebuilding the DOM on every keystroke. All edits emit canonical
- * {@link QuizData}; the incoming document may be legacy and is normalized on
- * each sync.
+ * `syncTo` patches inputs in place (preserving focus) instead of rebuilding
+ * the DOM on every keystroke. The form has a question list (add/remove,
+ * selectable tabs); the ACTIVE question's text/media/options/correct select
+ * are edited below it. Switching the selected question rebuilds that
+ * question's editor rows (an explicit action); within the active question,
+ * edits patch in place. All edits emit canonical multi-question
+ * {@link QuizData}.
  */
 function createQuizEditorController(
   container: HTMLElement,
@@ -86,12 +114,78 @@ function createQuizEditorController(
 
   let currentData: QuizData = normalizeQuizData(rawData);
   let currentOnChange = onChange;
+  let selectedIndex = 0;
+  let bodyQuestionIndex = -1;
+  let optionRows: OptionRow[] = [];
+
+  const emit = (questions: QuizQuestionSpec[]): void => {
+    currentOnChange({ questions });
+  };
+
+  /** Applies `mutate` to the active question and emits the canonical list. */
+  const patchActiveQuestion = (
+    mutate: (question: QuizQuestionSpec) => QuizQuestionSpec,
+  ): void => {
+    const active = currentData.questions[selectedIndex];
+    if (!active) return;
+    const questions = currentData.questions.slice();
+    questions[selectedIndex] = mutate(active);
+    emit(questions);
+  };
+
+  // --- Questions toolbar ---
+  const questionsHeader = document.createElement("div");
+  questionsHeader.textContent = "Questions";
+  questionsHeader.style.marginBottom = `${SPACE[2]}px`;
+  questionsHeader.style.fontWeight = "600";
+  questionsHeader.style.fontSize = `${TYPE.sm}px`;
+  questionsHeader.style.color = COLORS.textMuted;
+  root.appendChild(questionsHeader);
+
+  const tabsBar = document.createElement("div");
+  tabsBar.className = "quiz-question-tabs";
+  tabsBar.style.display = "flex";
+  tabsBar.style.flexWrap = "wrap";
+  tabsBar.style.gap = `${SPACE[2]}px`;
+  tabsBar.style.marginBottom = `${SPACE[3]}px`;
+  root.appendChild(tabsBar);
+
+  const addQuestionButton = document.createElement("button");
+  addQuestionButton.type = "button";
+  addQuestionButton.className = "quiz-add-question";
+  addQuestionButton.textContent = "Add question";
+  addQuestionButton.style.marginBottom = `${SPACE[4]}px`;
+  addQuestionButton.style.padding = `${SPACE[2]}px ${SPACE[4]}px`;
+  addQuestionButton.style.backgroundColor = COLORS.surface;
+  addQuestionButton.style.border = `1px solid ${COLORS.borderStrong}`;
+  addQuestionButton.style.borderRadius = `${RADIUS.sm}px`;
+  addQuestionButton.style.cursor = "pointer";
+  addQuestionButton.style.fontSize = `${TYPE.sm}px`;
+  addQuestionButton.style.fontWeight = "600";
+  addQuestionButton.style.color = COLORS.text;
+  addQuestionButton.addEventListener("click", () => {
+    const id = nextQuestionId(currentData.questions, currentData.questions.length);
+    const questions = [...currentData.questions, emptyQuestion(id)];
+    currentData = { questions };
+    selectedIndex = questions.length - 1;
+    emit(questions);
+    bodyQuestionIndex = -1;
+    renderTabs();
+    syncActiveBody();
+  });
+  root.appendChild(addQuestionButton);
+
+  // --- Active question editor body ---
+  const body = document.createElement("div");
+  body.className = "quiz-editor-body";
+  root.appendChild(body);
 
   const questionInput = document.createElement("input");
   questionInput.type = "text";
   questionInput.className = "quiz-question";
   questionInput.style.display = "block";
   questionInput.style.width = "100%";
+  questionInput.style.boxSizing = "border-box";
   questionInput.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
   questionInput.style.fontSize = `${TYPE.md}px`;
   questionInput.style.color = COLORS.text;
@@ -99,10 +193,10 @@ function createQuizEditorController(
   questionInput.style.borderRadius = `${RADIUS.sm}px`;
   questionInput.style.backgroundColor = COLORS.surface;
   questionInput.addEventListener("input", () => {
-    currentOnChange({
-      ...currentData,
-      question: { ...currentData.question, text: questionInput.value },
-    });
+    patchActiveQuestion((question) => ({
+      ...question,
+      text: questionInput.value,
+    }));
   });
   const questionLabel = document.createElement("label");
   questionLabel.style.display = "block";
@@ -112,9 +206,9 @@ function createQuizEditorController(
   questionLabel.style.color = COLORS.textMuted;
   questionLabel.appendChild(document.createTextNode("Question"));
   questionLabel.appendChild(questionInput);
-  root.appendChild(questionLabel);
+  body.appendChild(questionLabel);
 
-  // Question media sub-block: src + alt inputs and a live preview.
+  // Active question media sub-block: src + alt inputs and a live preview.
   const questionMediaBox = document.createElement("div");
   questionMediaBox.className = "quiz-question-media";
   questionMediaBox.style.padding = `${SPACE[3]}px`;
@@ -129,6 +223,7 @@ function createQuizEditorController(
   questionMediaSrc.placeholder = "Question media URL";
   questionMediaSrc.style.display = "block";
   questionMediaSrc.style.width = "100%";
+  questionMediaSrc.style.boxSizing = "border-box";
   questionMediaSrc.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
   questionMediaSrc.style.marginBottom = `${SPACE[2]}px`;
   questionMediaSrc.style.fontSize = `${TYPE.base}px`;
@@ -143,6 +238,7 @@ function createQuizEditorController(
   questionMediaAlt.placeholder = "Media alt text";
   questionMediaAlt.style.display = "block";
   questionMediaAlt.style.width = "100%";
+  questionMediaAlt.style.boxSizing = "border-box";
   questionMediaAlt.style.padding = `${SPACE[2]}px ${SPACE[3]}px`;
   questionMediaAlt.style.fontSize = `${TYPE.base}px`;
   questionMediaAlt.style.color = COLORS.text;
@@ -154,15 +250,12 @@ function createQuizEditorController(
   const emitQuestionMedia = () => {
     const media = buildMediaRef(questionMediaSrc.value, questionMediaAlt.value);
     syncPreview(questionPreviewSlot, media, "quiz-question-media-preview");
-    currentOnChange({
-      ...currentData,
-      question: { ...currentData.question, media },
-    });
+    patchActiveQuestion((question) => ({ ...question, media }));
   };
   questionMediaSrc.addEventListener("input", emitQuestionMedia);
   questionMediaAlt.addEventListener("input", emitQuestionMedia);
   questionMediaBox.append(questionMediaSrc, questionMediaAlt, questionPreviewSlot);
-  root.appendChild(questionMediaBox);
+  body.appendChild(questionMediaBox);
 
   const optionsTitle = document.createElement("div");
   optionsTitle.textContent = "Options";
@@ -170,12 +263,12 @@ function createQuizEditorController(
   optionsTitle.style.fontWeight = "600";
   optionsTitle.style.fontSize = `${TYPE.sm}px`;
   optionsTitle.style.color = COLORS.textMuted;
-  root.appendChild(optionsTitle);
+  body.appendChild(optionsTitle);
   const optionsContainer = document.createElement("div");
   optionsContainer.style.display = "flex";
   optionsContainer.style.flexDirection = "column";
   optionsContainer.style.gap = `${SPACE[2]}px`;
-  root.appendChild(optionsContainer);
+  body.appendChild(optionsContainer);
 
   const addOptionButton = document.createElement("button");
   addOptionButton.type = "button";
@@ -191,25 +284,27 @@ function createQuizEditorController(
   addOptionButton.style.fontWeight = "600";
   addOptionButton.style.color = COLORS.text;
   addOptionButton.addEventListener("click", () => {
-    const nextOptions: QuizOption[] = [
-      ...currentData.options,
-      {
-        id: nextOptionId(currentData.options, currentData.options.length),
-        text: "",
-      },
-    ];
-    // Adding the first option defaults it to correct (ported behavior).
-    const nextCorrectOptionId =
-      currentData.options.length === 0
-        ? nextOptions[0]!.id
-        : currentData.correctOptionId;
-    currentOnChange({
-      ...currentData,
-      options: nextOptions,
-      correctOptionId: nextCorrectOptionId,
+    patchActiveQuestion((question) => {
+      const nextOptions: QuizOption[] = [
+        ...question.options,
+        {
+          id: nextOptionId(question.options, question.options.length),
+          text: "",
+        },
+      ];
+      // Adding the first option defaults it to correct (ported behavior).
+      const nextCorrectOptionId =
+        question.options.length === 0
+          ? nextOptions[0]!.id
+          : question.correctOptionId;
+      return {
+        ...question,
+        options: nextOptions,
+        correctOptionId: nextCorrectOptionId,
+      };
     });
   });
-  root.appendChild(addOptionButton);
+  body.appendChild(addOptionButton);
 
   const correctLabel = document.createElement("label");
   correctLabel.style.display = "block";
@@ -230,27 +325,17 @@ function createQuizEditorController(
   select.style.borderRadius = `${RADIUS.sm}px`;
   select.style.backgroundColor = COLORS.surface;
   select.addEventListener("change", () => {
-    currentOnChange({
-      ...currentData,
+    patchActiveQuestion((question) => ({
+      ...question,
       correctOptionId: select.value.length > 0 ? select.value : null,
-    });
+    }));
   });
   correctLabel.appendChild(select);
-  root.appendChild(correctLabel);
+  body.appendChild(correctLabel);
 
   container.appendChild(root);
 
-  interface OptionRow {
-    row: HTMLDivElement;
-    textInput: HTMLInputElement;
-    mediaSrcInput: HTMLInputElement;
-    mediaAltInput: HTMLInputElement;
-    previewSlot: HTMLDivElement;
-  }
-
-  let optionRows: OptionRow[] = [];
-
-  const createOptionRow = (option: QuizOption, index: number): OptionRow => {
+  const createOptionRow = (option: QuizOption, optionIndex: number): OptionRow => {
     const row = document.createElement("div");
     row.className = "quiz-option-row";
     row.style.display = "flex";
@@ -275,9 +360,14 @@ function createQuizEditorController(
     textInput.style.backgroundColor = COLORS.surface;
     textInput.value = option.text;
     textInput.addEventListener("input", () => {
-      const nextOptions = currentData.options.slice();
-      nextOptions[index] = { ...nextOptions[index]!, text: textInput.value };
-      currentOnChange({ ...currentData, options: nextOptions });
+      patchActiveQuestion((question) => {
+        const nextOptions = question.options.slice();
+        nextOptions[optionIndex] = {
+          ...nextOptions[optionIndex]!,
+          text: textInput.value,
+        };
+        return { ...question, options: nextOptions };
+      });
     });
 
     const mediaSrcInput = document.createElement("input");
@@ -307,19 +397,22 @@ function createQuizEditorController(
     mediaAltInput.style.border = `1px solid ${COLORS.borderStrong}`;
     mediaAltInput.style.borderRadius = `${RADIUS.sm}px`;
     mediaAltInput.style.backgroundColor = COLORS.surface;
-    const emitOptionMedia = () => {
-      const media = buildMediaRef(mediaSrcInput.value, mediaAltInput.value);
-      syncPreview(previewSlot, media, "quiz-option-thumb");
-      const nextOptions = currentData.options.slice();
-      nextOptions[index] = { ...nextOptions[index]!, media };
-      currentOnChange({ ...currentData, options: nextOptions });
-    };
-    mediaSrcInput.addEventListener("input", emitOptionMedia);
-    mediaAltInput.addEventListener("input", emitOptionMedia);
 
     const previewSlot = document.createElement("div");
     previewSlot.className = "quiz-option-media-preview";
     syncPreview(previewSlot, option.media, "quiz-option-thumb");
+
+    const emitOptionMedia = () => {
+      const media = buildMediaRef(mediaSrcInput.value, mediaAltInput.value);
+      syncPreview(previewSlot, media, "quiz-option-thumb");
+      patchActiveQuestion((question) => {
+        const nextOptions = question.options.slice();
+        nextOptions[optionIndex] = { ...nextOptions[optionIndex]!, media };
+        return { ...question, options: nextOptions };
+      });
+    };
+    mediaSrcInput.addEventListener("input", emitOptionMedia);
+    mediaAltInput.addEventListener("input", emitOptionMedia);
 
     const remove = document.createElement("button");
     remove.type = "button";
@@ -334,16 +427,18 @@ function createQuizEditorController(
     remove.style.fontWeight = "600";
     remove.style.color = COLORS.errorText;
     remove.addEventListener("click", () => {
-      const removed = currentData.options[index];
-      const nextOptions = currentData.options.filter((_, i) => i !== index);
-      currentOnChange({
-        ...currentData,
-        options: nextOptions,
-        // Removing the correct option clears correctness; do not shift it.
-        correctOptionId:
-          removed && removed.id === currentData.correctOptionId
-            ? null
-            : currentData.correctOptionId,
+      patchActiveQuestion((question) => {
+        const removed = question.options[optionIndex];
+        const nextOptions = question.options.filter((_, i) => i !== optionIndex);
+        return {
+          ...question,
+          options: nextOptions,
+          // Removing the correct option clears correctness; do not shift it.
+          correctOptionId:
+            removed && removed.id === question.correctOptionId
+              ? null
+              : question.correctOptionId,
+        };
       });
     });
 
@@ -352,34 +447,98 @@ function createQuizEditorController(
     return { row, textInput, mediaSrcInput, mediaAltInput, previewSlot };
   };
 
-  const syncTo = (
-    nextRawData: RawQuizData,
-    nextOnChange: (next: QuizData) => void,
-  ): void => {
-    currentData = normalizeQuizData(nextRawData);
-    currentOnChange = nextOnChange;
-    const data = currentData;
-    const options = data.options;
+  const selectQuestion = (index: number): void => {
+    selectedIndex = index;
+    bodyQuestionIndex = -1;
+    renderTabs();
+    syncActiveBody();
+  };
 
-    questionInput.value = data.question.text;
-    questionMediaSrc.value = data.question.media?.src ?? "";
-    questionMediaAlt.value = data.question.media?.alt ?? "";
-    syncPreview(
-      questionPreviewSlot,
-      data.question.media,
-      "quiz-question-media-preview",
-    );
+  const removeQuestion = (index: number): void => {
+    const next = currentData.questions.filter((_, i) => i !== index);
+    const questions =
+      next.length > 0 ? next : [emptyQuestion(nextQuestionId([], 0))];
+    if (selectedIndex === index) {
+      selectedIndex = 0; // removing the selected question selects the first remaining
+    } else if (index < selectedIndex) {
+      selectedIndex -= 1;
+    }
+    currentData = { questions };
+    emit(questions);
+    bodyQuestionIndex = -1;
+    renderTabs();
+    syncActiveBody();
+  };
 
-    if (optionRows.length !== options.length) {
-      // Option count changed: rebuild rows (an explicit add/remove action).
+  const renderTabs = (): void => {
+    tabsBar.innerHTML = "";
+    currentData.questions.forEach((question, index) => {
+      const wrap = document.createElement("div");
+      wrap.className = "quiz-question-tab-wrap";
+      wrap.style.display = "inline-flex";
+      wrap.style.alignItems = "center";
+      wrap.style.gap = `${SPACE[1]}px`;
+
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "quiz-question-tab";
+      tab.textContent = `Question ${index + 1}`;
+      tab.style.padding = `${SPACE[1]}px ${SPACE[3]}px`;
+      tab.style.borderRadius = `${RADIUS.sm}px`;
+      tab.style.border = `1px solid ${COLORS.borderStrong}`;
+      tab.style.cursor = "pointer";
+      tab.style.fontSize = `${TYPE.sm}px`;
+      tab.style.fontWeight = "600";
+      if (index === selectedIndex) {
+        tab.style.backgroundColor = COLORS.accent;
+        tab.style.borderColor = COLORS.accent;
+        tab.style.color = COLORS.white;
+      } else {
+        tab.style.backgroundColor = COLORS.surface;
+        tab.style.color = COLORS.text;
+      }
+      tab.addEventListener("click", () => selectQuestion(index));
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "quiz-question-remove";
+      remove.textContent = "Remove";
+      remove.style.padding = `${SPACE[1]}px ${SPACE[2]}px`;
+      remove.style.borderRadius = `${RADIUS.sm}px`;
+      remove.style.border = `1px solid ${COLORS.errorBorder}`;
+      remove.style.backgroundColor = COLORS.errorBg;
+      remove.style.color = COLORS.errorText;
+      remove.style.cursor = "pointer";
+      remove.style.fontSize = `${TYPE.xs}px`;
+      remove.style.fontWeight = "600";
+      remove.addEventListener("click", () => removeQuestion(index));
+
+      wrap.append(tab, remove);
+      tabsBar.appendChild(wrap);
+    });
+  };
+
+  const syncActiveBody = (): void => {
+    const active = currentData.questions[selectedIndex];
+    if (!active) return;
+
+    questionInput.value = active.text;
+    questionMediaSrc.value = active.media?.src ?? "";
+    questionMediaAlt.value = active.media?.alt ?? "";
+    syncPreview(questionPreviewSlot, active.media, "quiz-question-media-preview");
+
+    const options = active.options;
+    if (bodyQuestionIndex !== selectedIndex || optionRows.length !== options.length) {
+      // Question switch or option count change: rebuild the active question's rows.
       optionsContainer.innerHTML = "";
-      optionRows = options.map((option, index) =>
-        createOptionRow(option, index),
+      optionRows = options.map((option, optionIndex) =>
+        createOptionRow(option, optionIndex),
       );
+      bodyQuestionIndex = selectedIndex;
     } else {
       // Count unchanged: patch values in place, preserving input focus.
-      optionRows.forEach((row, index) => {
-        const option = options[index]!;
+      optionRows.forEach((row, optionIndex) => {
+        const option = options[optionIndex]!;
         row.textInput.value = option.text;
         row.mediaSrcInput.value = option.media?.src ?? "";
         row.mediaAltInput.value = option.media?.alt ?? "";
@@ -400,9 +559,28 @@ function createQuizEditorController(
       const option = options[i]!;
       el.value = option.id;
       el.textContent = `Option ${i + 1}: ${option.text}`;
-      el.selected = option.id === data.correctOptionId;
+      el.selected = option.id === active.correctOptionId;
     }
   };
+
+  const syncTo = (
+    nextRawData: RawQuizData,
+    nextOnChange: (next: QuizData) => void,
+  ): void => {
+    currentData = normalizeQuizData(nextRawData);
+    currentOnChange = nextOnChange;
+    if (currentData.questions.length === 0) {
+      currentData = { questions: [emptyQuestion("q-0")] };
+    }
+    if (selectedIndex >= currentData.questions.length) {
+      selectedIndex = 0;
+    }
+    renderTabs();
+    syncActiveBody();
+  };
+
+  renderTabs();
+  syncActiveBody();
 
   return { syncTo };
 }
@@ -427,10 +605,10 @@ export function unmountQuizEditor(container: HTMLElement): void {
 }
 
 /**
- * Built-in Quiz editor content type. Authors the canonical {@link QuizData}
- * shape with rich media; legacy documents are normalized on mount so they
- * edit seamlessly. Registered id is `quiz-editor`, matching the player's
- * built-in quiz content type.
+ * Built-in Quiz editor content type. Authors the canonical multi-question
+ * {@link QuizData} shape with rich media; legacy documents are normalized on
+ * mount so they edit seamlessly. Registered id is `quiz-editor`, matching the
+ * player's built-in quiz content type.
  */
 export const QuizEditorType: ContentType<QuizData> = {
   getId: () => "quiz-editor",
@@ -473,7 +651,7 @@ export const QuizEditorType: ContentType<QuizData> = {
     data: QuizData,
     callbacks: { onComplete(score?: number): void },
   ): void {
-    renderQuizPlayback(container, data as unknown as RawQuizData, callbacks);
+    renderQuizPlayback(container, data, callbacks);
   },
 
   unmountPlayback(container: HTMLElement): void {

@@ -12,5 +12,7 @@ export type {
   QuizMediaRef,
   QuizOption,
   QuizQuestion,
+  QuizQuestionSpec,
   RawQuizData,
+  RawQuizQuestionSpec,
 } from "./schema";

@@ -171,15 +171,20 @@ const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
 
 function makeDefaultData(contentTypeId: string): unknown {
   if (contentTypeId === "quiz" || contentTypeId === "quiz-editor") {
-    // Canonical rich shape from creation (the quiz package's
+    // Canonical multi-question shape from creation (the quiz package's
     // normalizeQuizData still normalizes legacy v1 documents).
     return {
-      question: { text: "" },
-      options: [
-        { id: "opt-0", text: "" },
-        { id: "opt-1", text: "" },
+      questions: [
+        {
+          id: "q-0",
+          text: "",
+          options: [
+            { id: "opt-0", text: "" },
+            { id: "opt-1", text: "" },
+          ],
+          correctOptionId: "opt-0",
+        },
       ],
-      correctOptionId: "opt-0",
     };
   }
   return {};

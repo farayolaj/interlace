@@ -81,7 +81,9 @@ describe("QuizEditor", () => {
     fireEvent.input(question, { target: { value: "Hello" } });
     expect(onChange).toHaveBeenCalled();
     const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1];
-    expect(lastCall?.[0]).toMatchObject({ question: { text: "Hello" } });
+    expect(lastCall?.[0]).toMatchObject({
+      questions: [{ text: "Hello" }],
+    });
   });
 
   it("keeps focus in the question input across keystrokes", () => {
@@ -112,12 +114,12 @@ describe("QuizEditor", () => {
     fireEvent.input(question, { target: { value: "Edited" } });
 
     const data = lastEmitted(onChange);
-    expect(data.question).toEqual({ text: "Edited" });
-    expect(data.options).toEqual([
+    expect(data.questions[0]?.text).toBe("Edited");
+    expect(data.questions[0]?.options).toEqual([
       { id: "opt-0", text: "a" },
       { id: "opt-1", text: "b" },
     ]);
-    expect(data.correctOptionId).toBe("opt-1");
+    expect(data.questions[0]?.correctOptionId).toBe("opt-1");
   });
 
   it("adds a new option via the Add option button with a generated id", () => {
@@ -133,12 +135,12 @@ describe("QuizEditor", () => {
     fireEvent.click(add);
     expect(onChange).toHaveBeenCalled();
     const data = lastEmitted(onChange);
-    expect(data.options).toEqual([
+    expect(data.questions[0]?.options).toEqual([
       { id: "opt-0", text: "a" },
       { id: "opt-1", text: "b" },
       { id: "opt-2", text: "" },
     ]);
-    expect(data.correctOptionId).toBe("opt-0");
+    expect(data.questions[0]?.correctOptionId).toBe("opt-0");
   });
 
   it("removing a non-correct option keeps the remaining options and correctness", async () => {
@@ -147,17 +149,17 @@ describe("QuizEditor", () => {
     });
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
-    const removeButtons = Array.from(editor.querySelectorAll("button")).filter(
-      (b) => b.textContent === "Remove",
+    const removeButtons = Array.from(
+      editor.querySelectorAll(".quiz-option-remove"),
     );
     if (removeButtons[0]) fireEvent.click(removeButtons[0]);
 
     await waitFor(() => {
       const data = lastEmitted(onChange);
-      expect(data.options.map((o) => o.text)).toEqual(["b", "c"]);
+      expect(data.questions[0]?.options.map((o) => o.text)).toEqual(["b", "c"]);
       // Ids are preserved; the correct option (the third originally) keeps
       // its id rather than being shifted.
-      expect(data.correctOptionId).toBe("opt-2");
+      expect(data.questions[0]?.correctOptionId).toBe("opt-2");
     });
   });
 
@@ -167,15 +169,15 @@ describe("QuizEditor", () => {
     });
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
-    const removeButtons = Array.from(editor.querySelectorAll("button")).filter(
-      (b) => b.textContent === "Remove",
+    const removeButtons = Array.from(
+      editor.querySelectorAll(".quiz-option-remove"),
     );
     if (removeButtons[0]) fireEvent.click(removeButtons[0]);
 
     await waitFor(() => {
       const data = lastEmitted(onChange);
-      expect(data.options.map((o) => o.text)).toEqual(["b", "c"]);
-      expect(data.correctOptionId).toBeNull();
+      expect(data.questions[0]?.options.map((o) => o.text)).toEqual(["b", "c"]);
+      expect(data.questions[0]?.correctOptionId).toBeNull();
     });
   });
 
@@ -187,15 +189,15 @@ describe("QuizEditor", () => {
     if (!select) throw new Error("expected select");
     fireEvent.change(select, { target: { value: "opt-2" } });
     expect(onChange).toHaveBeenCalled();
-    expect(lastEmitted(onChange).correctOptionId).toBe("opt-2");
+    expect(lastEmitted(onChange).questions[0]?.correctOptionId).toBe("opt-2");
   });
 
   it("returns getMaximumScore() = 100", () => {
     expect(
       QuizEditor.getMaximumScore({
-        question: { text: "" },
-        options: [],
-        correctOptionId: null,
+        questions: [
+          { id: "q-0", text: "", options: [], correctOptionId: null },
+        ],
       }),
     ).toBe(100);
   });

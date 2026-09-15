@@ -16,20 +16,39 @@ export interface QuizQuestion {
   media?: QuizMediaRef;
 }
 
-/** Canonical QuizData shape this package defines and maintains. */
-export interface QuizData {
-  question: QuizQuestion;
+/** Rich raw per-question spec (multi-question documents). */
+export interface RawQuizQuestionSpec {
+  id?: string;
+  text?: string;
+  media?: QuizMediaRef;
+  options?: Array<string | QuizOption>;
+  correctIndex?: number;
+  correctOptionId?: string | null;
+}
+
+/** Canonical per-question shape this package defines and maintains. */
+export interface QuizQuestionSpec {
+  id: string;
+  text: string;
+  media?: QuizMediaRef;
   options: QuizOption[];
   correctOptionId: string | null;
 }
 
+/** Canonical multi-question QuizData shape this package defines and maintains. */
+export interface QuizData {
+  questions: QuizQuestionSpec[];
+}
+
 /**
- * What a document may contain (legacy v1 documents store strings with a
- * numeric correctIndex; authored docs store the canonical shape).
+ * What a document may contain: the flat legacy v1 shape (`question` string +
+ * numeric `correctIndex`), the 1-question canonical shape, and the
+ * multi-question shape (`questions`).
  */
 export interface RawQuizData {
-  question: string | QuizQuestion;
-  options: Array<string | QuizOption>;
+  question?: string | QuizQuestion;
+  options?: Array<string | QuizOption>;
   correctIndex?: number;
   correctOptionId?: string | null;
+  questions?: Array<RawQuizQuestionSpec>;
 }
