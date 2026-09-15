@@ -172,10 +172,68 @@ describe("BlockingOverlay", () => {
     expect(overlay.style.pointerEvents).toBe("auto");
   });
 
-  it("closing the overlay calls onClose", () => {
+  it("does not render a dismiss control (blocking content cannot be dismissed)", () => {
     const { overlay, onClose } = renderOverlay();
-    fireEvent.click(screen.getByText("Close"));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    // No Close / Continue / Dismiss affordance: the only interactive
+    // elements in the dialog are the content's own.
+    expect(
+      screen.queryByRole("button", { name: /close/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /continue/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /dismiss/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Answer" })).toBeInTheDocument();
     expect(overlay).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("completing mode renders the completion surface with the score", () => {
+    const { contentType } = makeContentType();
+    const content = makeContent({ question: "What is 2 + 2?" }, contentType);
+    const renderPlayback = vi.fn();
+    const completingType: ContentType<DemoData> = {
+      getId: () => "demo",
+      getVersion: () => 1,
+      getMaximumScore: () => 100,
+      renderEditor: () => {},
+      renderPlayback,
+    };
+
+    render(
+      <BlockingOverlay
+        content={content}
+        contentType={completingType}
+        onClose={vi.fn()}
+        completing
+        completingScore={100}
+      />,
+    );
+
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText("100")).toBeInTheDocument();
+  });
+
+  it("completing mode does not require (or mount) the content body", () => {
+    const { contentType, renderPlayback } = makeContentType();
+    const content = makeContent({ question: "What is 2 + 2?" }, contentType);
+
+    render(
+      <BlockingOverlay
+        content={content}
+        contentType={contentType}
+        onClose={vi.fn()}
+        completing
+        completingScore={100}
+      />,
+    );
+
+    expect(renderPlayback).not.toHaveBeenCalled();
+    expect(screen.queryByText("What is 2 + 2?")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Answer" }),
+    ).not.toBeInTheDocument();
   });
 });

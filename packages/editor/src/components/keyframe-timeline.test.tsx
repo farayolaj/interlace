@@ -10,8 +10,40 @@ import {
 
 afterEach(() => {
   cleanup();
+  restoreClientWidth();
   vi.restoreAllMocks();
 });
+
+/**
+ * The timeline auto-fits the full video duration to the visible strip width
+ * on mount (and on video reload). jsdom reports `clientWidth` as 0, so the
+ * scroll viewport width is stubbed on `HTMLElement.prototype` BEFORE render —
+ * the mount layout effect then measures it deterministically (480px viewport
+ * → fit zoom 8 for the 60s fixture).
+ */
+const ORIGINAL_CLIENT_WIDTH = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "clientWidth",
+);
+
+function stubClientWidth(width: number): void {
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get: () => width,
+  });
+}
+
+function restoreClientWidth(): void {
+  if (ORIGINAL_CLIENT_WIDTH) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "clientWidth",
+      ORIGINAL_CLIENT_WIDTH,
+    );
+  } else {
+    delete (HTMLElement.prototype as { clientWidth?: unknown }).clientWidth;
+  }
+}
 
 const DURATION = 60;
 const ZOOM = 8; // default px/s → strip is 480px wide
@@ -45,12 +77,18 @@ function baseProps(): KeyframeTimelineProps {
  */
 function renderTimeline(overrides: Partial<KeyframeTimelineProps> = {}) {
   const props = { ...baseProps(), ...overrides };
+  // Fit the viewport (480px) so the mount auto-fit resolves to zoom 8 for
+  // the 60s fixture — the same value the tests' math assumes.
+  stubClientWidth(DURATION * ZOOM);
   const utils = render(<KeyframeTimeline {...props} />);
   const strip = utils.container.querySelector(
     '[data-testid="keyframe-timeline-strip"]',
   ) as HTMLDivElement;
+  const scroll = utils.container.querySelector(
+    '[data-testid="keyframe-timeline-scroll"]',
+  ) as HTMLDivElement;
   const restore = stubRect(strip, { width: DURATION * ZOOM, height: 72 });
-  return { ...props, ...utils, strip, restore };
+  return { ...props, ...utils, strip, scroll, restore, props };
 }
 
 function keyframeEl(container: HTMLElement, id: string): HTMLElement {
@@ -423,5 +461,84 @@ describe("KeyframeTimeline", () => {
     const kf = keyframeEl(container, "b1");
     fireEvent.pointerDown(kf);
     expect(onDeselect).toHaveBeenCalledTimes(1);
+  });
+
+  it("default zoom fits the whole duration without horizontal overflow", () => {
+    // A 100s video in a 480px viewport: the mount auto-fit sets zoom 4.8 so
+    // the strip is exactly the viewport width (a non-fitted default of 8px/s
+    // would render 800px and require horizontal panning).
+    const { container, strip, scroll } = renderTimeline({
+      videoDuration: 100,
+    });
+    expect(strip.style.width).toBe("480px");
+    Object.defineProperty(scroll, "scrollWidth", {
+      configurable: true,
+      value: 480,
+    });
+    expect(scroll.scrollWidth <= scroll.clientWidth + 1).toBe(true);
+    // The fitted ruler still renders ticks across the full duration
+    // (interval 15s at zoom 4.8 → the 90s tick is present).
+    expect(
+      container.querySelector('[data-testid="keyframe-timeline-tick-90"]'),
+    ).not.toBeNull();
+  });
+
+  it("wheel up zooms in and wheel down zooms out (plain wheel)", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    expect(kf.style.left).toBe("73px"); // zoom 8 → 10*8 - 7
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    // zoom 8 → 9.6: left = 10*9.6 - 7.
+    expect(kf.style.left).toBe("89px");
+    fireEvent.wheel(scroll, { deltaY: 100 });
+    // zoom 9.6 → 8: back to the fitted zoom.
+    expect(kf.style.left).toBe("73px");
+  });
+
+  it("eliminates vertical scrolling: overflow-y is hidden and lanes compress", () => {
+    const { scroll } = renderTimeline();
+    // Horizontal scoping stays; vertical scrolling is gone.
+    expect(scroll.style.overflowX).toBe("auto");
+    expect(scroll.style.overflowY).toBe("hidden");
+
+    // Five overlapping hooks stack into five lanes; the adaptive lane
+    // height compresses the track to the fixed budget instead of growing.
+    const entries: KeyframeTimelineEntry[] = [1, 2, 3, 4, 5].map((n) => ({
+      id: `b${n}`,
+      title: `Q${n}`,
+      hookType: "blocking" as const,
+      timestamp: 10,
+    }));
+    const { container } = renderTimeline({ entries });
+    const track = container.querySelector(
+      '[data-testid="keyframe-timeline-track"]',
+    ) as HTMLElement;
+    // laneHeight = floor((96 - 6) / 5) = 18 → track = 5*18 + 6 = 96.
+    // A fixed 28px lane would have been 146px — the compression is pinned.
+    expect(track.style.height).toBe("96px");
+    expect(track.style.height).not.toBe("146px");
+  });
+
+  it("a manual zoom locks the auto-fit: a duration change does not reset it", () => {
+    const { container, rerender, props } = renderTimeline({
+      videoDuration: 100,
+    });
+    const kf = keyframeEl(container, "b1");
+    // Fit zoom 4.8 → keyframe at 10s: left = 10*4.8 - 7.
+    expect(kf.style.left).toBe("41px");
+
+    // Manual zoom in via the slider (4.8 → 7.2).
+    fireEvent.click(
+      container.querySelector(
+        '[data-testid="keyframe-timeline-zoom-in"]',
+      ) as HTMLElement,
+    );
+    const afterManual = kf.style.left; // 10*7.2 - 7 = 65
+    expect(afterManual).toBe("65px");
+
+    // The video reloads with a new duration: the auto-fit would reset the
+    // zoom to 480/120 = 4, but the userZoomed lock keeps the manual zoom.
+    rerender(<KeyframeTimeline {...props} videoDuration={120} />);
+    expect(kf.style.left).toBe(afterManual);
   });
 });

@@ -483,10 +483,18 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     const option = screen.getByRole("button", { name: "4" });
     act(() => void fireEvent.click(option));
 
-    // Completion unblocks playback and dismisses the overlay.
+    // Completion unblocks playback immediately; the overlay stays mounted
+    // showing the completion feedback (animated ✓ + "Completed" + score)
+    // for ~600ms, then unmounts smoothly.
     await act(() => Promise.resolve());
     expect(playSpy).toHaveBeenCalled();
     expect(adapter.isPlaying).toBe(true);
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // After the completing delay the overlay is gone.
+    act(() => void vi.advanceTimersByTime(700));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -510,10 +518,18 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     const option = screen.getByRole("button", { name: /Media option/ });
     act(() => void fireEvent.click(option));
 
-    // Completion unblocks playback and dismisses the overlay.
+    // Completion unblocks playback immediately; the overlay stays mounted
+    // showing the completion feedback (animated ✓ + "Completed" + score)
+    // for ~600ms, then unmounts smoothly.
     await act(() => Promise.resolve());
     expect(playSpy).toHaveBeenCalled();
     expect(adapter.isPlaying).toBe(true);
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // After the completing delay the overlay is gone.
+    act(() => void vi.advanceTimersByTime(700));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

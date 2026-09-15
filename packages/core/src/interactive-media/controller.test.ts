@@ -200,6 +200,73 @@ describe("InteractiveMediaController", () => {
     expect(state.visibleAnchorIds).toContain("c2");
   });
 
+  it("keeps a skipped non-blocking hook anchored inside its in-frame window", () => {
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 10,
+        end: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
+
+    controller.tick(15); // Encounter -> VISIBLE
+    instance.skip(); // Earlier open went out-of-frame; auto-skipped
+    expect(instance.getState()).toBe(ContentState.SKIPPED);
+
+    // Still in-window: the anchor id renders so the hook can be re-taken.
+    const inFrame = controller.getRenderState(15);
+    expect(inFrame.visibleAnchorIds).toContain("c1");
+    expect(inFrame.completedTagIds).not.toContain("c1");
+  });
+
+  it("never anchors a completed non-blocking hook (tag only, no re-take)", () => {
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 10,
+        end: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
+
+    controller.tick(15); // Encounter -> VISIBLE
+    instance.open();
+    instance.complete(100);
+    expect(instance.getState()).toBe(ContentState.COMPLETED);
+
+    const inFrame = controller.getRenderState(15);
+    expect(inFrame.visibleAnchorIds).not.toContain("c1");
+    expect(inFrame.completedTagIds).toContain("c1");
+  });
+
+  it("drops the anchor once a skipped hook is out of its window", () => {
+    const instance = createInstance({
+      id: "c1",
+      hook: {
+        type: "non-blocking",
+        start: 10,
+        end: 20,
+        placement: { x: 50, y: 50, width: 20, height: 20 },
+        revealBehavior: "click",
+      },
+    });
+    const controller = new InteractiveMediaController([instance], 60);
+
+    controller.tick(15); // Encounter -> VISIBLE
+    instance.skip();
+
+    const outOfFrame = controller.getRenderState(25);
+    expect(outOfFrame.visibleAnchorIds).not.toContain("c1");
+    expect(outOfFrame.completedTagIds).not.toContain("c1");
+  });
+
   it("computes aggregated result", () => {
     const instance1 = createInstance({
       id: "c1",

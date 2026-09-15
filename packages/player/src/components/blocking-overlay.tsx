@@ -1,6 +1,6 @@
 import { ContentInstance, ContentType } from "@interlace/core";
-import React, { useCallback, useEffect, useRef } from "react";
-import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
+import React, { useEffect, useRef, useState } from "react";
+import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 
 export interface BlockingOverlayProps {
   content: ContentInstance;
@@ -10,13 +10,27 @@ export interface BlockingOverlayProps {
    * close/unmount.
    */
   contentType: ContentType;
-  onClose: () => void;
+  /**
+   * Programmatic-only close hook (reserved for the parent's teardown).
+   * Blocking content cannot be dismissed by the user: the overlay stays
+   * until its content completes (or the player unmounts), so nothing in
+   * this component calls `onClose`.
+   */
+  onClose?: () => void;
   /**
    * Called with the reported score when the content's playback
    * completes itself via `callbacks.onComplete` (the parent then
    * completes the item through the controller).
    */
   onContentComplete?: (score?: number) => void;
+  /**
+   * Completing mode: the content body is swapped for a completion
+   * surface (animated check + "Completed" + score) while the parent
+   * runs its ~600ms completing lifecycle before unmounting the overlay.
+   */
+  completing?: boolean;
+  /** Score reported by the completed content, shown in completing mode. */
+  completingScore?: number;
 }
 
 /**
@@ -32,11 +46,14 @@ export interface BlockingOverlayProps {
 export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
   content,
   contentType,
-  onClose,
   onContentComplete,
+  completing = false,
+  completingScore,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Drives the completion surface's fade/slide-in transition.
+  const [revealed, setRevealed] = useState(false);
 
   // Mount/unmount the content type's playback session. The same body
   // completion callback is ref-stabilized so identity churn cannot
@@ -66,6 +83,17 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
       contentType.unmountPlayback?.(body);
     };
   }, [contentType, content]);
+
+  // When the overlay enters completing mode, flip `revealed` on the next
+  // frame so the CSS transitions animate the check + label in.
+  useEffect(() => {
+    if (!completing) {
+      setRevealed(false);
+      return;
+    }
+    const raf = requestAnimationFrame(() => setRevealed(true));
+    return () => cancelAnimationFrame(raf);
+  }, [completing]);
 
   // Focus trap: keep focus within overlay
   useEffect(() => {
@@ -107,9 +135,73 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
     };
   }, []);
 
-  const handleClose = useCallback(() => {
-    onClose();
-  }, [onClose]);
+  const completionSurface = (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: `${SPACE[3]}px`,
+        padding: `${SPACE[4]}px 0`,
+      }}
+    >
+      <div
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: "50%",
+          backgroundColor: COLORS.accentLighter,
+          color: COLORS.accent,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: TYPE.xl,
+          fontWeight: 600,
+          lineHeight: 1,
+          opacity: revealed ? 1 : 0,
+          transform: revealed ? "scale(1)" : "scale(0.6)",
+          transition: "opacity 200ms ease, transform 200ms ease",
+        }}
+        aria-hidden="true"
+      >
+        ✓
+      </div>
+      <p
+        style={{
+          margin: 0,
+          fontFamily: FONTS.display,
+          fontSize: TYPE.lg,
+          fontWeight: 600,
+          color: COLORS.text,
+          opacity: revealed ? 1 : 0,
+          transform: revealed ? "none" : "translateY(6px)",
+          transition:
+            "opacity 250ms ease 120ms, transform 250ms ease 120ms",
+        }}
+      >
+        <span>Completed</span>
+        {typeof completingScore === "number" && (
+          <span
+            aria-label={`completion-score-${completingScore}`}
+            style={{
+              marginLeft: `${SPACE[2]}px`,
+              display: "inline-block",
+              padding: `0 ${SPACE[2]}px`,
+              borderRadius: `${RADIUS.sm}px`,
+              backgroundColor: COLORS.accent,
+              color: COLORS.white,
+              fontSize: TYPE.sm,
+              fontWeight: 600,
+              verticalAlign: "middle",
+            }}
+          >
+            {completingScore}
+          </span>
+        )}
+      </p>
+    </div>
+  );
 
   return (
     <div
@@ -159,52 +251,13 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           {content.getTitle()}
         </h2>
 
-        <div style={{ margin: `${SPACE[4]}px 0` }}>
-          <div ref={bodyRef} />
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: `${SPACE[2]}px`,
-            justifyContent: "flex-end",
-            marginTop: `${SPACE[5]}px`,
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleClose}
-            style={{
-              padding: `${SPACE[2]}px ${SPACE[4]}px`,
-              backgroundColor: COLORS.surfaceRaised,
-              border: `1px solid ${COLORS.borderStrong}`,
-              borderRadius: `${RADIUS.sm}px`,
-              cursor: "pointer",
-              fontSize: TYPE.md,
-              color: COLORS.text,
-              transition: "background-color 150ms ease",
-            }}
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              padding: `${SPACE[2]}px ${SPACE[4]}px`,
-              backgroundColor: COLORS.accent,
-              color: COLORS.white,
-              border: "none",
-              borderRadius: `${RADIUS.sm}px`,
-              cursor: "pointer",
-              fontSize: TYPE.md,
-              fontWeight: 600,
-              transition: "background-color 150ms ease",
-            }}
-          >
-            Continue
-          </button>
-        </div>
+        {completing ? (
+          completionSurface
+        ) : (
+          <div style={{ margin: `${SPACE[4]}px 0` }}>
+            <div ref={bodyRef} />
+          </div>
+        )}
       </div>
     </div>
   );

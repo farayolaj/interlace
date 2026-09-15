@@ -163,7 +163,14 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
             state.activeBlockingContentId = item.getId();
           }
         } else {
-          if (contentState === ContentState.VISIBLE) {
+          // VISIBLE and SKIPPED non-blocking items stay anchored for their
+          // whole in-frame window: a skipped hook (out-of-frame auto-skip
+          // from an earlier open) remains actionable inside its window and
+          // can be re-taken (the anchor-click open path accepts SKIPPED).
+          if (
+            contentState === ContentState.VISIBLE ||
+            contentState === ContentState.SKIPPED
+          ) {
             state.visibleAnchorIds.push(item.getId());
           }
           if (contentState === ContentState.OPEN) {

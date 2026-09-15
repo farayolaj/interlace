@@ -2,6 +2,7 @@ import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -93,6 +94,14 @@ const MAX_ZOOM = 100;
 const DEFAULT_ZOOM = 8;
 const MIN_RANGE = 1; // seconds
 
+const LANE_HEIGHT = 28; // px per lane row
+const MIN_LANE_HEIGHT = 14; // px minimum per lane when lanes stack
+const TRACK_PADDING = 6; // 3px top + 3px bottom padding around the lanes
+const TRACK_HEIGHT_BUDGET = 96; // fixed track height so the chrome stays short
+const RULER_HEIGHT = 24; // px height of the ruler strip
+const KEYFRAME_WIDTH_PX = 14; // rendered diamond width
+const RANGE_MIN_WIDTH_PX = 12; // rendered minimum range width
+
 interface DragState {
   cleanup: () => void;
 }
@@ -120,10 +129,6 @@ function formatTick(seconds: number): string {
   const s = seconds % 60;
   return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
-
-const LANE_HEIGHT = 28; // px per lane row
-const KEYFRAME_WIDTH_PX = 14; // rendered diamond width
-const RANGE_MIN_WIDTH_PX = 12; // rendered minimum range width
 
 function anchorOf(entry: KeyframeTimelineEntry): number {
   return entry.hookType === "blocking"
@@ -186,9 +191,35 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   const dragRef = useRef<DragState | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
+  // Once the user manually zooms (slider or wheel), the full-duration
+  // auto-fit stops re-asserting itself (even across video reloads).
+  const userZoomedRef = useRef(false);
   // Latest props for the native drag listeners.
   const propsRef = useRef({ zoom, videoDuration, currentTime });
   propsRef.current = { zoom, videoDuration, currentTime };
+
+  // Default zoom = the full video duration: on mount and whenever the video
+  // duration changes (video reload), compute the zoom that fits the entire
+  // duration into the visible strip width. A ResizeObserver keeps the fit
+  // honest when the host resizes, but a manual zoom wins from then on.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measureAndFit = () => {
+      const width = el.clientWidth;
+      if (width <= 0 || videoDuration <= 0) return;
+      if (!userZoomedRef.current) {
+        setZoom(clampValue(width / videoDuration, MIN_ZOOM, MAX_ZOOM));
+      }
+    };
+    measureAndFit();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => measureAndFit());
+      observer.observe(el);
+      return () => observer.disconnect();
+    }
+    return undefined;
+  }, [videoDuration]);
 
   const stripWidth = Math.max(videoDuration * zoom, 320);
   const pxToTime = useCallback(
@@ -330,15 +361,17 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
     [beginDrag, onUpdateEntry],
   );
 
-  // Ctrl+wheel zoom. React's synthetic onWheel is passive at the root
-  // since React 17, so preventDefault requires a native non-passive
-  // listener.
+  // Wheel zoom on the timeline body: wheel up = zoom in, wheel down = zoom
+  // out. React's synthetic onWheel is passive at the root since React 17,
+  // so preventDefault requires a native non-passive listener. ctrl/meta+wheel
+  // is accepted as the same gesture (backwards compatible with the prior
+  // ctrl+wheel behavior).
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
       e.preventDefault();
+      userZoomedRef.current = true;
       setZoom((z) =>
         clampValue(e.deltaY < 0 ? z * 1.2 : z / 1.2, MIN_ZOOM, MAX_ZOOM),
       );
@@ -348,6 +381,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   }, []);
 
   const handleZoom = useCallback((direction: 1 | -1) => {
+    userZoomedRef.current = true;
     setZoom((z) =>
       clampValue(direction > 0 ? z * 1.5 : z / 1.5, MIN_ZOOM, MAX_ZOOM),
     );
@@ -479,6 +513,21 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   }
   const playheadPx = currentTime * zoom;
 
+  // Adaptive lane height: as lanes stack, the rows compress so the track
+  // never grows past the fixed height budget (no vertical scrolling; the
+  // chrome stays short). Small lane counts keep the base 28px row.
+  const laneHeight = clampValue(
+    Math.floor(
+      (TRACK_HEIGHT_BUDGET - TRACK_PADDING) / Math.max(1, layout.laneCount),
+    ),
+    MIN_LANE_HEIGHT,
+    LANE_HEIGHT,
+  );
+  const trackHeight = Math.max(
+    48,
+    layout.laneCount * laneHeight + TRACK_PADDING,
+  );
+
   return (
     <div
       className="keyframe-timeline"
@@ -597,11 +646,18 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
         </button>
       </div>
 
-      {/* Scrollable strip: ruler + track + playhead */}
+      {/* Scrollable strip: ruler + track + playhead. Horizontal overflow
+          is allowed for zoomed-in scoping; vertical overflow is
+          eliminated (the lanes compress instead of scrolling). */}
       <div
         ref={scrollRef}
         data-testid="keyframe-timeline-scroll"
-        style={{ overflowX: "auto", position: "relative" }}
+        style={{
+          overflowX: "auto",
+          overflowY: "hidden",
+          position: "relative",
+          maxHeight: RULER_HEIGHT + TRACK_HEIGHT_BUDGET,
+        }}
       >
         <div
           ref={stripRef}
@@ -667,7 +723,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
             }}
             style={{
               position: "relative",
-              height: Math.max(48, layout.laneCount * LANE_HEIGHT + 6),
+              height: trackHeight,
             }}
           >
             {entries.length === 0 ? (
@@ -689,7 +745,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                 // Lane assignment from the greedy interval packing:
                 // overlapping entries stack into successive rows.
                 const lane = layout.lanes.get(entry.id) ?? 0;
-                const laneTop = 3 + lane * LANE_HEIGHT;
+                const laneTop = 3 + lane * laneHeight;
                 if (entry.hookType === "blocking") {
                   const px = (entry.timestamp ?? 0) * zoom;
                   return (
@@ -753,7 +809,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       left: startPx,
                       width: widthPx,
                       top: laneTop,
-                      height: LANE_HEIGHT - 4,
+                      height: laneHeight - 4,
                       backgroundColor: selected
                         ? COLORS.accentLight
                         : COLORS.accentLighter,
