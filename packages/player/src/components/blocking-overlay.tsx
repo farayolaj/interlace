@@ -176,8 +176,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           color: COLORS.text,
           opacity: revealed ? 1 : 0,
           transform: revealed ? "none" : "translateY(6px)",
-          transition:
-            "opacity 250ms ease 120ms, transform 250ms ease 120ms",
+          transition: "opacity 250ms ease 120ms, transform 250ms ease 120ms",
         }}
       >
         <span>Completed</span>
@@ -196,7 +195,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
               verticalAlign: "middle",
             }}
           >
-            {completingScore}
+            Score: {completingScore}/{content.getMaximumScore()}
           </span>
         )}
       </p>
