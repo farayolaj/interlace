@@ -86,16 +86,13 @@ export function useInteractiveMedia(options: UseInteractiveMediaOptions) {
     });
 
     // Wire controller commands to adapter
-    const unsubscribeRequestPause = controller.on("requestPause", async () => {
-      await adapter.pause();
+    const unsubscribeRequestPause = controller.on("requestPause", () => {
+      adapter.pause();
     });
 
-    const unsubscribeRequestSeek = controller.on(
-      "requestSeek",
-      async (event) => {
-        await adapter.seek(event.timeInSeconds);
-      },
-    );
+    const unsubscribeRequestSeek = controller.on("requestSeek", (event) => {
+      adapter.seek(event.timeInSeconds);
+    });
 
     return () => {
       unsubscribePause();

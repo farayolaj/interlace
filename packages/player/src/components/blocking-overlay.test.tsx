@@ -213,7 +213,35 @@ describe("BlockingOverlay", () => {
     );
 
     expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByText("Score: 100/100")).toBeInTheDocument();
+    // The completion surface's only exit is Continue (not a dismiss).
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /close/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /dismiss/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clicking Continue fires onContinue (the completion acknowledgement)", () => {
+    const { contentType } = makeContentType();
+    const content = makeContent({ question: "What is 2 + 2?" }, contentType);
+    const onContinue = vi.fn();
+
+    render(
+      <BlockingOverlay
+        content={content}
+        contentType={contentType}
+        onClose={vi.fn()}
+        completing
+        completingScore={100}
+        onContinue={onContinue}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
   it("completing mode does not require (or mount) the content body", () => {

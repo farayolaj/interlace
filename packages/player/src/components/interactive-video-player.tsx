@@ -5,8 +5,8 @@ import {
   VideoAdapter,
 } from "@interlace/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
 import { useInteractiveMedia } from "../hooks/use-interactive-media";
+import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
 import { BlockingOverlay } from "./blocking-overlay";
 import { ContentErrorBoundary } from "./content-error-boundary";
 import { OverlayLayer } from "./overlay-layer";
@@ -38,8 +38,9 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     openedContentIds: [],
   });
   const [activeContentId, setActiveContentId] = useState<string | null>(null);
-  // Completing lifecycle: the completed overlay stays mounted showing a
-  // completion surface for ~600ms before unmounting (see the effect below).
+  // Completing lifecycle: after an item completes, the overlay stays mounted
+  // showing the completion surface + Continue until the user acknowledges it
+  // (Continue resumes playback and unmounts the overlay).
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [completingScore, setCompletingScore] = useState<number | undefined>(
     undefined,
@@ -54,9 +55,13 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     onError,
   });
 
-  const handleAnchorClick = useCallback((contentId: string) => {
-    setActiveContentId(contentId);
-  }, []);
+  const handleAnchorClick = useCallback(
+    (contentId: string) => {
+      adapter.pause();
+      setActiveContentId(contentId);
+    },
+    [adapter],
+  );
 
   // Auto-open the blocking overlay when the controller pauses for blocking
   // content. The ref guard keeps a manually closed overlay closed instead of
@@ -74,39 +79,28 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     }
   }, [renderState.activeBlockingContentId]);
 
-  // Completion feedback lifecycle: once an item completes, the overlay stays
-  // mounted in completing mode for ~600ms (the feedback plays over the
-  // resumed video), then clears `completingId` and the overlay unmounts.
-  // The timeout is torn down on unmount and whenever the completing id
-  // changes (a new completion restarts the timer).
-  useEffect(() => {
-    if (!completingId) return;
-    const timeout = setTimeout(() => {
-      setCompletingId(null);
-      setCompletingScore(undefined);
-    }, 600);
-    return () => clearTimeout(timeout);
-  }, [completingId]);
-
   const handleContentComplete = useCallback(
     (score?: number) => {
       if (!controller || !activeContentId) return;
       const item = (items ?? []).find((it) => it.getId() === activeContentId);
       item?.complete(score ?? 0);
-      // Resume playback IMMEDIATELY — the completion feedback plays over
-      // the moving video (the paused video walks out of the blocking frame
-      // on the next ticks).
-      void adapter.play();
-      // Enter the completing lifecycle: detach the active content id and
-      // mount the overlay's completion surface under `completingId`. The
-      // render below keeps the overlay mounted via `activeContentId ??
-      // completingId` while `completingId` is set.
+      // Enter the completing lifecycle: the overlay swaps to a completion
+      // surface with a Continue button. Playback stays PAUSED until the
+      // user acknowledges completion and resumes via Continue.
       setCompletingScore(score ?? 0);
       setCompletingId(activeContentId);
       setActiveContentId(null);
     },
-    [controller, items, activeContentId, adapter],
+    [controller, items, activeContentId],
   );
+
+  // Continue-gated resume: unmount the completion surface and resume
+  // playback. This is the ONLY exit from the completing state.
+  const handleContinueAfterCompletion = useCallback(() => {
+    setCompletingId(null);
+    setCompletingScore(undefined);
+    void adapter.play();
+  }, [adapter]);
 
   if (error) {
     return (
@@ -129,14 +123,14 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   if (!initialized || !controller) {
     return (
       <div
-      style={{
-        padding: `${SPACE[4]}px`,
-        color: COLORS.textMuted,
-        fontSize: TYPE.md,
-      }}
-    >
-      Loading player…
-    </div>
+        style={{
+          padding: `${SPACE[4]}px`,
+          color: COLORS.textMuted,
+          fontSize: TYPE.md,
+        }}
+      >
+        Loading player…
+      </div>
     );
   }
 
@@ -170,7 +164,10 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
             content={activeItem.content}
             contentType={activeContentType}
             onContentComplete={handleContentComplete}
-            completing={completingId !== null && completingId === overlayContentId}
+            onContinue={handleContinueAfterCompletion}
+            completing={
+              completingId !== null && completingId === overlayContentId
+            }
             completingScore={completingScore}
           />
         )}

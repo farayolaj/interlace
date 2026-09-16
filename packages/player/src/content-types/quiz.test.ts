@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   QuizContentType,
   renderQuizPlayback,
@@ -44,7 +44,12 @@ function renderIntoContainer(data: QuizData = QUIZ_DATA) {
   const options = [
     ...container.querySelectorAll(".quiz-playback-option"),
   ] as HTMLButtonElement[];
-  return { container, onComplete, question, options };
+  const navButtons = [
+    ...container.querySelectorAll(".quiz-playback-nav button"),
+  ] as HTMLButtonElement[];
+  // [0] = Previous (absent on the first question), last = Next/Complete.
+  const completeButton = navButtons[navButtons.length - 1];
+  return { container, onComplete, question, options, completeButton };
 }
 
 describe("QuizContentType", () => {
@@ -67,18 +72,21 @@ describe("QuizContentType", () => {
     expect(options.every((option) => !option.disabled)).toBe(true);
   });
 
-  it("selecting the correct option reports the maximum score and locks the options", () => {
-    const { onComplete, options } = renderIntoContainer();
+  it("selecting the correct option reveals, locks, and completes with the maximum score", () => {
+    const { onComplete, options, completeButton } = renderIntoContainer();
     options[1]!.click();
+    // No auto-completion: submission is the explicit Complete button.
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(options.every((option) => option.disabled)).toBe(true);
+    expect(completeButton!.disabled).toBe(false);
+    completeButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledWith(100);
-    expect(options.every((option) => option.disabled)).toBe(true);
   });
 
-  it("selecting an incorrect option reports a zero score and marks it", () => {
-    const { onComplete, options } = renderIntoContainer();
+  it("selecting an incorrect option reveals the answer, marks, and completes with zero", () => {
+    const { onComplete, options, completeButton } = renderIntoContainer();
     options[0]!.click();
-    expect(onComplete).toHaveBeenCalledWith(0);
     // The correct option is revealed, the wrong selection is marked.
     expect(options[1]!.classList.contains("quiz-playback-option-correct")).toBe(
       true,
@@ -86,9 +94,11 @@ describe("QuizContentType", () => {
     expect(
       options[0]!.classList.contains("quiz-playback-option-incorrect"),
     ).toBe(true);
-    // Answering once locks the options.
+    // Answering once locks the options (further clicks change nothing).
     options[2]!.click();
+    completeButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(0);
   });
 
   it("unmountPlayback clears the container and allows re-render", () => {
@@ -110,8 +120,9 @@ describe("QuizContentType", () => {
     // predate an authored answer: unset correctIndex means no option
     // is correct and every answer scores 0.
     const data: QuizData = { question: "Legacy import", options: ["a", "b"] };
-    const { onComplete, options } = renderIntoContainer(data);
+    const { onComplete, options, completeButton } = renderIntoContainer(data);
     options[1]!.click();
+    completeButton!.click();
     expect(onComplete).toHaveBeenCalledWith(0);
     expect(
       options.every(
@@ -137,8 +148,9 @@ describe("QuizContentType", () => {
       options: ["a", "b"],
       correctIndex: 7,
     };
-    const { onComplete, options } = renderIntoContainer(data);
+    const { onComplete, options, completeButton } = renderIntoContainer(data);
     options[0]!.click();
+    completeButton!.click();
     expect(onComplete).toHaveBeenCalledWith(0);
     expect(
       options.every(
@@ -154,9 +166,7 @@ describe("QuizContentType", () => {
 
     QuizContentType.renderEditor(container, CANONICAL_QUIZ_DATA, onChange);
 
-    const input = container.querySelector(
-      ".quiz-question",
-    ) as HTMLInputElement;
+    const input = container.querySelector(".quiz-question") as HTMLInputElement;
     expect(input.value).toBe("What is 2 + 2?");
     input.value = "New question";
     input.dispatchEvent(new Event("input", { bubbles: true }));

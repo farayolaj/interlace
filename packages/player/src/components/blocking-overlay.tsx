@@ -25,12 +25,19 @@ export interface BlockingOverlayProps {
   onContentComplete?: (score?: number) => void;
   /**
    * Completing mode: the content body is swapped for a completion
-   * surface (animated check + "Completed" + score) while the parent
-   * runs its ~600ms completing lifecycle before unmounting the overlay.
+   * surface (animated check + "Completed" + score) that persists until
+   * the user acknowledges it.
    */
   completing?: boolean;
   /** Score reported by the completed content, shown in completing mode. */
   completingScore?: number;
+  /**
+   * Completion-acknowledgement control (programmatic owner: the player).
+   * The completing surface's ONLY exit is the Continue button that calls
+   * this — it is not a dismiss affordance; the parent resumes playback and
+   * unmounts the overlay.
+   */
+  onContinue?: () => void;
 }
 
 /**
@@ -49,6 +56,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
   onContentComplete,
   completing = false,
   completingScore,
+  onContinue,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -95,7 +103,10 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
     return () => cancelAnimationFrame(raf);
   }, [completing]);
 
-  // Focus trap: keep focus within overlay
+  // Focus trap: keep focus within overlay. Re-runs when completing mode
+  // flips so the completion surface's Continue button joins the trap and
+  // receives focus as the surface appears (the content body's focusables
+  // are gone by then).
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay) return;
@@ -133,7 +144,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
     return () => {
       overlay.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [completing]);
 
   const completionSurface = (
     <div
@@ -199,6 +210,25 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           </span>
         )}
       </p>
+      <button
+        type="button"
+        onClick={onContinue}
+        style={{
+          marginTop: `${SPACE[3]}px`,
+          padding: `${SPACE[2]}px ${SPACE[5]}px`,
+          backgroundColor: COLORS.accent,
+          color: COLORS.white,
+          border: "none",
+          borderRadius: `${RADIUS.sm}px`,
+          cursor: "pointer",
+          fontSize: TYPE.md,
+          fontWeight: 600,
+          transition: "background-color 150ms ease",
+          opacity: revealed ? 1 : 0,
+        }}
+      >
+        Continue
+      </button>
     </div>
   );
 

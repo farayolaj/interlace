@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QuizContentType } from "./quiz-content-type";
-import {
-  renderQuizPlayback,
-  unmountQuizPlayback,
-} from "./quiz-player";
+import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
 import type { QuizData, RawQuizData } from "./schema";
 
 afterEach(() => {
@@ -51,6 +48,12 @@ const MULTI_DATA: RawQuizData = {
   ],
 };
 
+function currentOptions(): HTMLButtonElement[] {
+  return [
+    ...document.querySelectorAll(".quiz-playback-option"),
+  ] as HTMLButtonElement[];
+}
+
 function renderIntoContainer(data: RawQuizData = LEGACY_DATA) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -62,13 +65,22 @@ function renderIntoContainer(data: RawQuizData = LEGACY_DATA) {
   const question = container.querySelector(
     ".quiz-playback-question",
   ) as HTMLElement | null;
-  const options = [
-    ...container.querySelectorAll(".quiz-playback-option"),
-  ] as HTMLButtonElement[];
+  const options = currentOptions();
   const nextButton = container.querySelector(
     ".quiz-playback-next",
   ) as HTMLButtonElement | null;
-  return { container, onComplete, indicator, question, options, nextButton };
+  const prevButton = container.querySelector(
+    ".quiz-playback-prev",
+  ) as HTMLButtonElement | null;
+  return {
+    container,
+    onComplete,
+    indicator,
+    question,
+    options,
+    nextButton,
+    prevButton,
+  };
 }
 
 describe("QuizContentType", () => {
@@ -100,7 +112,11 @@ describe("renderQuizPlayback", () => {
     const { indicator, question, options } = renderIntoContainer();
     expect(indicator?.textContent).toBe("Question 1 of 1");
     expect(question?.textContent).toBe("What is 2 + 2?");
-    expect(options.map((option) => option.textContent)).toEqual(["3", "4", "5"]);
+    expect(options.map((option) => option.textContent)).toEqual([
+      "3",
+      "4",
+      "5",
+    ]);
     expect(options.every((option) => !option.disabled)).toBe(true);
   });
 
@@ -126,9 +142,7 @@ describe("renderQuizPlayback", () => {
     expect(firstThumb).not.toBeNull();
     expect(firstThumb?.getAttribute("src")).toBe("a.png");
     expect(firstThumb?.getAttribute("alt")).toBe("Alpha art");
-    expect(
-      options[1]?.querySelector(".quiz-playback-option-media"),
-    ).toBeNull();
+    expect(options[1]?.querySelector(".quiz-playback-option-media")).toBeNull();
   });
 
   it("shows 'Question 1 of 2' and renders only the first question's options", () => {
@@ -152,83 +166,21 @@ describe("renderQuizPlayback", () => {
     expect(container.querySelector(".quiz-playback-option-media")).toBeNull();
   });
 
-  it("answers a single question with the maximum score and locks the options", () => {
-    const { onComplete, options, nextButton } = renderIntoContainer();
-    options[1]!.click();
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(100);
-    expect(options.every((option) => option.disabled)).toBe(true);
-    // Single-question sessions have no Next affordance.
-    expect(nextButton?.style.display).toBe("none");
-  });
+  it("Next is gated on the current answer and does not auto-advance", () => {
+    const { options, nextButton, prevButton, indicator, question } =
+      renderIntoContainer(MULTI_DATA);
+    expect(nextButton?.disabled).toBe(true);
+    expect(nextButton?.textContent).toBe("Next");
+    expect(prevButton?.style.display).toBe("none");
 
-  it("answers a single question incorrectly with a zero score and marks it", () => {
-    const { onComplete, options } = renderIntoContainer();
-    options[0]!.click();
-    expect(onComplete).toHaveBeenCalledWith(0);
-    // The correct option is revealed, the wrong selection is marked.
-    expect(options[1]!.classList.contains("quiz-playback-option-correct")).toBe(
-      true,
-    );
-    expect(
-      options[0]!.classList.contains("quiz-playback-option-incorrect"),
-    ).toBe(true);
-    // Answering once locks the options.
-    options[2]!.click();
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it("locks an answered question's options before revealing Next", () => {
-    const { options, nextButton } = renderIntoContainer(MULTI_DATA);
-    expect(nextButton?.style.display).toBe("none");
     options[0]!.click(); // correct on question 1
-    expect(options.every((option) => option.disabled)).toBe(true);
-    expect(options[0]!.classList.contains("quiz-playback-option-correct")).toBe(
-      true,
-    );
-    expect(nextButton?.style.display).toBe("block");
+    expect(nextButton?.disabled).toBe(false);
+    // No auto-advance: the view stays on question 1.
+    expect(indicator?.textContent).toBe("Question 1 of 2");
+    expect(question?.textContent).toBe("First question");
   });
 
-  it("aggregates partial credit across two questions (one right, one wrong → 50)", () => {
-    const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
-    // Question 1: correct.
-    options[0]!.click();
-    expect(onComplete).not.toHaveBeenCalled();
-    nextButton!.click();
-    // Question 2: wrong.
-    const secondOptions = [
-      ...document.querySelectorAll(".quiz-playback-option"),
-    ] as HTMLButtonElement[];
-    secondOptions[1]!.click();
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(50);
-  });
-
-  it("reports 100 when both questions are answered correctly", () => {
-    const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
-    options[0]!.click();
-    nextButton!.click();
-    const secondOptions = [
-      ...document.querySelectorAll(".quiz-playback-option"),
-    ] as HTMLButtonElement[];
-    secondOptions[0]!.click();
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(100);
-  });
-
-  it("fires completion once on the final question", () => {
-    const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
-    options[0]!.click();
-    nextButton!.click();
-    const secondOptions = [
-      ...document.querySelectorAll(".quiz-playback-option"),
-    ] as HTMLButtonElement[];
-    secondOptions[1]!.click(); // completes
-    secondOptions[0]!.click(); // already locked, ignored
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders the second question after Next and shows 'Question 2 of 2'", () => {
+  it("advances to question 2 via Next and shows 'Question 2 of 2'", () => {
     const { options, nextButton } = renderIntoContainer(MULTI_DATA);
     options[1]!.click(); // wrong on question 1 (still allowed)
     nextButton!.click();
@@ -240,13 +192,142 @@ describe("renderQuizPlayback", () => {
     ) as HTMLElement | null;
     expect(indicator?.textContent).toBe("Question 2 of 2");
     expect(question?.textContent).toBe("Second question");
-    const secondOptions = [
-      ...document.querySelectorAll(".quiz-playback-option"),
-    ] as HTMLButtonElement[];
-    expect(secondOptions.map((option) => option.textContent)).toEqual([
+    expect(currentOptions().map((option) => option.textContent)).toEqual([
       "Correct two",
       "Wrong two",
     ]);
+  });
+
+  it("Previous is absent on the first question and returns review-only to question 1", () => {
+    const { options, nextButton, prevButton } = renderIntoContainer(MULTI_DATA);
+    expect(prevButton?.style.display).toBe("none");
+
+    options[0]!.click(); // correct on question 1
+    nextButton!.click(); // question 2
+    expect(prevButton?.style.display).toBe("block");
+
+    // Answer question 2 before going back.
+    currentOptions()[1]!.click(); // wrong
+    prevButton!.click();
+
+    // Back on question 1: reveal intact, options disabled (review-only).
+    const indicator = document.querySelector(
+      ".quiz-playback-indicator",
+    ) as HTMLElement | null;
+    const firstOptions = currentOptions();
+    expect(indicator?.textContent).toBe("Question 1 of 2");
+    expect(
+      firstOptions[0]!.classList.contains("quiz-playback-option-correct"),
+    ).toBe(true);
+    expect(firstOptions.every((option) => option.disabled)).toBe(true);
+  });
+
+  it("changing decisions is impossible after reveal (options locked)", () => {
+    const { options, nextButton, prevButton } = renderIntoContainer(MULTI_DATA);
+    options[0]!.click(); // answer question 1
+    nextButton!.click(); // question 2
+    currentOptions()[1]!.click(); // answer question 2
+    prevButton!.click(); // back to question 1 review
+
+    const firstOptions = currentOptions();
+    // The locked question 1 cannot be re-answered: clicking its (correct)
+    // option changes nothing.
+    firstOptions[0]!.click();
+    firstOptions[1]!.click();
+    expect(currentOptions()[0]!.disabled).toBe(true);
+    expect(currentOptions()[1]!.disabled).toBe(true);
+    // And no decision changed: the correct option is still the revealed one.
+    expect(
+      currentOptions()[0]!.classList.contains("quiz-playback-option-correct"),
+    ).toBe(true);
+  });
+
+  it("answers a single question correctly, then Complete reports 100 once", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer();
+    options[1]!.click();
+    // Reveal + lock; no auto-complete.
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(options.every((option) => option.disabled)).toBe(true);
+    expect(nextButton?.textContent).toBe("Complete");
+    expect(nextButton?.disabled).toBe(false);
+
+    nextButton!.click();
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(100);
+
+    // Already completed: the footer click does nothing more.
+    nextButton!.click();
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers a single question incorrectly with a zero score and marks it", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer();
+    options[0]!.click();
+    expect(onComplete).not.toHaveBeenCalled();
+    // The correct option is revealed, the wrong selection is marked.
+    expect(options[1]!.classList.contains("quiz-playback-option-correct")).toBe(
+      true,
+    );
+    expect(
+      options[0]!.classList.contains("quiz-playback-option-incorrect"),
+    ).toBe(true);
+    // Answering once locks the options.
+    options[2]!.click();
+    expect(onComplete).not.toHaveBeenCalled();
+
+    nextButton!.click(); // Complete
+    expect(onComplete).toHaveBeenCalledWith(0);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("aggregates partial credit across two questions (one right, one wrong → 50)", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
+    // Question 1: correct.
+    options[0]!.click();
+    expect(onComplete).not.toHaveBeenCalled();
+    nextButton!.click();
+    // Question 2: wrong — the footer still gates completion.
+    currentOptions()[1]!.click();
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(nextButton?.textContent).toBe("Complete");
+    expect(nextButton?.disabled).toBe(false);
+    nextButton!.click();
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(50);
+  });
+
+  it("reports 100 when both questions are answered correctly", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
+    options[0]!.click();
+    nextButton!.click();
+    currentOptions()[0]!.click();
+    nextButton!.click(); // Complete
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith(100);
+  });
+
+  it("the final question's Complete button is disabled until answered", () => {
+    const { options, nextButton } = renderIntoContainer(MULTI_DATA);
+    options[0]!.click();
+    nextButton!.click();
+    // Question 2 (final): Complete present but gated.
+    expect(nextButton?.textContent).toBe("Complete");
+    expect(nextButton?.disabled).toBe(true);
+    currentOptions()[0]!.click();
+    expect(nextButton?.disabled).toBe(false);
+  });
+
+  it("fires completion once on the final question", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
+    options[0]!.click();
+    nextButton!.click();
+    currentOptions()[1]!.click(); // wrong
+    nextButton!.click(); // Complete
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    // Re-clicking Complete (and the now-locked options) does nothing.
+    nextButton!.click();
+    currentOptions()[1]!.click();
+    expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
   it("unmountQuizPlayback clears the container and allows re-render", () => {
@@ -267,15 +348,20 @@ describe("renderQuizPlayback", () => {
     // Load-bearing compatibility case with documents that predate an
     // authored answer: no resolvable correct option means nothing is marked
     // correct and every answer scores 0.
-    const data: RawQuizData = { question: "Legacy import", options: ["a", "b"] };
-    const { onComplete, options } = renderIntoContainer(data);
+    const data: RawQuizData = {
+      question: "Legacy import",
+      options: ["a", "b"],
+    };
+    const { onComplete, options, nextButton } = renderIntoContainer(data);
     options[1]!.click();
-    expect(onComplete).toHaveBeenCalledWith(0);
+    expect(onComplete).not.toHaveBeenCalled();
     expect(
       options.every(
         (option) => !option.classList.contains("quiz-playback-option-correct"),
       ),
     ).toBe(true);
+    nextButton!.click(); // Complete
+    expect(onComplete).toHaveBeenCalledWith(0);
   });
 
   it("renders zero options for non-array data without throwing", () => {
@@ -284,8 +370,10 @@ describe("renderQuizPlayback", () => {
       options: undefined as unknown as Array<string>,
       correctIndex: 1,
     };
-    const { onComplete, options } = renderIntoContainer(bad);
+    const { onComplete, options, nextButton } = renderIntoContainer(bad);
     expect(options.length).toBe(0);
+    // Nothing answered → Complete stays gated → no completion fires.
+    expect(nextButton?.disabled).toBe(true);
     expect(onComplete).not.toHaveBeenCalled();
   });
 
@@ -295,21 +383,23 @@ describe("renderQuizPlayback", () => {
       options: ["a", "b"],
       correctIndex: 7,
     };
-    const { onComplete, options } = renderIntoContainer(data);
+    const { onComplete, options, nextButton } = renderIntoContainer(data);
     options[0]!.click();
-    expect(onComplete).toHaveBeenCalledWith(0);
     expect(
       options.every(
         (option) => !option.classList.contains("quiz-playback-option-correct"),
       ),
     ).toBe(true);
+    nextButton!.click(); // Complete
+    expect(onComplete).toHaveBeenCalledWith(0);
   });
 
   it("scores by option id in the canonical flat shape", () => {
-    const { onComplete, options } = renderIntoContainer(CANONICAL_DATA);
+    const { onComplete, options, nextButton } =
+      renderIntoContainer(CANONICAL_DATA);
     options[1]!.click();
+    nextButton!.click(); // Complete
     expect(onComplete).toHaveBeenCalledWith(100);
-    options[0]!.click();
-    expect(onComplete).toHaveBeenCalledTimes(1); // already locked
+    expect(onComplete).toHaveBeenCalledTimes(1); // once, after Complete
   });
 });

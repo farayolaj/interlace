@@ -1,13 +1,20 @@
-import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ContentTypeRegistry,
   SerializedInteractiveMediaDocument,
   VideoAdapterEvent,
   VideoAdapterEventType,
 } from "@interlace/core";
-import { QuizContentType } from "../content-types/quiz";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InteractiveVideoPlayer } from "../components/interactive-video-player";
+import { QuizContentType } from "../content-types/quiz";
 import { useInteractiveMedia } from "./use-interactive-media";
 
 /**
@@ -201,12 +208,18 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     vi.useFakeTimers();
     // Stub rAF onto the fake-timer clock so tests control every frame.
     globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
-      setTimeout(() => cb(performance.now()), TICK_MS)) as unknown as typeof globalThis.requestAnimationFrame;
-    globalThis.cancelAnimationFrame =
-      ((handle: number) => clearTimeout(handle)) as unknown as typeof globalThis.cancelAnimationFrame;
+      setTimeout(
+        () => cb(performance.now()),
+        TICK_MS,
+      )) as unknown as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = ((handle: number) =>
+      clearTimeout(
+        handle,
+      )) as unknown as typeof globalThis.cancelAnimationFrame;
   });
 
   afterEach(() => {
+    cleanup();
     globalThis.requestAnimationFrame = originalRaf;
     globalThis.cancelAnimationFrame = originalCaf;
     vi.useRealTimers();
@@ -239,7 +252,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
 
     // The user answers (the quiz's playback would drive this through
     // callbacks.onComplete; the runtime path is item completion).
-    const item = hook.result.current.items?.find((i) => i.getId() === "quiz-block");
+    const item = hook.result.current.items?.find(
+      (i) => i.getId() === "quiz-block",
+    );
     expect(item?.getState()).toBe("open");
     act(() => void item?.complete(100));
     tick(adapter);
@@ -274,7 +289,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     };
     expect(state.activeBlockingContentId).toBeUndefined();
     expect(
-      hook.result.current.items?.find((i) => i.getId() === "quiz-block")?.getState(),
+      hook.result.current.items
+        ?.find((i) => i.getId() === "quiz-block")
+        ?.getState(),
     ).toBe("pending");
   });
 
@@ -290,9 +307,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     walkIntoBlockingWindow(adapter, 10);
     expect(
       (
-        hook.result.current.controller?.getRenderState(
-          adapter.currentTime,
-        ) as { activeBlockingContentId?: string }
+        hook.result.current.controller?.getRenderState(adapter.currentTime) as {
+          activeBlockingContentId?: string;
+        }
       ).activeBlockingContentId,
     ).toBe("quiz-block");
 
@@ -308,7 +325,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
       ).activeBlockingContentId,
     ).toBeUndefined();
     expect(
-      hook.result.current.items?.find((i) => i.getId() === "quiz-block")?.getState(),
+      hook.result.current.items
+        ?.find((i) => i.getId() === "quiz-block")
+        ?.getState(),
     ).toBe("open");
 
     // The user re-seeks: playback resumes, the clock walks back into the
@@ -318,9 +337,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     walkIntoBlockingWindow(adapter, 10);
     expect(
       (
-        hook.result.current.controller?.getRenderState(
-          adapter.currentTime,
-        ) as { activeBlockingContentId?: string }
+        hook.result.current.controller?.getRenderState(adapter.currentTime) as {
+          activeBlockingContentId?: string;
+        }
       ).activeBlockingContentId,
     ).toBe("quiz-block");
   });
@@ -333,7 +352,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     });
     tick(adapter);
     walkIntoBlockingWindow(adapter, 10);
-    const item = hook.result.current.items?.find((i) => i.getId() === "quiz-block");
+    const item = hook.result.current.items?.find(
+      (i) => i.getId() === "quiz-block",
+    );
     act(() => void item?.complete(100));
     tick(adapter);
 
@@ -359,7 +380,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     hook.result.current.controller?.on("finished", finished);
 
     walkIntoBlockingWindow(adapter, 10);
-    const item = hook.result.current.items?.find((i) => i.getId() === "quiz-block");
+    const item = hook.result.current.items?.find(
+      (i) => i.getId() === "quiz-block",
+    );
     act(() => void item?.complete(100));
 
     adapter.currentTime = 40;
@@ -479,22 +502,33 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     walkIntoBlockingWindow(adapter, 10);
     expect(adapter.isPlaying).toBe(false); // paused at the hook
 
-    // The user answers the quiz in the overlay.
+    // The user answers the quiz in the overlay (option click reveals and
+    // locks), then advances with the explicit Complete button — the quiz's
+    // single completion trigger.
     const option = screen.getByRole("button", { name: "4" });
+    playSpy.mockClear();
     act(() => void fireEvent.click(option));
+    act(
+      () =>
+        void fireEvent.click(screen.getByRole("button", { name: "Complete" })),
+    );
 
-    // Completion unblocks playback immediately; the overlay stays mounted
-    // showing the completion feedback (animated ✓ + "Completed" + score)
-    // for ~600ms, then unmounts smoothly.
+    // Completion feedback shows, but playback stays PAUSED until the user
+    // continues — completing must NOT call adapter.play().
     await act(() => Promise.resolve());
-    expect(playSpy).toHaveBeenCalled();
-    expect(adapter.isPlaying).toBe(true);
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(adapter.isPlaying).toBe(false);
     expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByText("Score: 100/100")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    // After the completing delay the overlay is gone.
-    act(() => void vi.advanceTimersByTime(700));
+    // Continue acknowledges completion: the overlay unmounts AND resumes.
+    act(
+      () =>
+        void fireEvent.click(screen.getByRole("button", { name: "Continue" })),
+    );
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(adapter.isPlaying).toBe(true);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -514,22 +548,32 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(screen.getByAltText("opt one art")).toBeInTheDocument();
     expect(screen.getByAltText("opt two art")).toBeInTheDocument();
 
-    // The user answers the quiz in the overlay by its option id.
+    // The user answers the quiz in the overlay by its option id, then
+    // advances with the explicit Complete button (the single completion
+    // trigger for the final question).
     const option = screen.getByRole("button", { name: /Media option/ });
+    playSpy.mockClear();
     act(() => void fireEvent.click(option));
+    act(
+      () =>
+        void fireEvent.click(screen.getByRole("button", { name: "Complete" })),
+    );
 
-    // Completion unblocks playback immediately; the overlay stays mounted
-    // showing the completion feedback (animated ✓ + "Completed" + score)
-    // for ~600ms, then unmounts smoothly.
+    // Completion feedback shows, but playback stays PAUSED until Continue.
     await act(() => Promise.resolve());
-    expect(playSpy).toHaveBeenCalled();
-    expect(adapter.isPlaying).toBe(true);
+    expect(playSpy).not.toHaveBeenCalled();
+    expect(adapter.isPlaying).toBe(false);
     expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByText("Score: 100/100")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    // After the completing delay the overlay is gone.
-    act(() => void vi.advanceTimersByTime(700));
+    // Continue acknowledges completion: the overlay unmounts AND resumes.
+    act(
+      () =>
+        void fireEvent.click(screen.getByRole("button", { name: "Continue" })),
+    );
+    expect(playSpy).toHaveBeenCalledTimes(1);
+    expect(adapter.isPlaying).toBe(true);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

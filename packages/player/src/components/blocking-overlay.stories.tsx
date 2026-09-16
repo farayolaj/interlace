@@ -98,5 +98,6 @@ export const Completing: Story = {
   args: {
     completing: true,
     completingScore: 100,
+    onContinue: fn(),
   },
 };
