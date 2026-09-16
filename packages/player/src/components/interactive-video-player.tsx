@@ -163,6 +163,17 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
           <BlockingOverlay
             content={activeItem.content}
             contentType={activeContentType}
+            onSkip={() => {
+              // Skipping declines the hook for this viewing (the item is
+              // marked skipped; per the controller the anchor can be
+              // taken again on re-approach) and closes the overlay.
+              const item = (items ?? []).find(
+                (it) => it.getId() === overlayContentId,
+              );
+              item?.skip();
+              setActiveContentId(null);
+              void adapter.play();
+            }}
             onContentComplete={handleContentComplete}
             onContinue={handleContinueAfterCompletion}
             completing={

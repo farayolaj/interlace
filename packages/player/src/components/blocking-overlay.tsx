@@ -11,12 +11,12 @@ export interface BlockingOverlayProps {
    */
   contentType: ContentType;
   /**
-   * Programmatic-only close hook (reserved for the parent's teardown).
-   * Blocking content cannot be dismissed by the user: the overlay stays
-   * until its content completes (or the player unmounts), so nothing in
-   * this component calls `onClose`.
+   * Skip affordance for NON-blocking content opened in the overlay: the
+   * user declines this hook for the current window visit. The parent
+   * wires this to `skipContent` (controller-managed skip memory) and
+   * clears the selection; blocking content renders no Skip control.
    */
-  onClose?: () => void;
+  onSkip?: () => void;
   /**
    * Called with the reported score when the content's playback
    * completes itself via `callbacks.onComplete` (the parent then
@@ -54,6 +54,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
   content,
   contentType,
   onContentComplete,
+  onSkip,
   completing = false,
   completingScore,
   onContinue,
@@ -267,18 +268,48 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           boxShadow: "0 16px 48px rgba(0, 0, 0, 0.35)",
         }}
       >
-        <h2
-          id={`blocking-content-${content.getId()}`}
+        <div
           style={{
-            marginTop: 0,
-            fontFamily: FONTS.display,
-            fontSize: TYPE.lg,
-            fontWeight: 600,
-            color: COLORS.text,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: `${SPACE[2]}px`,
           }}
         >
-          {content.getTitle()}
-        </h2>
+          <h2
+            id={`blocking-content-${content.getId()}`}
+            style={{
+              marginTop: 0,
+              fontFamily: FONTS.display,
+              fontSize: TYPE.lg,
+              fontWeight: 600,
+              color: COLORS.text,
+            }}
+          >
+            {content.getTitle()}
+          </h2>
+          {content.getHook().type === "non-blocking" && (
+            <button
+              type="button"
+              onClick={() => {
+                content.skip();
+                onSkip?.();
+              }}
+              style={{
+                padding: `${SPACE[1]}px`,
+                backgroundColor: COLORS.accent,
+                color: COLORS.white,
+                border: "none",
+                borderRadius: `${RADIUS.sm}px`,
+                cursor: "pointer",
+                fontSize: TYPE.md,
+                fontWeight: 600,
+                transition: "background-color 150ms ease",
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
 
         {completing ? (
           completionSurface

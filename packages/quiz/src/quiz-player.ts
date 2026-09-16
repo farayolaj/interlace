@@ -13,6 +13,13 @@ interface QuizPlaybackSession {
   destroy: () => void;
 }
 
+interface OptionEntry {
+  button: HTMLButtonElement;
+  option: QuizOption;
+  statusGlyph: HTMLSpanElement;
+  statusLabel: HTMLSpanElement;
+}
+
 /**
  * Per-container playback sessions, so `unmountQuizPlayback` can tear down
  * the listeners built by `renderQuizPlayback`.
@@ -37,17 +44,55 @@ function createMediaImage(
   return img;
 }
 
+/** Locks an option button so it can no longer be clicked. */
+function lockOption(button: HTMLButtonElement): void {
+  button.disabled = true;
+  button.style.cursor = "default";
+}
+
+/** Reveals the correct-answer state on an option button. */
+function revealCorrect(
+  button: HTMLButtonElement,
+  glyph: HTMLSpanElement,
+  label: HTMLSpanElement,
+): void {
+  button.classList.add("quiz-playback-option-correct");
+  button.style.backgroundColor = COLORS.correctBg;
+  button.style.borderColor = COLORS.correctBg;
+  button.style.color = COLORS.correctText;
+  glyph.textContent = "✓";
+  label.textContent = "Correct";
+  glyph.style.opacity = "1";
+  label.style.opacity = "1";
+}
+
+/** Reveals the wrong-answer state on the selected option button. */
+function revealIncorrect(
+  button: HTMLButtonElement,
+  glyph: HTMLSpanElement,
+  label: HTMLSpanElement,
+): void {
+  button.classList.add("quiz-playback-option-incorrect");
+  button.style.backgroundColor = COLORS.incorrectBg;
+  button.style.borderColor = COLORS.incorrectBorder;
+  button.style.color = COLORS.incorrectText;
+  glyph.textContent = "✕";
+  label.textContent = "Incorrect";
+  glyph.style.opacity = "1";
+  label.style.opacity = "1";
+}
+
 /**
  * Renders a multi-question quiz into `container`: one question at a time
  * with a "Question i of n" indicator, per-question media and option buttons,
  * and an explicit navigation footer. Answering a question reveals
- * correctness and locks its options; the user then advances with **Next**
- * (or **Complete** on the final question). **Previous** returns to an
- * answered question in its locked, review-only state. Clicking **Complete**
- * computes the aggregate score (`Math.round(correct / total * 100)`) over
- * all recorded selections and fires `callbacks.onComplete(score)` ONCE, as
- * the click handler's final statement. Accepts legacy raw documents; they
- * are normalized before rendering.
+ * correctness and locks its options; the user then advances with **Next**.
+ * On the final question, clicking **Next** computes the aggregate score
+ * (`Math.round(correct / total * 100)`) over all recorded selections and
+ * fires `callbacks.onComplete(score)` ONCE, as the click handler's final
+ * statement. **Previous** returns to an answered question in its locked,
+ * review-only state. Accepts legacy raw documents; they are normalized
+ * before rendering.
  */
 export function renderQuizPlayback(
   container: HTMLElement,
@@ -101,9 +146,9 @@ export function renderQuizPlayback(
   optionsBox.style.gap = `${SPACE[2]}px`;
   root.appendChild(optionsBox);
 
-  // Navigation footer: Previous (review-only back), Next, and Complete on
-  // the final question. Both advances are gated on the current question
-  // being answered — no auto-advance, no auto-complete.
+  // Navigation footer: Previous (review-only back) and Next. The final
+  // question uses the same Next label; clicking it aggregates the score
+  // and fires onComplete once.
   const navFooter = document.createElement("div");
   navFooter.className = "quiz-playback-nav";
   navFooter.style.display = "flex";
@@ -124,6 +169,7 @@ export function renderQuizPlayback(
   prevButton.style.cursor = "pointer";
   prevButton.style.fontSize = `${TYPE.base}px`;
   prevButton.style.fontWeight = "600";
+  prevButton.style.transition = "background-color 150ms ease";
   prevButton.addEventListener("click", () => {
     if (currentIndex > 0) {
       renderQuestion(currentIndex - 1);
@@ -144,6 +190,7 @@ export function renderQuizPlayback(
   nextButton.style.cursor = "pointer";
   nextButton.style.fontSize = `${TYPE.base}px`;
   nextButton.style.fontWeight = "600";
+  nextButton.style.transition = "background-color 150ms ease, opacity 150ms ease";
   nextButton.addEventListener("click", () => {
     if (completed) return;
     if (currentIndex < total - 1) {
@@ -161,6 +208,8 @@ export function renderQuizPlayback(
         0,
       );
       const score = Math.round((correctCount / total) * QUIZ_MAX_SCORE);
+      nextButton.disabled = true;
+      nextButton.style.opacity = "0.55";
       callbacks.onComplete(score);
     }
   });
@@ -168,14 +217,100 @@ export function renderQuizPlayback(
 
   container.appendChild(root);
 
-  let optionEntries: { button: HTMLButtonElement; option: QuizOption }[] = [];
+  let optionEntries: OptionEntry[] = [];
 
   const syncFooter = (index: number): void => {
     prevButton.style.display = index > 0 ? "block" : "none";
-    nextButton.textContent = index < total - 1 ? "Next" : "Complete";
+    nextButton.textContent = "Next";
     const answered = answers[index] !== null;
     nextButton.disabled = completed || !answered;
     nextButton.style.opacity = nextButton.disabled ? "0.55" : "1";
+  };
+
+  const createOptionButton = (
+    option: QuizOption,
+    isReview: boolean,
+  ): OptionEntry => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quiz-playback-option";
+    button.style.display = "flex";
+    button.style.alignItems = "center";
+    button.style.gap = `${SPACE[2]}px`;
+    button.style.width = "100%";
+    button.style.padding = `${SPACE[3]}px ${SPACE[4]}px`;
+    button.style.backgroundColor = COLORS.surface;
+    button.style.border = `1px solid ${COLORS.borderStrong}`;
+    button.style.borderRadius = `${RADIUS.md}px`;
+    button.style.cursor = "pointer";
+    button.style.fontSize = `${TYPE.base}px`;
+    button.style.color = COLORS.text;
+    button.style.textAlign = "left";
+    button.style.transition =
+      "background-color 150ms ease, border-color 150ms ease, color 150ms ease";
+
+    const text = document.createElement("span");
+    text.className = "quiz-playback-option-text";
+    text.textContent = option.text;
+    text.style.flex = "1";
+    button.appendChild(text);
+
+    const thumbnail = createMediaImage(
+      "quiz-playback-option-media",
+      option.media?.src ?? "",
+      option.media?.alt,
+    );
+    if (thumbnail) button.appendChild(thumbnail);
+
+    const status = document.createElement("span");
+    status.style.display = "flex";
+    status.style.alignItems = "center";
+    status.style.gap = `${SPACE[1]}px`;
+    status.style.marginLeft = "auto";
+    status.style.opacity = "0";
+    status.style.transition = "opacity 150ms ease";
+
+    const glyph = document.createElement("span");
+    glyph.style.fontWeight = "700";
+    glyph.style.fontSize = `${TYPE.md}px`;
+    glyph.style.lineHeight = "1";
+    status.appendChild(glyph);
+
+    const label = document.createElement("span");
+    label.style.fontWeight = "600";
+    label.style.fontSize = `${TYPE.sm}px`;
+    label.style.textTransform = "uppercase";
+    label.style.letterSpacing = "0.04em";
+    status.appendChild(label);
+
+    button.appendChild(status);
+
+    if (isReview) {
+      lockOption(button);
+    }
+
+    return { button, option, statusGlyph: glyph, statusLabel: label };
+  };
+
+  const revealQuestion = (
+    questionIndex: number,
+    selectedOptionId: string,
+  ): void => {
+    const spec = data.questions[questionIndex]!;
+    const correctOptionId = spec.correctOptionId;
+
+    optionEntries.forEach((entry) => {
+      lockOption(entry.button);
+      if (entry.option.id === correctOptionId) {
+        revealCorrect(entry.button, entry.statusGlyph, entry.statusLabel);
+      }
+      if (
+        entry.option.id === selectedOptionId &&
+        selectedOptionId !== correctOptionId
+      ) {
+        revealIncorrect(entry.button, entry.statusGlyph, entry.statusLabel);
+      }
+    });
   };
 
   const renderQuestion = (index: number): void => {
@@ -196,84 +331,29 @@ export function renderQuizPlayback(
 
     optionsBox.innerHTML = "";
     optionEntries = spec.options.map((option) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "quiz-playback-option";
-      button.style.display = "flex";
-      button.style.alignItems = "center";
-      button.style.gap = `${SPACE[2]}px`;
-      button.style.width = "100%";
-      button.style.padding = `${SPACE[3]}px ${SPACE[4]}px`;
-      button.style.backgroundColor = COLORS.surface;
-      button.style.border = `1px solid ${COLORS.borderStrong}`;
-      button.style.borderRadius = `${RADIUS.md}px`;
-      button.style.cursor = "pointer";
-      button.style.fontSize = `${TYPE.base}px`;
-      button.style.color = COLORS.text;
-      button.style.textAlign = "left";
-      button.style.transition =
-        "background-color 150ms ease, border-color 150ms ease, color 150ms ease";
+      const isReview = answered !== null;
+      const entry = createOptionButton(option, isReview);
 
-      const text = document.createElement("span");
-      text.className = "quiz-playback-option-text";
-      text.textContent = option.text;
-      text.style.flex = "1";
-      button.appendChild(text);
-
-      const thumbnail = createMediaImage(
-        "quiz-playback-option-media",
-        option.media?.src ?? "",
-        option.media?.alt,
-      );
-      if (thumbnail) button.appendChild(thumbnail);
-
-      // If this question was already answered (navigating back), render it
-      // in its locked, revealed state — review-only, no re-answering.
-      if (answered !== null) {
-        button.disabled = true;
-        button.style.cursor = "default";
+      if (isReview) {
         if (option.id === correctOptionId) {
-          button.classList.add("quiz-playback-option-correct");
-          button.style.backgroundColor = COLORS.accent;
-          button.style.borderColor = COLORS.accent;
-          button.style.color = COLORS.white;
+          revealCorrect(entry.button, entry.statusGlyph, entry.statusLabel);
         }
         if (option.id === answered && answered !== correctOptionId) {
-          button.classList.add("quiz-playback-option-incorrect");
-          button.style.backgroundColor = COLORS.errorBg;
-          button.style.borderColor = COLORS.errorBorder;
-          button.style.color = COLORS.errorText;
+          revealIncorrect(entry.button, entry.statusGlyph, entry.statusLabel);
         }
       } else {
-        button.addEventListener("click", () => {
+        entry.button.addEventListener("click", () => {
           if (completed) return;
           answers[index] = option.id;
           // Reveal correctness and lock this question's options. No
           // auto-advance and no auto-complete: the footer gates progress.
-          optionEntries.forEach(
-            ({ button: candidate, option: candidateOption }) => {
-              candidate.disabled = true;
-              candidate.style.cursor = "default";
-              if (candidateOption.id === correctOptionId) {
-                candidate.classList.add("quiz-playback-option-correct");
-                candidate.style.backgroundColor = COLORS.accent;
-                candidate.style.borderColor = COLORS.accent;
-                candidate.style.color = COLORS.white;
-              }
-            },
-          );
-          if (option.id !== correctOptionId) {
-            button.classList.add("quiz-playback-option-incorrect");
-            button.style.backgroundColor = COLORS.errorBg;
-            button.style.borderColor = COLORS.errorBorder;
-            button.style.color = COLORS.errorText;
-          }
+          revealQuestion(index, option.id);
           syncFooter(index);
         });
       }
 
-      optionsBox.appendChild(button);
-      return { button, option };
+      optionsBox.appendChild(entry.button);
+      return entry;
     });
 
     syncFooter(index);

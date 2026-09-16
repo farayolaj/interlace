@@ -503,14 +503,14 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(adapter.isPlaying).toBe(false); // paused at the hook
 
     // The user answers the quiz in the overlay (option click reveals and
-    // locks), then advances with the explicit Complete button — the quiz's
+    // locks), then advances with the explicit Next button — the quiz's
     // single completion trigger.
     const option = screen.getByRole("button", { name: "4" });
     playSpy.mockClear();
     act(() => void fireEvent.click(option));
     act(
       () =>
-        void fireEvent.click(screen.getByRole("button", { name: "Complete" })),
+        void fireEvent.click(screen.getByRole("button", { name: "Next" })),
     );
 
     // Completion feedback shows, but playback stays PAUSED until the user
@@ -549,14 +549,14 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(screen.getByAltText("opt two art")).toBeInTheDocument();
 
     // The user answers the quiz in the overlay by its option id, then
-    // advances with the explicit Complete button (the single completion
+    // advances with the explicit Next button (the single completion
     // trigger for the final question).
     const option = screen.getByRole("button", { name: /Media option/ });
     playSpy.mockClear();
     act(() => void fireEvent.click(option));
     act(
       () =>
-        void fireEvent.click(screen.getByRole("button", { name: "Complete" })),
+        void fireEvent.click(screen.getByRole("button", { name: "Next" })),
     );
 
     // Completion feedback shows, but playback stays PAUSED until Continue.

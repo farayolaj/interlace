@@ -23,6 +23,12 @@ export const COLORS = {
   errorBorder: "#fecaca",
   white: "#ffffff",
   black: "#000000",
+  // Reveal-state aliases for quiz option feedback.
+  correctBg: "#0066cc",
+  correctText: "#ffffff",
+  incorrectBg: "#fef2f2",
+  incorrectText: "#b91c1c",
+  incorrectBorder: "#fecaca",
 } as const;
 
 export const FONTS = {

@@ -47,7 +47,7 @@ function renderIntoContainer(data: QuizData = QUIZ_DATA) {
   const navButtons = [
     ...container.querySelectorAll(".quiz-playback-nav button"),
   ] as HTMLButtonElement[];
-  // [0] = Previous (absent on the first question), last = Next/Complete.
+  // [0] = Previous (absent on the first question), last = Next.
   const completeButton = navButtons[navButtons.length - 1];
   return { container, onComplete, question, options, completeButton };
 }
@@ -75,7 +75,7 @@ describe("QuizContentType", () => {
   it("selecting the correct option reveals, locks, and completes with the maximum score", () => {
     const { onComplete, options, completeButton } = renderIntoContainer();
     options[1]!.click();
-    // No auto-completion: submission is the explicit Complete button.
+    // No auto-completion: submission is the explicit Next button.
     expect(onComplete).not.toHaveBeenCalled();
     expect(options.every((option) => option.disabled)).toBe(true);
     expect(completeButton!.disabled).toBe(false);

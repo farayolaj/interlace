@@ -242,13 +242,13 @@ describe("renderQuizPlayback", () => {
     ).toBe(true);
   });
 
-  it("answers a single question correctly, then Complete reports 100 once", () => {
+  it("answers a single question correctly, then Next reports 100 once", () => {
     const { onComplete, options, nextButton } = renderIntoContainer();
     options[1]!.click();
     // Reveal + lock; no auto-complete.
     expect(onComplete).not.toHaveBeenCalled();
     expect(options.every((option) => option.disabled)).toBe(true);
-    expect(nextButton?.textContent).toBe("Complete");
+    expect(nextButton?.textContent).toBe("Next");
     expect(nextButton?.disabled).toBe(false);
 
     nextButton!.click();
@@ -275,7 +275,7 @@ describe("renderQuizPlayback", () => {
     options[2]!.click();
     expect(onComplete).not.toHaveBeenCalled();
 
-    nextButton!.click(); // Complete
+    nextButton!.click(); // Next completes the single question
     expect(onComplete).toHaveBeenCalledWith(0);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -289,7 +289,7 @@ describe("renderQuizPlayback", () => {
     // Question 2: wrong — the footer still gates completion.
     currentOptions()[1]!.click();
     expect(onComplete).not.toHaveBeenCalled();
-    expect(nextButton?.textContent).toBe("Complete");
+    expect(nextButton?.textContent).toBe("Next");
     expect(nextButton?.disabled).toBe(false);
     nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
@@ -301,17 +301,17 @@ describe("renderQuizPlayback", () => {
     options[0]!.click();
     nextButton!.click();
     currentOptions()[0]!.click();
-    nextButton!.click(); // Complete
+    nextButton!.click(); // Next completes the final question
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledWith(100);
   });
 
-  it("the final question's Complete button is disabled until answered", () => {
+  it("the final question's Next button is disabled until answered", () => {
     const { options, nextButton } = renderIntoContainer(MULTI_DATA);
     options[0]!.click();
     nextButton!.click();
-    // Question 2 (final): Complete present but gated.
-    expect(nextButton?.textContent).toBe("Complete");
+    // Question 2 (final): Next present but gated until answered.
+    expect(nextButton?.textContent).toBe("Next");
     expect(nextButton?.disabled).toBe(true);
     currentOptions()[0]!.click();
     expect(nextButton?.disabled).toBe(false);
@@ -322,9 +322,9 @@ describe("renderQuizPlayback", () => {
     options[0]!.click();
     nextButton!.click();
     currentOptions()[1]!.click(); // wrong
-    nextButton!.click(); // Complete
+    nextButton!.click(); // Next completes the quiz
     expect(onComplete).toHaveBeenCalledTimes(1);
-    // Re-clicking Complete (and the now-locked options) does nothing.
+    // Re-clicking Next (and the now-locked options) does nothing.
     nextButton!.click();
     currentOptions()[1]!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
@@ -360,7 +360,7 @@ describe("renderQuizPlayback", () => {
         (option) => !option.classList.contains("quiz-playback-option-correct"),
       ),
     ).toBe(true);
-    nextButton!.click(); // Complete
+    nextButton!.click(); // Next completes the quiz
     expect(onComplete).toHaveBeenCalledWith(0);
   });
 
@@ -372,7 +372,7 @@ describe("renderQuizPlayback", () => {
     };
     const { onComplete, options, nextButton } = renderIntoContainer(bad);
     expect(options.length).toBe(0);
-    // Nothing answered → Complete stays gated → no completion fires.
+    // Nothing answered → Next stays gated → no completion fires.
     expect(nextButton?.disabled).toBe(true);
     expect(onComplete).not.toHaveBeenCalled();
   });
@@ -390,7 +390,7 @@ describe("renderQuizPlayback", () => {
         (option) => !option.classList.contains("quiz-playback-option-correct"),
       ),
     ).toBe(true);
-    nextButton!.click(); // Complete
+    nextButton!.click(); // Next completes the quiz
     expect(onComplete).toHaveBeenCalledWith(0);
   });
 
@@ -398,8 +398,8 @@ describe("renderQuizPlayback", () => {
     const { onComplete, options, nextButton } =
       renderIntoContainer(CANONICAL_DATA);
     options[1]!.click();
-    nextButton!.click(); // Complete
+    nextButton!.click(); // Next completes the quiz
     expect(onComplete).toHaveBeenCalledWith(100);
-    expect(onComplete).toHaveBeenCalledTimes(1); // once, after Complete
+    expect(onComplete).toHaveBeenCalledTimes(1); // once, after Next
   });
 });

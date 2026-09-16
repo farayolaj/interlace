@@ -84,7 +84,6 @@ const meta: Meta<typeof BlockingOverlay> = {
   args: {
     content: contentInstance,
     contentType,
-    onClose: fn(),
     onContentComplete: fn(),
   },
 };

@@ -72,13 +72,11 @@ function makeContent(
 function renderOverlay(data: DemoData = { question: "What is 2 + 2?" }) {
   const { contentType, renderPlayback, unmountPlayback } = makeContentType();
   const content = makeContent(data, contentType);
-  const onClose = vi.fn();
   const onContentComplete = vi.fn();
   const utils = render(
     <BlockingOverlay
       content={content}
       contentType={contentType}
-      onClose={onClose}
       onContentComplete={onContentComplete}
     />,
   );
@@ -90,7 +88,6 @@ function renderOverlay(data: DemoData = { question: "What is 2 + 2?" }) {
     renderPlayback,
     unmountPlayback,
     content,
-    onClose,
     onContentComplete,
     overlay,
     ...utils,
@@ -157,7 +154,6 @@ describe("BlockingOverlay", () => {
       <BlockingOverlay
         content={content}
         contentType={contentType}
-        onClose={vi.fn()}
       />,
     );
 
@@ -173,7 +169,7 @@ describe("BlockingOverlay", () => {
   });
 
   it("does not render a dismiss control (blocking content cannot be dismissed)", () => {
-    const { overlay, onClose } = renderOverlay();
+    const { overlay } = renderOverlay();
     // No Close / Continue / Dismiss affordance: the only interactive
     // elements in the dialog are the content's own.
     expect(
@@ -187,7 +183,6 @@ describe("BlockingOverlay", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Answer" })).toBeInTheDocument();
     expect(overlay).not.toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("completing mode renders the completion surface with the score", () => {
@@ -206,7 +201,6 @@ describe("BlockingOverlay", () => {
       <BlockingOverlay
         content={content}
         contentType={completingType}
-        onClose={vi.fn()}
         completing
         completingScore={100}
       />,
@@ -233,7 +227,6 @@ describe("BlockingOverlay", () => {
       <BlockingOverlay
         content={content}
         contentType={contentType}
-        onClose={vi.fn()}
         completing
         completingScore={100}
         onContinue={onContinue}
@@ -252,7 +245,6 @@ describe("BlockingOverlay", () => {
       <BlockingOverlay
         content={content}
         contentType={contentType}
-        onClose={vi.fn()}
         completing
         completingScore={100}
       />,
