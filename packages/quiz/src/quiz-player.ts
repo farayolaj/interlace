@@ -1,9 +1,5 @@
-import type { QuizOption, RawQuizData } from "./schema";
+import type { QuizData, QuizOption } from "./schema";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "./tokens";
-import { normalizeQuizData } from "./validate";
-
-/** Shared maximum score for quiz content. */
-const QUIZ_MAX_SCORE = 100;
 
 export interface QuizPlaybackCallbacks {
   onComplete(score?: number): void;
@@ -87,16 +83,15 @@ function revealIncorrect(
  * with a "Question i of n" indicator, per-question media and option buttons,
  * and an explicit navigation footer. Answering a question reveals
  * correctness and locks its options; the user then advances with **Next**.
- * On the final question, clicking **Next** computes the aggregate score
- * (`Math.round(correct / total * 100)`) over all recorded selections and
- * fires `callbacks.onComplete(score)` ONCE, as the click handler's final
- * statement. **Previous** returns to an answered question in its locked,
- * review-only state. Accepts legacy raw documents; they are normalized
- * before rendering.
+ * On the final question, clicking **Next** reports the per-question
+ * correct count (`onComplete(correctCount)`, one point per question) ONCE,
+ * as the click handler's final statement. **Previous** returns to an
+ * answered question in its locked, review-only state. The document is the
+ * canonical single-format {@link QuizData} shape.
  */
 export function renderQuizPlayback(
   container: HTMLElement,
-  raw: RawQuizData,
+  data: QuizData,
   callbacks: QuizPlaybackCallbacks,
 ): void {
   // Destroy any session already mounted in this container: the overlay
@@ -104,7 +99,6 @@ export function renderQuizPlayback(
   // the WeakMap entry would leak the first root (and its click listeners).
   unmountQuizPlayback(container);
 
-  const data = normalizeQuizData(raw);
   const total = data.questions.length;
   // Per-question recorded selections; back-navigation and the final
   // aggregate both read from here, and reveal locks make it stable.
@@ -190,7 +184,8 @@ export function renderQuizPlayback(
   nextButton.style.cursor = "pointer";
   nextButton.style.fontSize = `${TYPE.base}px`;
   nextButton.style.fontWeight = "600";
-  nextButton.style.transition = "background-color 150ms ease, opacity 150ms ease";
+  nextButton.style.transition =
+    "background-color 150ms ease, opacity 150ms ease";
   nextButton.addEventListener("click", () => {
     if (completed) return;
     if (currentIndex < total - 1) {
@@ -207,10 +202,9 @@ export function renderQuizPlayback(
             : 0),
         0,
       );
-      const score = Math.round((correctCount / total) * QUIZ_MAX_SCORE);
       nextButton.disabled = true;
       nextButton.style.opacity = "0.55";
-      callbacks.onComplete(score);
+      callbacks.onComplete(correctCount);
     }
   });
   navFooter.appendChild(nextButton);
@@ -267,7 +261,6 @@ export function renderQuizPlayback(
     status.style.alignItems = "center";
     status.style.gap = `${SPACE[1]}px`;
     status.style.marginLeft = "auto";
-    status.style.opacity = "0";
     status.style.transition = "opacity 150ms ease";
 
     const glyph = document.createElement("span");
@@ -279,7 +272,6 @@ export function renderQuizPlayback(
     const label = document.createElement("span");
     label.style.fontWeight = "600";
     label.style.fontSize = `${TYPE.sm}px`;
-    label.style.textTransform = "uppercase";
     label.style.letterSpacing = "0.04em";
     status.appendChild(label);
 

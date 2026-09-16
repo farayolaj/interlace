@@ -179,8 +179,12 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
       >
         ✓
       </div>
-      <p
+      <div
         style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: `${SPACE[1]}px`,
           margin: 0,
           fontFamily: FONTS.display,
           fontSize: TYPE.lg,
@@ -196,7 +200,6 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           <span
             aria-label={`completion-score-${completingScore}`}
             style={{
-              marginLeft: `${SPACE[2]}px`,
               display: "inline-block",
               padding: `0 ${SPACE[2]}px`,
               borderRadius: `${RADIUS.sm}px`,
@@ -210,7 +213,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
             Score: {completingScore}/{content.getMaximumScore()}
           </span>
         )}
-      </p>
+      </div>
       <button
         type="button"
         onClick={onContinue}

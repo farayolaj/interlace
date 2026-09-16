@@ -3,12 +3,11 @@
  *
  * The implementation (rich playback + canonical authoring) lives in
  * `@interlace/quiz`; the player keeps these names for its public API.
- * `QuizData` is aliased to the legacy-tolerant raw shape so existing
- * player consumers and documents keep working.
+ * `QuizData` is the canonical single-format multi-question shape.
  */
 export {
   QuizContentType,
   renderQuizPlayback,
   unmountQuizPlayback,
 } from "@interlace/quiz";
-export type { RawQuizData as QuizData } from "@interlace/quiz";
+export type { QuizData } from "@interlace/quiz";

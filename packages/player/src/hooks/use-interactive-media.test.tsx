@@ -89,9 +89,19 @@ const blockingDoc = (
         contentTypeId: "quiz-editor",
         version: 1,
         data: {
-          question: "What is 2 + 2?",
-          options: ["3", "4", "5", "6"],
-          correctIndex: 1,
+          questions: [
+            {
+              id: "q-0",
+              text: "What is 2 + 2?",
+              options: [
+                { id: "opt-0", text: "3" },
+                { id: "opt-1", text: "4" },
+                { id: "opt-2", text: "5" },
+                { id: "opt-3", text: "6" },
+              ],
+              correctOptionId: "opt-1",
+            },
+          ],
         },
       },
     },
@@ -100,23 +110,26 @@ const blockingDoc = (
 
 /** Canonical rich-media quiz data for the Phase 3 runtime flow. */
 const CANONICAL_RICH_DATA = {
-  question: {
-    text: "Which option has media?",
-    media: { src: "https://example.com/q.png", alt: "quiz question art" },
-  },
-  options: [
+  questions: [
     {
-      id: "o-1",
-      text: "Plain",
-      media: { src: "https://example.com/o1.png", alt: "opt one art" },
-    },
-    {
-      id: "o-2",
-      text: "Media option",
-      media: { src: "https://example.com/o2.png", alt: "opt two art" },
+      id: "q-1",
+      text: "Which option has media?",
+      media: { src: "https://example.com/q.png", alt: "quiz question art" },
+      options: [
+        {
+          id: "o-1",
+          text: "Plain",
+          media: { src: "https://example.com/o1.png", alt: "opt one art" },
+        },
+        {
+          id: "o-2",
+          text: "Media option",
+          media: { src: "https://example.com/o2.png", alt: "opt two art" },
+        },
+      ],
+      correctOptionId: "o-2",
     },
   ],
-  correctOptionId: "o-2",
 };
 
 /** Runs one rAF frame of the hook's runtime loop (fake timers). */
@@ -383,7 +396,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     const item = hook.result.current.items?.find(
       (i) => i.getId() === "quiz-block",
     );
-    act(() => void item?.complete(100));
+    // The quiz reports one point per correct question; a single correctly
+    // answered question completes with score 1 against a max of 1.
+    act(() => void item?.complete(1));
 
     adapter.currentTime = 40;
     tick(adapter);
@@ -391,8 +406,8 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     const [eventPayload] = finished.mock.calls[0] as [
       { aggregatedResult: { numerator: number; denominator: number } },
     ];
-    expect(eventPayload.aggregatedResult.numerator).toBe(100);
-    expect(eventPayload.aggregatedResult.denominator).toBe(100);
+    expect(eventPayload.aggregatedResult.numerator).toBe(1);
+    expect(eventPayload.aggregatedResult.denominator).toBe(1);
   });
 
   it("keeps a non-blocking anchor visible across its whole window and swaps it for a completed tag", () => {
@@ -419,9 +434,17 @@ describe("useInteractiveMedia runtime end-to-end", () => {
                 contentTypeId: "quiz-editor",
                 version: 1,
                 data: {
-                  question: "What is 3 + 3?",
-                  options: ["5", "6"],
-                  correctIndex: 1,
+                  questions: [
+                    {
+                      id: "q-0",
+                      text: "What is 3 + 3?",
+                      options: [
+                        { id: "opt-0", text: "5" },
+                        { id: "opt-1", text: "6" },
+                      ],
+                      correctOptionId: "opt-1",
+                    },
+                  ],
                 },
               },
             },
@@ -519,7 +542,7 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(playSpy).not.toHaveBeenCalled();
     expect(adapter.isPlaying).toBe(false);
     expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(screen.getByText("Score: 100/100")).toBeInTheDocument();
+    expect(screen.getByText("Score: 1/1")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     // Continue acknowledges completion: the overlay unmounts AND resumes.
@@ -564,7 +587,7 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(playSpy).not.toHaveBeenCalled();
     expect(adapter.isPlaying).toBe(false);
     expect(screen.getByText("Completed")).toBeInTheDocument();
-    expect(screen.getByText("Score: 100/100")).toBeInTheDocument();
+    expect(screen.getByText("Score: 1/1")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     // Continue acknowledges completion: the overlay unmounts AND resumes.
@@ -577,8 +600,9 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("registers the canonical quiz type id and normalizes a legacy document", () => {
-    // Hook-level: a legacy document deserializes and triggers with no error.
+  it("registers the canonical quiz type id and renders its options", () => {
+    // Hook-level: a canonical quiz document deserializes and triggers with
+    // no error.
     const harness = makeHarness(10);
     const { adapter } = harness;
     const hook = renderHook((props) => useInteractiveMedia(props), {
@@ -600,8 +624,8 @@ describe("useInteractiveMedia runtime end-to-end", () => {
 
     hook.unmount();
 
-    // The mounted overlay renders the legacy document through normalization:
-    // its string options surface as the canonical option labels.
+    // The mounted overlay renders the canonical document: its option objects
+    // surface as the option labels.
     const overlayHarness = makeHarness(10);
     render(<InteractiveVideoPlayer {...overlayHarness.props} />);
     act(() => void vi.advanceTimersByTime(TICK_MS));

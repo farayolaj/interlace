@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ContentTypeEditorSlot } from "../components/content-type-editor-slot";
 import { ContentTypeRegistry } from "@interlace/core";
 import { QuizEditor } from "./quiz-editor";
-import type { QuizData, RawQuizData } from "./quiz-editor";
+import type { QuizData } from "./quiz-editor";
 
 afterEach(() => {
   cleanup();
@@ -13,24 +13,23 @@ afterEach(() => {
 /**
  * The QuizEditor tests mount directly through `ContentTypeEditorSlot` —
  * which is exactly how the editor composes the content type in production.
- * The editor accepts either the canonical shape or a legacy raw document
- * (normalized on mount); every emitted edit is canonical.
+ * The editor authors the canonical multi-question shape; every emitted edit
+ * is canonical.
  */
-type AuthoringData = QuizData | RawQuizData;
 
 function mountQuizEditor({
   data,
   onChange,
 }: {
-  data: AuthoringData;
-  onChange?: Mock<(next: AuthoringData) => void>;
+  data: QuizData;
+  onChange?: Mock<(next: QuizData) => void>;
 }) {
   const registry = new ContentTypeRegistry();
   registry.register(QuizEditor);
-  const handleChange: Mock<(next: AuthoringData) => void> =
-    onChange ?? vi.fn<(next: AuthoringData) => void>();
+  const handleChange: Mock<(next: QuizData) => void> =
+    onChange ?? vi.fn<(next: QuizData) => void>();
   const result = render(
-    <ContentTypeEditorSlot<AuthoringData>
+    <ContentTypeEditorSlot<QuizData>
       contentTypeId="quiz-editor"
       isOpen={true}
       onClose={vi.fn()}
@@ -42,16 +41,28 @@ function mountQuizEditor({
   return { ...result, onChange: handleChange };
 }
 
-function lastEmitted(onChange: Mock<(next: AuthoringData) => void>): QuizData {
+function lastEmitted(onChange: Mock<(next: QuizData) => void>): QuizData {
   const call = onChange.mock.calls[onChange.mock.calls.length - 1];
   if (!call) throw new Error("expected at least one onChange call");
-  return call[0] as QuizData;
+  return call[0];
 }
 
 describe("QuizEditor", () => {
   it("mounts the question input, options list, and correct-answer select", () => {
     const { container } = mountQuizEditor({
-      data: { question: "What?", options: ["a", "b"], correctIndex: 0 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "What?",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+            ],
+            correctOptionId: "opt-0",
+          },
+        ],
+      },
     });
 
     const editor = container.querySelector(".quiz-editor");
@@ -73,7 +84,19 @@ describe("QuizEditor", () => {
 
   it("reports question edits through onChange with canonical emission", () => {
     const { container, onChange } = mountQuizEditor({
-      data: { question: "", options: ["a", "b"], correctIndex: 0 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+            ],
+            correctOptionId: "opt-0",
+          },
+        ],
+      },
     });
     const question = container.querySelector(".quiz-question") as HTMLInputElement | null;
     if (!question) throw new Error("expected question input");
@@ -88,7 +111,19 @@ describe("QuizEditor", () => {
 
   it("keeps focus in the question input across keystrokes", () => {
     const { container } = mountQuizEditor({
-      data: { question: "", options: ["a", "b"], correctIndex: 0 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+            ],
+            correctOptionId: "opt-0",
+          },
+        ],
+      },
     });
     const question = container.querySelector(".quiz-question") as HTMLInputElement | null;
     if (!question) throw new Error("expected question input");
@@ -99,11 +134,21 @@ describe("QuizEditor", () => {
     expect(document.activeElement).toBe(question);
   });
 
-  it("edits a legacy raw document through normalization and emits canonical data", () => {
-    // Legacy v1 document (string options + numeric correctIndex) mounts
-    // through the normalization path; the select reflects the mapped id.
+  it("edits a canonical multi-question document and emits canonical data", () => {
     const { container, onChange } = mountQuizEditor({
-      data: { question: "Q", options: ["a", "b"], correctIndex: 1 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "Q",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+            ],
+            correctOptionId: "opt-1",
+          },
+        ],
+      },
     });
     const select = container.querySelector("select") as HTMLSelectElement | null;
     if (!select) throw new Error("expected select");
@@ -124,7 +169,19 @@ describe("QuizEditor", () => {
 
   it("adds a new option via the Add option button with a generated id", () => {
     const { container, onChange } = mountQuizEditor({
-      data: { question: "Q", options: ["a", "b"], correctIndex: 0 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "Q",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+            ],
+            correctOptionId: "opt-0",
+          },
+        ],
+      },
     });
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
@@ -145,7 +202,20 @@ describe("QuizEditor", () => {
 
   it("removing a non-correct option keeps the remaining options and correctness", async () => {
     const { container, onChange } = mountQuizEditor({
-      data: { question: "Q", options: ["a", "b", "c"], correctIndex: 2 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "Q",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+              { id: "opt-2", text: "c" },
+            ],
+            correctOptionId: "opt-2",
+          },
+        ],
+      },
     });
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
@@ -165,7 +235,20 @@ describe("QuizEditor", () => {
 
   it("removing the correct option clears correctOptionId", async () => {
     const { container, onChange } = mountQuizEditor({
-      data: { question: "Q", options: ["a", "b", "c"], correctIndex: 0 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "Q",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+              { id: "opt-2", text: "c" },
+            ],
+            correctOptionId: "opt-0",
+          },
+        ],
+      },
     });
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
@@ -183,7 +266,20 @@ describe("QuizEditor", () => {
 
   it("reports the correct-answer change via the select", () => {
     const { container, onChange } = mountQuizEditor({
-      data: { question: "Q", options: ["a", "b", "c"], correctIndex: 0 },
+      data: {
+        questions: [
+          {
+            id: "q-0",
+            text: "Q",
+            options: [
+              { id: "opt-0", text: "a" },
+              { id: "opt-1", text: "b" },
+              { id: "opt-2", text: "c" },
+            ],
+            correctOptionId: "opt-0",
+          },
+        ],
+      },
     });
     const select = container.querySelector("select") as HTMLSelectElement | null;
     if (!select) throw new Error("expected select");
@@ -192,13 +288,13 @@ describe("QuizEditor", () => {
     expect(lastEmitted(onChange).questions[0]?.correctOptionId).toBe("opt-2");
   });
 
-  it("returns getMaximumScore() = 100", () => {
+  it("returns getMaximumScore() = the question count", () => {
     expect(
       QuizEditor.getMaximumScore({
         questions: [
           { id: "q-0", text: "", options: [], correctOptionId: null },
         ],
       }),
-    ).toBe(100);
+    ).toBe(1);
   });
 });

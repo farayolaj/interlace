@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   QuizContentType,
   renderQuizPlayback,
@@ -10,15 +10,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+/** Canonical single-question quiz data. */
 const QUIZ_DATA: QuizData = {
-  question: "What is 2 + 2?",
-  options: ["3", "4", "5"],
-  correctIndex: 1,
-};
-
-/** Canonical-shaped data for the content-type-level surface (`getMaximumScore`, `renderEditor`). */
-type CanonicalQuizData = Parameters<typeof QuizContentType.renderEditor>[1];
-const CANONICAL_QUIZ_DATA: CanonicalQuizData = {
   questions: [
     {
       id: "q-0",
@@ -44,17 +37,15 @@ function renderIntoContainer(data: QuizData = QUIZ_DATA) {
   const options = [
     ...container.querySelectorAll(".quiz-playback-option"),
   ] as HTMLButtonElement[];
-  const navButtons = [
-    ...container.querySelectorAll(".quiz-playback-nav button"),
-  ] as HTMLButtonElement[];
-  // [0] = Previous (absent on the first question), last = Next.
-  const completeButton = navButtons[navButtons.length - 1];
-  return { container, onComplete, question, options, completeButton };
+  const nextButton = container.querySelector(
+    ".quiz-playback-next",
+  ) as HTMLButtonElement | null;
+  return { container, onComplete, question, options, nextButton };
 }
 
 describe("QuizContentType", () => {
-  it("getMaximumScore returns the maximum quiz score", () => {
-    expect(QuizContentType.getMaximumScore(CANONICAL_QUIZ_DATA)).toBe(100);
+  it("getMaximumScore returns the question count (one point per question)", () => {
+    expect(QuizContentType.getMaximumScore(QUIZ_DATA)).toBe(1);
   });
 
   it("is registered as quiz-editor (the editor package's authoring id)", () => {
@@ -72,20 +63,20 @@ describe("QuizContentType", () => {
     expect(options.every((option) => !option.disabled)).toBe(true);
   });
 
-  it("selecting the correct option reveals, locks, and completes with the maximum score", () => {
-    const { onComplete, options, completeButton } = renderIntoContainer();
+  it("selecting the correct option reveals, locks, and completes with 1 via Next", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer();
     options[1]!.click();
     // No auto-completion: submission is the explicit Next button.
     expect(onComplete).not.toHaveBeenCalled();
     expect(options.every((option) => option.disabled)).toBe(true);
-    expect(completeButton!.disabled).toBe(false);
-    completeButton!.click();
+    expect(nextButton?.disabled).toBe(false);
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(100);
+    expect(onComplete).toHaveBeenCalledWith(1);
   });
 
   it("selecting an incorrect option reveals the answer, marks, and completes with zero", () => {
-    const { onComplete, options, completeButton } = renderIntoContainer();
+    const { onComplete, options, nextButton } = renderIntoContainer();
     options[0]!.click();
     // The correct option is revealed, the wrong selection is marked.
     expect(options[1]!.classList.contains("quiz-playback-option-correct")).toBe(
@@ -96,7 +87,7 @@ describe("QuizContentType", () => {
     ).toBe(true);
     // Answering once locks the options (further clicks change nothing).
     options[2]!.click();
-    completeButton!.click();
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onComplete).toHaveBeenCalledWith(0);
   });
@@ -115,14 +106,25 @@ describe("QuizContentType", () => {
     expect(container.querySelector(".quiz-playback-question")).not.toBeNull();
   });
 
-  it("renders defensively when correctIndex is unset (every answer scores 0)", () => {
-    // The load-bearing compatibility case with editor documents that
-    // predate an authored answer: unset correctIndex means no option
-    // is correct and every answer scores 0.
-    const data: QuizData = { question: "Legacy import", options: ["a", "b"] };
-    const { onComplete, options, completeButton } = renderIntoContainer(data);
+  it("renders defensively when correctness is unresolved (correctOptionId null → 0)", () => {
+    // No resolvable correct option means nothing is marked correct and the
+    // answer contributes no points.
+    const data: QuizData = {
+      questions: [
+        {
+          id: "q-0",
+          text: "No answer",
+          options: [
+            { id: "a", text: "a" },
+            { id: "b", text: "b" },
+          ],
+          correctOptionId: null,
+        },
+      ],
+    };
+    const { onComplete, options, nextButton } = renderIntoContainer(data);
     options[1]!.click();
-    completeButton!.click();
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledWith(0);
     expect(
       options.every(
@@ -131,26 +133,37 @@ describe("QuizContentType", () => {
     ).toBe(true);
   });
 
-  it("renders zero options for non-array data without throwing", () => {
+  it("renders zero options for an empty options list without throwing", () => {
     const bad: QuizData = {
-      question: "Broken",
-      options: undefined as unknown as string[],
-      correctIndex: 1,
+      questions: [
+        { id: "q-0", text: "Broken", options: [], correctOptionId: null },
+      ],
     };
-    const { onComplete, options } = renderIntoContainer(bad);
+    const { onComplete, options, nextButton } = renderIntoContainer(bad);
     expect(options.length).toBe(0);
+    expect(nextButton?.disabled).toBe(true);
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("marks no correct option for an out-of-range correctIndex", () => {
+  it("marks no correct option for a correctOptionId referencing a missing option", () => {
+    // A canonical document may name a correct option id that does not
+    // exist; the renderer treats it as unresolved → every answer scores 0.
     const data: QuizData = {
-      question: "Q",
-      options: ["a", "b"],
-      correctIndex: 7,
+      questions: [
+        {
+          id: "q-0",
+          text: "Q",
+          options: [
+            { id: "a", text: "a" },
+            { id: "b", text: "b" },
+          ],
+          correctOptionId: "nope",
+        },
+      ],
     };
-    const { onComplete, options, completeButton } = renderIntoContainer(data);
+    const { onComplete, options, nextButton } = renderIntoContainer(data);
     options[0]!.click();
-    completeButton!.click();
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledWith(0);
     expect(
       options.every(
@@ -159,12 +172,12 @@ describe("QuizContentType", () => {
     ).toBe(true);
   });
 
-  it("renderEditor produces a fallback question input that reports changes", () => {
+  it("renderEditor produces a question input that reports changes", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const onChange = vi.fn();
 
-    QuizContentType.renderEditor(container, CANONICAL_QUIZ_DATA, onChange);
+    QuizContentType.renderEditor(container, QUIZ_DATA, onChange);
 
     const input = container.querySelector(".quiz-question") as HTMLInputElement;
     expect(input.value).toBe("What is 2 + 2?");

@@ -11,21 +11,6 @@ export interface QuizOption {
   media?: QuizMediaRef;
 }
 
-export interface QuizQuestion {
-  text: string;
-  media?: QuizMediaRef;
-}
-
-/** Rich raw per-question spec (multi-question documents). */
-export interface RawQuizQuestionSpec {
-  id?: string;
-  text?: string;
-  media?: QuizMediaRef;
-  options?: Array<string | QuizOption>;
-  correctIndex?: number;
-  correctOptionId?: string | null;
-}
-
 /** Canonical per-question shape this package defines and maintains. */
 export interface QuizQuestionSpec {
   id: string;
@@ -35,20 +20,11 @@ export interface QuizQuestionSpec {
   correctOptionId: string | null;
 }
 
-/** Canonical multi-question QuizData shape this package defines and maintains. */
+/**
+ * Canonical single-format QuizData shape this package defines and maintains.
+ * There is only ONE format: a `questions` list of fully-authored specs (ids,
+ * option objects, explicit correctness). The legacy flat format was removed.
+ */
 export interface QuizData {
   questions: QuizQuestionSpec[];
-}
-
-/**
- * What a document may contain: the flat legacy v1 shape (`question` string +
- * numeric `correctIndex`), the 1-question canonical shape, and the
- * multi-question shape (`questions`).
- */
-export interface RawQuizData {
-  question?: string | QuizQuestion;
-  options?: Array<string | QuizOption>;
-  correctIndex?: number;
-  correctOptionId?: string | null;
-  questions?: Array<RawQuizQuestionSpec>;
 }

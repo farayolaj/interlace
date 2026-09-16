@@ -171,8 +171,8 @@ const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
 
 function makeDefaultData(contentTypeId: string): unknown {
   if (contentTypeId === "quiz" || contentTypeId === "quiz-editor") {
-    // Canonical multi-question shape from creation (the quiz package's
-    // normalizeQuizData still normalizes legacy v1 documents).
+    // Canonical multi-question shape from creation (the single supported
+    // quiz format).
     return {
       questions: [
         {

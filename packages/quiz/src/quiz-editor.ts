@@ -1,5 +1,4 @@
 import { ContentType } from "@interlace/core";
-import { normalizeQuizData } from "./validate";
 import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "./tokens";
 import type {
@@ -7,11 +6,10 @@ import type {
   QuizMediaRef,
   QuizOption,
   QuizQuestionSpec,
-  RawQuizData,
 } from "./schema";
 
 interface QuizEditorController {
-  syncTo(rawData: RawQuizData, onChange: (next: QuizData) => void): void;
+  syncTo(data: QuizData, onChange: (next: QuizData) => void): void;
 }
 
 /**
@@ -102,7 +100,7 @@ interface OptionRow {
  */
 function createQuizEditorController(
   container: HTMLElement,
-  rawData: RawQuizData,
+  data: QuizData,
   onChange: (next: QuizData) => void,
 ): QuizEditorController {
   container.innerHTML = "";
@@ -112,7 +110,7 @@ function createQuizEditorController(
   root.style.color = COLORS.text;
   root.style.lineHeight = "1.5";
 
-  let currentData: QuizData = normalizeQuizData(rawData);
+  let currentData: QuizData = data;
   let currentOnChange = onChange;
   let selectedIndex = 0;
   let bodyQuestionIndex = -1;
@@ -564,10 +562,10 @@ function createQuizEditorController(
   };
 
   const syncTo = (
-    nextRawData: RawQuizData,
+    nextData: QuizData,
     nextOnChange: (next: QuizData) => void,
   ): void => {
-    currentData = normalizeQuizData(nextRawData);
+    currentData = nextData;
     currentOnChange = nextOnChange;
     if (currentData.questions.length === 0) {
       currentData = { questions: [emptyQuestion("q-0")] };
@@ -587,12 +585,12 @@ function createQuizEditorController(
 
 function getOrCreateQuizEditorController(
   container: HTMLElement,
-  rawData: RawQuizData,
+  data: QuizData,
   onChange: (next: QuizData) => void,
 ): QuizEditorController {
   let controller = quizEditorControllers.get(container);
   if (!controller) {
-    controller = createQuizEditorController(container, rawData, onChange);
+    controller = createQuizEditorController(container, data, onChange);
     quizEditorControllers.set(container, controller);
   }
   return controller;
@@ -606,16 +604,16 @@ export function unmountQuizEditor(container: HTMLElement): void {
 
 /**
  * Built-in Quiz editor content type. Authors the canonical multi-question
- * {@link QuizData} shape with rich media; legacy documents are normalized on
- * mount so they edit seamlessly. Registered id is `quiz-editor`, matching the
- * player's built-in quiz content type.
+ * {@link QuizData} shape with rich media (the single supported format).
+ * Registered id is `quiz-editor`, matching the player's built-in quiz
+ * content type.
  */
 export const QuizEditorType: ContentType<QuizData> = {
   getId: () => "quiz-editor",
   getVersion: () => 1,
 
-  getMaximumScore(): number | undefined {
-    return 100;
+  getMaximumScore(data): number | undefined {
+    return data.questions.length;
   },
 
   async preload(): Promise<void> {
@@ -627,9 +625,8 @@ export const QuizEditorType: ContentType<QuizData> = {
     data: QuizData,
     onChange: (newData: QuizData) => void,
   ): void {
-    const raw = data;
-    getOrCreateQuizEditorController(container, raw, onChange).syncTo(
-      raw,
+    getOrCreateQuizEditorController(container, data, onChange).syncTo(
+      data,
       onChange,
     );
   },
@@ -639,9 +636,8 @@ export const QuizEditorType: ContentType<QuizData> = {
     data: QuizData,
     onChange: (newData: QuizData) => void,
   ): void {
-    const raw = data;
-    getOrCreateQuizEditorController(container, raw, onChange).syncTo(
-      raw,
+    getOrCreateQuizEditorController(container, data, onChange).syncTo(
+      data,
       onChange,
     );
   },

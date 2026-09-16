@@ -1,23 +1,28 @@
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { QuizEditorType } from "./quiz-editor";
-import type { QuizData, QuizQuestionSpec, RawQuizData } from "./schema";
+import type { QuizData, QuizQuestionSpec } from "./schema";
 
 afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** Flat canonical single-question input (normalizes to one question). */
-const CANONICAL: RawQuizData = {
-  question: { text: "What?" },
-  options: [
-    { id: "a", text: "Alpha" },
-    { id: "b", text: "Beta" },
-    { id: "c", text: "Gamma" },
+/** Canonical single-question input. */
+const CANONICAL: QuizData = {
+  questions: [
+    {
+      id: "q-0",
+      text: "What?",
+      options: [
+        { id: "a", text: "Alpha" },
+        { id: "b", text: "Beta" },
+        { id: "c", text: "Gamma" },
+      ],
+      correctOptionId: "c",
+    },
   ],
-  correctOptionId: "c",
 };
 
-/** Multi-question canonical input. */
+/** Canonical multi-question input. */
 const MULTI: QuizData = {
   questions: [
     {
@@ -44,15 +49,11 @@ function query<T extends Element>(container: HTMLElement, selector: string): T {
   return el as T;
 }
 
-function mountEditor(raw: QuizData | RawQuizData) {
+function mountEditor(data: QuizData) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const onChange: Mock<(next: QuizData) => void> = vi.fn();
-  QuizEditorType.renderEditor(
-    container,
-    raw as unknown as QuizData,
-    onChange,
-  );
+  QuizEditorType.renderEditor(container, data, onChange);
   return { container, onChange };
 }
 
@@ -88,7 +89,6 @@ describe("QuizEditorType", () => {
     expect(select.options.length).toBe(3);
     expect(select.selectedOptions[0]?.value).toBe("c");
 
-    // Flat input normalizes to a single question tab.
     const tabs = container.querySelectorAll(".quiz-question-tab");
     expect(tabs.length).toBe(1);
     expect(tabs[0]?.textContent).toBe("Question 1");
@@ -102,7 +102,7 @@ describe("QuizEditorType", () => {
     const data = lastEmitted(onChange);
     expect(data.questions.length).toBe(1);
     expect(data.questions[0]).toMatchObject({ text: "New Q" });
-    expect(data.questions[0]?.options).toEqual(CANONICAL.options);
+    expect(data.questions[0]?.options).toEqual(CANONICAL.questions[0]?.options);
     expect(data.questions[0]?.correctOptionId).toBe("c");
   });
 
@@ -116,32 +116,26 @@ describe("QuizEditorType", () => {
     expect(document.activeElement).toBe(question);
   });
 
-  it("mounts legacy raw documents through normalization and emits canonical on edit", () => {
-    const legacy: RawQuizData = {
-      question: "Q?",
-      options: ["a", "b"],
-      correctIndex: 1,
-    };
-    const { container, onChange } = mountEditor(legacy);
+  it("mounts canonical multi-question data and edits the active question", () => {
+    const { container, onChange } = mountEditor(MULTI);
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    (tabs[1] as HTMLButtonElement).click();
 
     const question = query<HTMLInputElement>(container, ".quiz-question");
-    expect(question.value).toBe("Q?");
-
+    expect(question.value).toBe("Second");
     const select = query<HTMLSelectElement>(container, ".quiz-correct-answer");
-    expect(select.selectedOptions[0]?.value).toBe("opt-1");
+    expect(select.selectedOptions[0]?.value).toBe("s-a");
 
     type(question, "Edited");
     const data = lastEmitted(onChange);
-    expect(data.questions.length).toBe(1);
-    expect(data.questions[0]).toEqual({
-      id: "q-0",
+    expect(data.questions.length).toBe(2);
+    expect(data.questions[1]).toEqual({
+      id: "q-2",
       text: "Edited",
-      options: [
-        { id: "opt-0", text: "a" },
-        { id: "opt-1", text: "b" },
-      ],
-      correctOptionId: "opt-1",
+      options: [{ id: "s-a", text: "S A" }],
+      correctOptionId: "s-a",
     });
+    expect(data.questions[0]).toEqual(MULTI.questions[0]);
   });
 
   it("adds a question with a generated id and selects it", () => {
@@ -185,7 +179,7 @@ describe("QuizEditorType", () => {
     const tabsAfter = container.querySelectorAll(".quiz-question-tab");
     (tabsAfter[0] as HTMLButtonElement).click();
     expect(
-      (query<HTMLInputElement>(container, ".quiz-question")).value,
+      query<HTMLInputElement>(container, ".quiz-question").value,
     ).toBe("First");
   });
 
@@ -201,6 +195,21 @@ describe("QuizEditorType", () => {
     // First remaining question is now active.
     expect(query<HTMLInputElement>(container, ".quiz-question").value).toBe(
       "First",
+    );
+  });
+
+  it("removing a non-active question keeps the current selection", () => {
+    const { container, onChange } = mountEditor(MULTI);
+    const tabs = container.querySelectorAll(".quiz-question-tab");
+    (tabs[1] as HTMLButtonElement).click(); // select "Second"
+    const removeButtons = container.querySelectorAll(".quiz-question-remove");
+    (removeButtons[0] as HTMLButtonElement).click(); // remove "First"
+
+    const data = lastEmitted(onChange);
+    expect(data.questions.map((q) => q.id)).toEqual(["q-2"]);
+    // The selection slides to the first remaining question ("Second").
+    expect(query<HTMLInputElement>(container, ".quiz-question").value).toBe(
+      "Second",
     );
   });
 
@@ -231,9 +240,9 @@ describe("QuizEditorType", () => {
 
   it("defaults the first added option to correct when no correctness exists", () => {
     const { container, onChange } = mountEditor({
-      question: { text: "Q" },
-      options: [],
-      correctOptionId: null,
+      questions: [
+        { id: "q-0", text: "Q", options: [], correctOptionId: null },
+      ],
     });
     const add = query<HTMLButtonElement>(container, ".quiz-add-option");
     add.click();
@@ -318,13 +327,18 @@ describe("QuizEditorType", () => {
   });
 
   it("renders an option thumbnail preview on mount and drops it on empty src", () => {
-    const withMedia: RawQuizData = {
-      question: { text: "Q" },
-      options: [
-        { id: "a", text: "A", media: { src: "thumb.png", alt: "T" } },
-        { id: "b", text: "B" },
+    const withMedia: QuizData = {
+      questions: [
+        {
+          id: "q-0",
+          text: "Q",
+          options: [
+            { id: "a", text: "A", media: { src: "thumb.png", alt: "T" } },
+            { id: "b", text: "B" },
+          ],
+          correctOptionId: "a",
+        },
       ],
-      correctOptionId: "a",
     };
     const { container } = mountEditor(withMedia);
 
@@ -394,5 +408,10 @@ describe("QuizEditorType", () => {
       { id: "opt-1", text: "" },
     ]);
     expect(data.questions[1]?.correctOptionId).toBe("s-a");
+  });
+
+  it("reports a maximum score of the question count", () => {
+    expect(QuizEditorType.getMaximumScore(CANONICAL)).toBe(1);
+    expect(QuizEditorType.getMaximumScore(MULTI)).toBe(2);
   });
 });

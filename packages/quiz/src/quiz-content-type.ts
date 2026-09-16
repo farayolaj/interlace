@@ -14,8 +14,8 @@ export const QuizContentType: ContentType<QuizData> = {
   getId: () => "quiz-editor",
   getVersion: () => 1,
 
-  getMaximumScore(): number | undefined {
-    return 100;
+  getMaximumScore(data): number | undefined {
+    return data.questions.length;
   },
 
   async preload(): Promise<void> {

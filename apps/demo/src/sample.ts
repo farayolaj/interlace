@@ -63,12 +63,17 @@ export const SAMPLE_DOC: SerializedInteractiveMediaDocument = {
         contentTypeId: "quiz-editor",
         version: 1,
         data: {
-          question: { text: "Which trailer feature is the demo's core?" },
-          options: [
-            { id: "choice-hook", text: "Interactive hooks" },
-            { id: "choice-linear", text: "Linear playback" },
+          questions: [
+            {
+              id: "q-1",
+              text: "Which trailer feature is the demo's core?",
+              options: [
+                { id: "choice-hook", text: "Interactive hooks" },
+                { id: "choice-linear", text: "Linear playback" },
+              ],
+              correctOptionId: "choice-hook",
+            },
           ],
-          correctOptionId: "choice-hook",
         },
       },
     },

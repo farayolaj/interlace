@@ -1,31 +1,34 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QuizContentType } from "./quiz-content-type";
-import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
-import type { QuizData, RawQuizData } from "./schema";
+import {
+  renderQuizPlayback,
+  unmountQuizPlayback,
+} from "./quiz-player";
+import type { QuizData } from "./schema";
 
 afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** Legacy v1 shape (string question/options + numeric correctIndex). */
-const LEGACY_DATA: RawQuizData = {
-  question: "What is 2 + 2?",
-  options: ["3", "4", "5"],
-  correctIndex: 1,
-};
-
-/** Canonical flat shape with rich media. */
-const CANONICAL_DATA: RawQuizData = {
-  question: { text: "Pick one", media: { src: "q.png", alt: "Question art" } },
-  options: [
-    { id: "a", text: "Alpha", media: { src: "a.png", alt: "Alpha art" } },
-    { id: "b", text: "Beta" },
+/** Canonical single-question data (with media). */
+const SINGLE_DATA: QuizData = {
+  questions: [
+    {
+      id: "q-0",
+      text: "What is 2 + 2?",
+      media: { src: "q.png", alt: "Question art" },
+      options: [
+        { id: "opt-0", text: "3", media: { src: "a.png", alt: "Alpha art" } },
+        { id: "opt-1", text: "4" },
+        { id: "opt-2", text: "5" },
+      ],
+      correctOptionId: "opt-1",
+    },
   ],
-  correctOptionId: "b",
 };
 
-/** Canonical multi-question shape. */
-const MULTI_DATA: RawQuizData = {
+/** Canonical multi-question data. */
+const MULTI_DATA: QuizData = {
   questions: [
     {
       id: "q-1",
@@ -54,7 +57,7 @@ function currentOptions(): HTMLButtonElement[] {
   ] as HTMLButtonElement[];
 }
 
-function renderIntoContainer(data: RawQuizData = LEGACY_DATA) {
+function renderIntoContainer(data: QuizData = SINGLE_DATA) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const onComplete = vi.fn();
@@ -84,18 +87,9 @@ function renderIntoContainer(data: RawQuizData = LEGACY_DATA) {
 }
 
 describe("QuizContentType", () => {
-  it("reports a maximum score of 100", () => {
-    const data: QuizData = {
-      questions: [
-        {
-          id: "q-0",
-          text: "Q",
-          options: [{ id: "a", text: "A" }],
-          correctOptionId: "a",
-        },
-      ],
-    };
-    expect(QuizContentType.getMaximumScore(data)).toBe(100);
+  it("reports a maximum score of the question count", () => {
+    expect(QuizContentType.getMaximumScore(SINGLE_DATA)).toBe(1);
+    expect(QuizContentType.getMaximumScore(MULTI_DATA)).toBe(2);
   });
 
   it("is registered as quiz-editor (the editor package's authoring id)", () => {
@@ -108,26 +102,26 @@ describe("QuizContentType", () => {
 });
 
 describe("renderQuizPlayback", () => {
-  it("renders a legacy flat single question as 'Question 1 of 1' with enabled options", () => {
+  it("renders the navigation footer with Previous and Next buttons", () => {
+    const { nextButton, prevButton } = renderIntoContainer();
+    expect(nextButton).not.toBeNull();
+    expect(prevButton).not.toBeNull();
+    // Single-question documents: no Previous, Next present but gated.
+    expect(prevButton?.style.display).toBe("none");
+    expect(nextButton?.disabled).toBe(true);
+  });
+
+  it("renders the question and one enabled option button per choice (single question)", () => {
     const { indicator, question, options } = renderIntoContainer();
     expect(indicator?.textContent).toBe("Question 1 of 1");
     expect(question?.textContent).toBe("What is 2 + 2?");
-    expect(options.map((option) => option.textContent)).toEqual([
-      "3",
-      "4",
-      "5",
-    ]);
+    expect(options.map((option) => option.textContent)).toEqual(["3", "4", "5"]);
     expect(options.every((option) => !option.disabled)).toBe(true);
   });
 
-  it("renders a canonical flat shape with question media and thumbnails", () => {
-    const { container, question, options } =
-      renderIntoContainer(CANONICAL_DATA);
-    expect(question?.textContent).toBe("Pick one");
-    expect(options.map((option) => option.textContent)).toEqual([
-      "Alpha",
-      "Beta",
-    ]);
+  it("renders a canonical question with media and thumbnails", () => {
+    const { container, question, options } = renderIntoContainer();
+    expect(question?.textContent).toBe("What is 2 + 2?");
 
     const questionMedia = container.querySelector(
       ".quiz-playback-question-media",
@@ -142,7 +136,9 @@ describe("renderQuizPlayback", () => {
     expect(firstThumb).not.toBeNull();
     expect(firstThumb?.getAttribute("src")).toBe("a.png");
     expect(firstThumb?.getAttribute("alt")).toBe("Alpha art");
-    expect(options[1]?.querySelector(".quiz-playback-option-media")).toBeNull();
+    expect(
+      options[1]?.querySelector(".quiz-playback-option-media"),
+    ).toBeNull();
   });
 
   it("shows 'Question 1 of 2' and renders only the first question's options", () => {
@@ -158,9 +154,15 @@ describe("renderQuizPlayback", () => {
 
   it("does not render media elements when src is blank", () => {
     const { container } = renderIntoContainer({
-      question: { text: "Q", media: { src: "", alt: "" } },
-      options: [{ id: "a", text: "A", media: { src: "" } }],
-      correctOptionId: "a",
+      questions: [
+        {
+          id: "q-0",
+          text: "Q",
+          media: { src: "", alt: "" },
+          options: [{ id: "a", text: "A", media: { src: "" } }],
+          correctOptionId: "a",
+        },
+      ],
     });
     expect(container.querySelector(".quiz-playback-question-media")).toBeNull();
     expect(container.querySelector(".quiz-playback-option-media")).toBeNull();
@@ -170,7 +172,6 @@ describe("renderQuizPlayback", () => {
     const { options, nextButton, prevButton, indicator, question } =
       renderIntoContainer(MULTI_DATA);
     expect(nextButton?.disabled).toBe(true);
-    expect(nextButton?.textContent).toBe("Next");
     expect(prevButton?.style.display).toBe("none");
 
     options[0]!.click(); // correct on question 1
@@ -206,8 +207,7 @@ describe("renderQuizPlayback", () => {
     nextButton!.click(); // question 2
     expect(prevButton?.style.display).toBe("block");
 
-    // Answer question 2 before going back.
-    currentOptions()[1]!.click(); // wrong
+    currentOptions()[1]!.click(); // wrong on question 2
     prevButton!.click();
 
     // Back on question 1: reveal intact, options disabled (review-only).
@@ -230,32 +230,61 @@ describe("renderQuizPlayback", () => {
     prevButton!.click(); // back to question 1 review
 
     const firstOptions = currentOptions();
-    // The locked question 1 cannot be re-answered: clicking its (correct)
-    // option changes nothing.
     firstOptions[0]!.click();
     firstOptions[1]!.click();
     expect(currentOptions()[0]!.disabled).toBe(true);
     expect(currentOptions()[1]!.disabled).toBe(true);
-    // And no decision changed: the correct option is still the revealed one.
     expect(
       currentOptions()[0]!.classList.contains("quiz-playback-option-correct"),
     ).toBe(true);
   });
 
-  it("answers a single question correctly, then Next reports 100 once", () => {
+  it("review mode preserves media thumbnails after back-navigation", () => {
+    const mediaData: QuizData = {
+      questions: [
+        {
+          id: "q-1",
+          text: "First",
+          media: { src: "q1.png", alt: "First art" },
+          options: [{ id: "a", text: "A", media: { src: "a.png", alt: "A art" } }],
+          correctOptionId: "a",
+        },
+        {
+          id: "q-2",
+          text: "Second",
+          options: [{ id: "b", text: "B" }],
+          correctOptionId: "b",
+        },
+      ],
+    };
+    const { options, nextButton, prevButton } = renderIntoContainer(mediaData);
+    options[0]!.click();
+    nextButton!.click();
+    currentOptions()[0]!.click();
+    prevButton!.click(); // review question 1
+
+    const reviewQuestion = document.querySelector(
+      ".quiz-playback-question-media",
+    ) as HTMLImageElement | null;
+    expect(reviewQuestion?.getAttribute("src")).toBe("q1.png");
+    const reviewThumb = document.querySelector(
+      ".quiz-playback-option-media",
+    ) as HTMLImageElement | null;
+    expect(reviewThumb?.getAttribute("src")).toBe("a.png");
+  });
+
+  it("answers a single question correctly, then Next reports 1 once", () => {
     const { onComplete, options, nextButton } = renderIntoContainer();
     options[1]!.click();
     // Reveal + lock; no auto-complete.
     expect(onComplete).not.toHaveBeenCalled();
     expect(options.every((option) => option.disabled)).toBe(true);
-    expect(nextButton?.textContent).toBe("Next");
     expect(nextButton?.disabled).toBe(false);
 
     nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(100);
+    expect(onComplete).toHaveBeenCalledWith(1);
 
-    // Already completed: the footer click does nothing more.
     nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
@@ -275,12 +304,12 @@ describe("renderQuizPlayback", () => {
     options[2]!.click();
     expect(onComplete).not.toHaveBeenCalled();
 
-    nextButton!.click(); // Next completes the single question
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledWith(0);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("aggregates partial credit across two questions (one right, one wrong → 50)", () => {
+  it("aggregates partial credit across two questions (one right, one wrong → 1)", () => {
     const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
     // Question 1: correct.
     options[0]!.click();
@@ -289,29 +318,27 @@ describe("renderQuizPlayback", () => {
     // Question 2: wrong — the footer still gates completion.
     currentOptions()[1]!.click();
     expect(onComplete).not.toHaveBeenCalled();
-    expect(nextButton?.textContent).toBe("Next");
     expect(nextButton?.disabled).toBe(false);
     nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(50);
+    expect(onComplete).toHaveBeenCalledWith(1);
   });
 
-  it("reports 100 when both questions are answered correctly", () => {
+  it("reports 2 when both questions are answered correctly", () => {
     const { onComplete, options, nextButton } = renderIntoContainer(MULTI_DATA);
     options[0]!.click();
     nextButton!.click();
     currentOptions()[0]!.click();
-    nextButton!.click(); // Next completes the final question
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete).toHaveBeenCalledWith(100);
+    expect(onComplete).toHaveBeenCalledWith(2);
   });
 
   it("the final question's Next button is disabled until answered", () => {
     const { options, nextButton } = renderIntoContainer(MULTI_DATA);
     options[0]!.click();
     nextButton!.click();
-    // Question 2 (final): Next present but gated until answered.
-    expect(nextButton?.textContent).toBe("Next");
+    // Question 2 (final): Next present but gated.
     expect(nextButton?.disabled).toBe(true);
     currentOptions()[0]!.click();
     expect(nextButton?.disabled).toBe(false);
@@ -322,7 +349,7 @@ describe("renderQuizPlayback", () => {
     options[0]!.click();
     nextButton!.click();
     currentOptions()[1]!.click(); // wrong
-    nextButton!.click(); // Next completes the quiz
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledTimes(1);
     // Re-clicking Next (and the now-locked options) does nothing.
     nextButton!.click();
@@ -333,7 +360,7 @@ describe("renderQuizPlayback", () => {
   it("unmountQuizPlayback clears the container and allows re-render", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
-    renderQuizPlayback(container, LEGACY_DATA, { onComplete: vi.fn() });
+    renderQuizPlayback(container, SINGLE_DATA, { onComplete: vi.fn() });
     expect(container.querySelector(".quiz-playback")).not.toBeNull();
 
     unmountQuizPlayback(container);
@@ -344,13 +371,21 @@ describe("renderQuizPlayback", () => {
     expect(container.querySelector(".quiz-playback-question")).not.toBeNull();
   });
 
-  it("renders defensively when correctness is unresolved (every answer scores 0)", () => {
-    // Load-bearing compatibility case with documents that predate an
-    // authored answer: no resolvable correct option means nothing is marked
-    // correct and every answer scores 0.
-    const data: RawQuizData = {
-      question: "Legacy import",
-      options: ["a", "b"],
+  it("renders defensively when correctness is unresolved (correctOptionId null → 0)", () => {
+    // No resolvable correct option means nothing is marked correct and the
+    // answer contributes no points.
+    const data: QuizData = {
+      questions: [
+        {
+          id: "q-0",
+          text: "Legacy import",
+          options: [
+            { id: "a", text: "a" },
+            { id: "b", text: "b" },
+          ],
+          correctOptionId: null,
+        },
+      ],
     };
     const { onComplete, options, nextButton } = renderIntoContainer(data);
     options[1]!.click();
@@ -360,46 +395,43 @@ describe("renderQuizPlayback", () => {
         (option) => !option.classList.contains("quiz-playback-option-correct"),
       ),
     ).toBe(true);
-    nextButton!.click(); // Next completes the quiz
+    nextButton!.click();
     expect(onComplete).toHaveBeenCalledWith(0);
   });
 
-  it("renders zero options for non-array data without throwing", () => {
-    const bad: RawQuizData = {
-      question: "Broken",
-      options: undefined as unknown as Array<string>,
-      correctIndex: 1,
+  it("renders zero options for an empty options list without throwing", () => {
+    const data: QuizData = {
+      questions: [
+        { id: "q-0", text: "Broken", options: [], correctOptionId: null },
+      ],
     };
-    const { onComplete, options, nextButton } = renderIntoContainer(bad);
+    const { onComplete, options, nextButton } = renderIntoContainer(data);
     expect(options.length).toBe(0);
     // Nothing answered → Next stays gated → no completion fires.
     expect(nextButton?.disabled).toBe(true);
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("marks no correct option for an out-of-range correctIndex", () => {
-    const data: RawQuizData = {
-      question: "Q",
-      options: ["a", "b"],
-      correctIndex: 7,
-    };
-    const { onComplete, options, nextButton } = renderIntoContainer(data);
-    options[0]!.click();
-    expect(
-      options.every(
-        (option) => !option.classList.contains("quiz-playback-option-correct"),
-      ),
-    ).toBe(true);
-    nextButton!.click(); // Next completes the quiz
-    expect(onComplete).toHaveBeenCalledWith(0);
+  it("scores by option id in the canonical shape", () => {
+    const { onComplete, options, nextButton } = renderIntoContainer();
+    options[1]!.click();
+    nextButton!.click();
+    expect(onComplete).toHaveBeenCalledWith(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("scores by option id in the canonical flat shape", () => {
-    const { onComplete, options, nextButton } =
-      renderIntoContainer(CANONICAL_DATA);
-    options[1]!.click();
-    nextButton!.click(); // Next completes the quiz
-    expect(onComplete).toHaveBeenCalledWith(100);
-    expect(onComplete).toHaveBeenCalledTimes(1); // once, after Next
+  it("re-advancing to an answered question preserves the recorded selection", () => {
+    const { options, nextButton, prevButton } = renderIntoContainer(MULTI_DATA);
+    options[0]!.click(); // correct on question 1
+    nextButton!.click(); // question 2
+    currentOptions()[0]!.click(); // correct on question 2
+    prevButton!.click(); // review question 1
+    nextButton!.click(); // question 2 again
+    const secondOptions = currentOptions();
+    // Question 2's reveal is intact (review-only lock).
+    expect(
+      secondOptions[0]!.classList.contains("quiz-playback-option-correct"),
+    ).toBe(true);
+    expect(secondOptions.every((option) => option.disabled)).toBe(true);
   });
 });
