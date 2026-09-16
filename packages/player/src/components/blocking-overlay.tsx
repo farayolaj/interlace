@@ -272,6 +272,7 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
           style={{
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "flex-start",
             gap: `${SPACE[2]}px`,
           }}
         >
@@ -295,18 +296,18 @@ export const BlockingOverlay: React.FC<BlockingOverlayProps> = ({
                 onSkip?.();
               }}
               style={{
-                padding: `${SPACE[1]}px`,
-                backgroundColor: COLORS.accent,
+                padding: `${SPACE[1]}px ${SPACE[2]}px`,
+                backgroundColor: "red",
                 color: COLORS.white,
                 border: "none",
                 borderRadius: `${RADIUS.sm}px`,
                 cursor: "pointer",
-                fontSize: TYPE.md,
+                fontSize: TYPE.sm,
                 fontWeight: 600,
                 transition: "background-color 150ms ease",
               }}
             >
-              ✕
+              Skip
             </button>
           )}
         </div>
