@@ -48,7 +48,9 @@ export const OverlayLayer: React.FC<OverlayLayerProps> = ({
           reachable; individual anchors re-enable pointer events. */}
       <div
         style={{
-          position: "relative",
+          position: "absolute",
+          top: 0,
+          left: 0,
           width: "100%",
           height: "100%",
           pointerEvents: "none",
@@ -80,7 +82,9 @@ export const OverlayLayer: React.FC<OverlayLayerProps> = ({
       {/* Layer 4: Completed Tags (z-index 14) */}
       <div
         style={{
-          position: "relative",
+          position: "absolute",
+          top: 0,
+          left: 0,
           width: "100%",
           height: "100%",
           pointerEvents: "none",
