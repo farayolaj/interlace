@@ -8,7 +8,7 @@ import { fn } from "@storybook/test";
 import { useState } from "react";
 import { InterlaceEditor } from "./interlace-editor";
 
-const VIDEO_SRC = "https://samplelib.com/mp4/sample-20s-360p.mp4";
+const VIDEO_SRC = "https://lorem.video/720p";
 const VIDEO_DURATION = 20;
 
 function makeQuizContentType(): ContentType<{

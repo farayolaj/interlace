@@ -9,7 +9,7 @@ import type { SerializedInteractiveMediaDocument } from "@interlace/core";
  */
 export const SAMPLE_DOC: SerializedInteractiveMediaDocument = {
   video: {
-    src: "https://samplelib.com/mp4/sample-20s-360p.mp4",
+    src: "https://lorem.video/720p",
     duration: 20,
   },
   items: [
