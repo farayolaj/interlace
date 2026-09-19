@@ -1,5 +1,11 @@
 # @interlace/core
 
+## 0.1.1
+
+### Patch Changes
+
+- Add per-package READMEs so every published npm page documents its install, its API surface, and where the full walkthrough lives.
+
 ## 0.1.0
 
 ### Minor Changes

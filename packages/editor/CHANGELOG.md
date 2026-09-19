@@ -1,5 +1,16 @@
 # @interlace/editor
 
+## 1.0.1
+
+### Patch Changes
+
+- Add per-package READMEs so every published npm page documents its install, its API surface, and where the full walkthrough lives.
+- Updated dependencies
+  - @interlacejs/core@0.1.1
+  - @interlacejs/player@0.1.1
+  - @interlacejs/quiz@0.1.1
+  - @interlacejs/native-adapter@0.0.2
+
 ## 1.0.0
 
 ### Major Changes
