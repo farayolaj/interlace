@@ -8,16 +8,16 @@ Interlace is a TypeScript monorepo library for building interactive video experi
 
 | Package | What it gives you |
 | --- | --- |
-| [`@interlace/core`](packages/core) | The playback state machine (`InteractiveMediaController`), content lifecycle (`ContentInstance`), hook types + validation, serialization (`serialize`/`deserialize`), and the `VideoAdapter` interface |
-| [`@interlace/native-adapter`](packages/native-adapter) | A ready `VideoAdapter` implementation wrapping an HTML5 `<video>` element (overlay mounting, fullscreen, programmatic-event suppression) |
-| [`@interlace/player`](packages/player) | The React playback runtime: `InteractiveVideoPlayer`, the `useInteractiveMedia` hook, the overlay system (anchors, blocking overlays, completed tags), completion feedback, and error boundaries |
-| [`@interlace/editor`](packages/editor) | The React authoring UI: `InterlaceEditor` (host component), keyframe timeline, hook inspector, placement editor, preview, and content-type slots |
-| [`@interlace/quiz`](packages/quiz) | The canonical quiz content type — authoring many questions at once, playback with Previous/Next navigation, one point per question |
+| [`@interlacejs/core`](packages/core) | The playback state machine (`InteractiveMediaController`), content lifecycle (`ContentInstance`), hook types + validation, serialization (`serialize`/`deserialize`), and the `VideoAdapter` interface |
+| [`@interlacejs/native-adapter`](packages/native-adapter) | A ready `VideoAdapter` implementation wrapping an HTML5 `<video>` element (overlay mounting, fullscreen, programmatic-event suppression) |
+| [`@interlacejs/player`](packages/player) | The React playback runtime: `InteractiveVideoPlayer`, the `useInteractiveMedia` hook, the overlay system (anchors, blocking overlays, completed tags), completion feedback, and error boundaries |
+| [`@interlacejs/editor`](packages/editor) | The React authoring UI: `InterlaceEditor` (host component), keyframe timeline, hook inspector, placement editor, preview, and content-type slots |
+| [`@interlacejs/quiz`](packages/quiz) | The canonical quiz content type — authoring many questions at once, playback with Previous/Next navigation, one point per question |
 
 Two demo apps live alongside them:
 
 - `apps/demo` — a dual-mode Author/Watch demo, the fastest way to see the whole round trip working
-- `apps/storybook` — the components' story gallery (`pnpm --filter @interlace/storybook dev`, port 6006)
+- `apps/storybook` — the components' story gallery (`pnpm --filter @interlacejs/storybook dev`, port 6006)
 
 ## Requirements
 
@@ -29,7 +29,7 @@ Two demo apps live alongside them:
 ```bash
 pnpm install
 pnpm build          # builds all packages (core → quiz → player → editor)
-pnpm --filter @interlace/demo dev   # open the demo (Author / Watch tabs)
+pnpm --filter @interlacejs/demo dev   # open the demo (Author / Watch tabs)
 ```
 
 The demo starts in **Author** mode: add a video source, place hooks along the timeline, author a quiz, and save — saving hands off to **Watch** mode, which plays the built-in 20-second sample trailer (a blocking quiz at 5s and a click-reveal anchor hook) or your saved document. "Reset to sample" brings the built-in document back.
@@ -41,7 +41,7 @@ pnpm build          # build every package (turbo run build)
 pnpm test           # run every suite
 pnpm check-types    # typecheck everything
 pnpm lint           # lint everything
-pnpm --filter @interlace/storybook dev   # component gallery on :6006
+pnpm --filter @interlacejs/storybook dev   # component gallery on :6006
 ```
 
 ## Using the library
@@ -51,8 +51,8 @@ The mental model: an authoring flow produces a **serialized document** (plain JS
 ### 1. Register content types
 
 ```ts
-import { ContentTypeRegistry } from "@interlace/core";
-import { QuizContentType } from "@interlace/quiz";
+import { ContentTypeRegistry } from "@interlacejs/core";
+import { QuizContentType } from "@interlacejs/quiz";
 
 const registry = new ContentTypeRegistry();
 registry.register(QuizContentType); // authoring + playback in one object, id "quiz-editor"
@@ -61,7 +61,7 @@ registry.register(QuizContentType); // authoring + playback in one object, id "q
 ### 2. Author
 
 ```tsx
-import { InterlaceEditor } from "@interlace/editor";
+import { InterlaceEditor } from "@interlacejs/editor";
 
 <div style={{ width: 960, height: 640 }}>
   <InterlaceEditor
@@ -79,8 +79,8 @@ import { InterlaceEditor } from "@interlace/editor";
 ### 3. Play
 
 ```tsx
-import { InteractiveVideoPlayer } from "@interlace/player";
-import { NativeVideoAdapter } from "@interlace/native-adapter";
+import { InteractiveVideoPlayer } from "@interlacejs/player";
+import { NativeVideoAdapter } from "@interlacejs/native-adapter";
 import { useEffect, useRef, useState } from "react";
 
 function Watch({ doc }: { doc: SerializedInteractiveMediaDocument }) {
@@ -144,7 +144,7 @@ Hook types:
 Anything that satisfies the `ContentType` contract can join the registry:
 
 ```ts
-import type { ContentType } from "@interlace/core";
+import type { ContentType } from "@interlacejs/core";
 
 registry.register({
   getId: () => "custom-widget",
@@ -184,12 +184,12 @@ pnpm test                     # run all suites (vitest per package)
 pnpm check-types && pnpm lint # typecheck + lint
 
 # work on one package only
-pnpm --filter @interlace/player test
-pnpm --filter @interlace/editor build   # turbo handles the core/quiz→player→editor order
+pnpm --filter @interlacejs/player test
+pnpm --filter @interlacejs/editor build   # turbo handles the core/quiz→player→editor order
 
 # demo / storybook while developing
-pnpm --filter @interlace/demo dev
-pnpm --filter @interlace/storybook dev
+pnpm --filter @interlacejs/demo dev
+pnpm --filter @interlacejs/storybook dev
 ```
 
 Test commands are `vitest run` per package; suites live next to their sources (`packages/*/src/*.test.*`). If you change a package that others consume, run `pnpm build` first — packages resolve each other's `dist` output.
