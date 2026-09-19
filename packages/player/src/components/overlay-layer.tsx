@@ -1,4 +1,4 @@
-import { RenderState } from "@interlace/core";
+import { RenderState } from "@interlacejs/core";
 import React, { useMemo } from "react";
 import { Anchor } from "./anchor";
 import { CompletedTag } from "./completed-tag";

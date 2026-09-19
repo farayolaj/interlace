@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ContentTypeRegistry } from "@interlace/core";
+import { ContentTypeRegistry } from "@interlacejs/core";
 import { ContentTypeEditor } from "./content-type-editor";
 
 afterEach(() => {

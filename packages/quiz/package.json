@@ -1,5 +1,5 @@
 {
-  "name": "@interlace/quiz",
+  "name": "@interlacejs/quiz",
   "version": "0.1.0",
   "description": "Interlace quiz content type: data schema, validation, and playback contract.",
   "type": "module",
@@ -44,6 +44,6 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@interlace/core": "workspace:*"
+    "@interlacejs/core": "workspace:*"
   }
 }

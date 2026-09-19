@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { ContentTypeRegistry } from "@interlace/core";
+import { ContentTypeRegistry } from "@interlacejs/core";
 import { useContentTypeEditorMount } from "./content-type-editor-mount";
 
 export interface ContentTypeEditorProps<TData = unknown> {

@@ -1,4 +1,4 @@
-import { ContentInstance, ContentType } from "@interlace/core";
+import { ContentInstance, ContentType } from "@interlacejs/core";
 import React, { useEffect, useRef, useState } from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 

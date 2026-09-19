@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { ContentTypeEditorSlot } from "../components/content-type-editor-slot";
-import { ContentTypeRegistry } from "@interlace/core";
+import { ContentTypeRegistry } from "@interlacejs/core";
 import { QuizEditor } from "./quiz-editor";
 import type { QuizData } from "./quiz-editor";
 

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { useState } from "react";
-import type { Placement } from "@interlace/core";
+import type { Placement } from "@interlacejs/core";
 import { PlacementEditor } from "./placement-editor";
 
 const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };

@@ -1,4 +1,4 @@
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
+import type { SerializedInteractiveMediaDocument } from "@interlacejs/core";
 
 /**
  * The built-in sample document: a short trailer with one multi-question

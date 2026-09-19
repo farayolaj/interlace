@@ -4,13 +4,13 @@ import {
   ContentInstance,
   ContentTypeRegistry,
   isBlockingHook,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import type {
   ContentRecord,
   ContentState,
   ContentType,
   SerializedInteractiveMediaDocument,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import {
   LoadDocumentResult,
   useAuthoringStore,

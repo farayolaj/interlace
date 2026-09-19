@@ -1,4 +1,4 @@
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
+import type { SerializedInteractiveMediaDocument } from "@interlacejs/core";
 
 const STORAGE_KEY = "interlace-demo-doc";
 

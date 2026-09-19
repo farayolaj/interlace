@@ -1,5 +1,5 @@
-import { ContentTypeRegistry } from "@interlace/core";
-import { QuizContentType } from "@interlace/quiz";
+import { ContentTypeRegistry } from "@interlacejs/core";
+import { QuizContentType } from "@interlacejs/quiz";
 
 /**
  * Registry backing the demo's content surfaces. The quiz content type is

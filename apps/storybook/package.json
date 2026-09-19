@@ -1,5 +1,5 @@
 {
-  "name": "@interlace/storybook",
+  "name": "@interlacejs/storybook",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,9 +9,9 @@
     "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf storybook-static"
   },
   "dependencies": {
-    "@interlace/core": "workspace:*",
-    "@interlace/editor": "workspace:*",
-    "@interlace/player": "workspace:*",
+    "@interlacejs/core": "workspace:*",
+    "@interlacejs/editor": "workspace:*",
+    "@interlacejs/player": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

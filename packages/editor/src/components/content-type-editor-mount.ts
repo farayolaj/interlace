@@ -1,6 +1,6 @@
 import type React from "react";
 import { useEffect, useRef } from "react";
-import { ContentType, ContentTypeRegistry } from "@interlace/core";
+import { ContentType, ContentTypeRegistry } from "@interlacejs/core";
 
 interface MountedSession<TData> {
   container: HTMLDivElement;

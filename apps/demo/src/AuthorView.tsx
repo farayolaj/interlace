@@ -1,5 +1,5 @@
-import { InterlaceEditor } from "@interlace/editor";
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
+import { InterlaceEditor } from "@interlacejs/editor";
+import type { SerializedInteractiveMediaDocument } from "@interlacejs/core";
 import { useState } from "react";
 import { getRegistry } from "./registry";
 import { saveDoc } from "./storage";

@@ -6,9 +6,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ContentInstance, type ContentRecord, type ContentState } from "@interlace/core";
+import { ContentInstance, type ContentRecord, type ContentState } from "@interlacejs/core";
 import { BlockingOverlay } from "./blocking-overlay";
-import type { ContentType } from "@interlace/core";
+import type { ContentType } from "@interlacejs/core";
 
 afterEach(() => {
   cleanup();

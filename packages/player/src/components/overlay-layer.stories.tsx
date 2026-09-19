@@ -5,7 +5,7 @@ import {
   type ContentType,
   type Hook,
   type RenderState,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { OverlayLayer } from "./overlay-layer";

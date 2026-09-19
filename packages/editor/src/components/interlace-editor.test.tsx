@@ -6,7 +6,7 @@ import {
   type ContentType,
   type SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import { InterlaceEditor, DEFAULT_EDITOR_STRINGS } from "./interlace-editor";
 
 afterEach(() => {

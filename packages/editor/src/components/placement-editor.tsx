@@ -1,4 +1,4 @@
-import { Placement } from "@interlace/core";
+import { Placement } from "@interlacejs/core";
 import React, { useCallback, useEffect, useRef } from "react";
 import { COLORS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 

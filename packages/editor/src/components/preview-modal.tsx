@@ -4,9 +4,9 @@ import {
   type SerializedInteractiveMediaDocument,
   type Strings,
   type VideoAdapter,
-} from "@interlace/core";
-import { InteractiveVideoPlayer } from "@interlace/player";
-import { NativeVideoAdapter } from "@interlace/native-adapter";
+} from "@interlacejs/core";
+import { InteractiveVideoPlayer } from "@interlacejs/player";
+import { NativeVideoAdapter } from "@interlacejs/native-adapter";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 

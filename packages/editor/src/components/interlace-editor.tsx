@@ -9,7 +9,7 @@ import {
   Placement,
   SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";

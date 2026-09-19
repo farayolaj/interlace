@@ -4,7 +4,7 @@ import {
   InspectorPanel,
   type InspectorPanelEntry,
 } from "./inspector-panel";
-import type { Placement } from "@interlace/core";
+import type { Placement } from "@interlacejs/core";
 
 afterEach(() => {
   cleanup();

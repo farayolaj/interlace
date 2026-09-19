@@ -1,4 +1,4 @@
-import type { Placement } from "@interlace/core";
+import type { Placement } from "@interlacejs/core";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { firePointer, stubPointerCapture } from "../test-utils/pointer";

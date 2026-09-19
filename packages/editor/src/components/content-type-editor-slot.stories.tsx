@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
-import { ContentTypeRegistry } from "@interlace/core";
+import { ContentTypeRegistry } from "@interlacejs/core";
 import { ContentTypeEditorSlot } from "./content-type-editor-slot";
 
 const quizRegistry = new ContentTypeRegistry();

@@ -2,7 +2,7 @@ import {
   DEFAULT_STRINGS,
   type Placement,
   type Strings,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import React, { useCallback, useRef } from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 import { ContentTypePicker } from "./content-type-picker";

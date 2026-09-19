@@ -1,11 +1,11 @@
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
+import type { SerializedInteractiveMediaDocument } from "@interlacejs/core";
 import {
   ContentInstance,
   ContentTypeRegistry,
   Hook,
   serialize as coreSerialize,
   deserialize,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import { useCallback, useState } from "react";
 
 /**

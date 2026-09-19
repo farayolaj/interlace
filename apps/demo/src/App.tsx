@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
+import type { SerializedInteractiveMediaDocument } from "@interlacejs/core";
 import { AuthorView } from "./AuthorView";
 import { WatchView } from "./WatchView";
 import { loadDoc, saveDoc } from "./storage";

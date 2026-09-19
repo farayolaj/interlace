@@ -3,7 +3,7 @@ import {
   RenderState,
   SerializedInteractiveMediaDocument,
   VideoAdapter,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useInteractiveMedia } from "../hooks/use-interactive-media";
 import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";

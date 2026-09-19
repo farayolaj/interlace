@@ -2,7 +2,7 @@ import {
   ContentTypeRegistry,
   type ContentType,
   type SerializedInteractiveMediaDocument,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { useState } from "react";

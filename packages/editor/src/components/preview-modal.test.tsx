@@ -5,7 +5,7 @@ import {
   ContentTypeRegistry,
   type ContentType,
   type SerializedInteractiveMediaDocument,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import { PreviewModal } from "./preview-modal";
 
 afterEach(() => {

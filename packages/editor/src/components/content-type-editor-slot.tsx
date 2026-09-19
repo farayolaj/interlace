@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { ContentTypeRegistry } from "@interlace/core";
+import { ContentTypeRegistry } from "@interlacejs/core";
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 import { useContentTypeEditorMount } from "./content-type-editor-mount";
 

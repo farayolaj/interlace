@@ -3,7 +3,7 @@ import {
   SerializedInteractiveMediaDocument,
   VideoAdapterEvent,
   VideoAdapterEventType,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import {
   act,
   cleanup,

@@ -6,7 +6,7 @@ import {
   RenderState,
   SerializedInteractiveMediaDocument,
   VideoAdapter,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import { useEffect, useRef, useState } from "react";
 
 export interface UseInteractiveMediaOptions {

@@ -3,7 +3,7 @@ import {
   VideoAdapter,
   VideoAdapterEvent,
   VideoAdapterEventType,
-} from "@interlace/core";
+} from "@interlacejs/core";
 
 /**
  * Native HTML5 `<video>` element adapter.

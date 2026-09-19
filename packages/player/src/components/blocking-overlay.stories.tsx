@@ -3,7 +3,7 @@ import {
   type ContentRecord,
   type ContentState,
   type ContentType,
-} from "@interlace/core";
+} from "@interlacejs/core";
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { BlockingOverlay } from "./blocking-overlay";

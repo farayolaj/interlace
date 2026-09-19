@@ -1,6 +1,6 @@
-import { NativeVideoAdapter } from "@interlace/native-adapter";
-import { InteractiveVideoPlayer } from "@interlace/player";
-import type { SerializedInteractiveMediaDocument } from "@interlace/core";
+import { NativeVideoAdapter } from "@interlacejs/native-adapter";
+import { InteractiveVideoPlayer } from "@interlacejs/player";
+import type { SerializedInteractiveMediaDocument } from "@interlacejs/core";
 import { useEffect, useRef, useState } from "react";
 import { getRegistry } from "./registry";
 import { SAMPLE_DOC } from "./sample";

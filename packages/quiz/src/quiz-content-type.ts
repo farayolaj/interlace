@@ -1,4 +1,4 @@
-import { ContentType } from "@interlace/core";
+import { ContentType } from "@interlacejs/core";
 import { QuizEditorType, unmountQuizEditor } from "./quiz-editor";
 import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
 import type { QuizData } from "./schema";

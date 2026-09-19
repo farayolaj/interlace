@@ -1,4 +1,4 @@
-import { DEFAULT_STRINGS, type Strings } from "@interlace/core";
+import { DEFAULT_STRINGS, type Strings } from "@interlacejs/core";
 import React, {
   useCallback,
   useEffect,

@@ -1,4 +1,4 @@
-import { ContentType } from "@interlace/core";
+import { ContentType } from "@interlacejs/core";
 import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "./tokens";
 import type {

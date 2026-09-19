@@ -1,5 +1,5 @@
 {
-  "name": "@interlace/editor",
+  "name": "@interlacejs/editor",
   "version": "1.0.0",
   "description": "Interlace content authoring and editing tools.",
   "type": "module",
@@ -55,9 +55,9 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@interlace/core": "workspace:*",
-    "@interlace/native-adapter": "workspace:*",
-    "@interlace/player": "workspace:*",
-    "@interlace/quiz": "workspace:*"
+    "@interlacejs/core": "workspace:*",
+    "@interlacejs/native-adapter": "workspace:*",
+    "@interlacejs/player": "workspace:*",
+    "@interlacejs/quiz": "workspace:*"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@interlace/native-adapter",
+  "name": "@interlacejs/native-adapter",
   "version": "0.0.1",
   "description": "Reference VideoAdapter implementation for a native HTML <video> element.",
   "type": "module",
@@ -43,6 +43,6 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@interlace/core": "workspace:*"
+    "@interlacejs/core": "workspace:*"
   }
 }

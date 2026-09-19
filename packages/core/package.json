@@ -1,5 +1,5 @@
 {
-  "name": "@interlace/core",
+  "name": "@interlacejs/core",
   "version": "0.1.0",
   "description": "Shared definitions and logic with no rendering opinions.",
   "type": "module",

@@ -20,16 +20,16 @@ const config: StorybookConfig = {
     return mergeConfig(config, {
       resolve: {
         alias: {
-          "@interlace/core": fileURLToPath(
+          "@interlacejs/core": fileURLToPath(
             new URL("../../../packages/core/src/index.ts", import.meta.url),
           ),
-          "@interlace/editor": fileURLToPath(
+          "@interlacejs/editor": fileURLToPath(
             new URL("../../../packages/editor/src/index.ts", import.meta.url),
           ),
-          "@interlace/player": fileURLToPath(
+          "@interlacejs/player": fileURLToPath(
             new URL("../../../packages/player/src/index.ts", import.meta.url),
           ),
-          "@interlace/native-adapter": fileURLToPath(
+          "@interlacejs/native-adapter": fileURLToPath(
             new URL(
               "../../../packages/native-adapter/src/index.ts",
               import.meta.url,
