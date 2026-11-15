@@ -1,13 +1,17 @@
 {
   "name": "@interlacejs/editor",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Interlace content authoring and editing tools.",
   "type": "module",
   "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
   },
   "sideEffects": false,
   "files": [

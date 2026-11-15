@@ -1,5 +1,16 @@
 # @interlace/demo
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @interlacejs/editor@1.0.3
+  - @interlacejs/core@0.1.3
+  - @interlacejs/quiz@0.1.3
+  - @interlacejs/player@0.1.3
+  - @interlacejs/native-adapter@0.0.4
+
 ## 0.0.2
 
 ### Patch Changes
