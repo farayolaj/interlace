@@ -153,6 +153,14 @@ export interface InterlaceEditorProps {
    * owns persistence — the editor never persists on its own.
    */
   onSave: (doc: SerializedInteractiveMediaDocument) => void;
+  /**
+   * Called when the editor gains or loses unsaved changes, relative to the
+   * loaded `document` (or an empty document) and the last `onSave`. Covers
+   * the video source, items, hooks, placements, content data, and an
+   * unmaterialized pending hook. The video duration is excluded: the
+   * editor corrects it from the video's metadata without user input.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
   /** Optional string overrides. */
   strings?: Partial<EditorStrings>;
   /** Optional theme overrides. */
@@ -432,6 +440,7 @@ export function InterlaceEditor({
   document,
   onUpload,
   onSave,
+  onDirtyChange,
   strings: stringsOverride,
   theme,
   onError,
@@ -458,6 +467,8 @@ export function InterlaceEditor({
    * in Hook details materializes it into the store.
    */
   const [pendingHook, setPendingHook] = useState<PendingHook | null>(null);
+  /** Bumped on each document load; marks where the dirty baseline resets. */
+  const [loadVersion, setLoadVersion] = useState(0);
   const [replaceMode, setReplaceMode] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   /** Authoring-video playhead position in seconds (drives the timeline). */
@@ -512,6 +523,9 @@ export function InterlaceEditor({
     // Loading a different document starts a new authoring session; a
     // pending hook from the old one is dropped.
     setPendingHook(null);
+    // Batched with loadDocument's setState, so the render that sees the
+    // new version also sees the loaded items (the dirty baseline).
+    setLoadVersion((v) => v + 1);
     const { validationErrors, warnings } = loadDocument(
       document,
       registryRef.current,
@@ -659,6 +673,44 @@ export function InterlaceEditor({
     // store update; the controller will restart when items change,
     // which is the correct semantic (the document did change).
   }, [state.videoSrc, state.videoDuration, state.items]);
+
+  /**
+   * Dirty tracking. The snapshot covers everything the author controls
+   * (duration excluded — it is corrected from video metadata). The
+   * baseline resets after each document load and on save.
+   */
+  const authoredSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        src: previewDocument.video.src,
+        items: previewDocument.items,
+      }),
+    [previewDocument],
+  );
+  const baselineRef = useRef<{ version: number; snapshot: string } | null>(
+    null,
+  );
+  if (baselineRef.current?.version !== loadVersion) {
+    baselineRef.current = { version: loadVersion, snapshot: authoredSnapshot };
+  }
+  // A save only counts for the document it was made against; a later
+  // load supersedes it.
+  const [saved, setSaved] = useState<{
+    version: number;
+    snapshot: string;
+  } | null>(null);
+  const baselineSnapshot =
+    saved?.version === loadVersion
+      ? saved.snapshot
+      : baselineRef.current.snapshot;
+  const isDirty = authoredSnapshot !== baselineSnapshot || pendingHook != null;
+
+  const lastReportedDirtyRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (lastReportedDirtyRef.current === isDirty) return;
+    lastReportedDirtyRef.current = isDirty;
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const handleSelectEntry = useCallback(
     (id: string) => {
@@ -1070,7 +1122,8 @@ export function InterlaceEditor({
 
   const handleSave = useCallback(() => {
     onSave(serialize());
-  }, [onSave, serialize]);
+    setSaved({ version: loadVersion, snapshot: authoredSnapshot });
+  }, [onSave, serialize, authoredSnapshot, loadVersion]);
 
   // Styling derived from the optional theme prop.
   const rootStyle: React.CSSProperties = {

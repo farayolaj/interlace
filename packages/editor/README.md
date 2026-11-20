@@ -32,11 +32,14 @@ registry.register(QuizContentType);
     onUpload={async (file) => URL.createObjectURL(file)}   // your upload story
     onSave={(doc) => save(doc)}   // the host owns persistence
     onError={(e) => showError(e.message)}
+    onDirtyChange={(dirty) => setHasUnsavedChanges(dirty)}   // optional
   />
 </div>
 ```
 
 `onSave` receives the serialized document (JSON) ready for the player (`@interlacejs/player`). The editor never persists on its own — bring your own storage.
+
+`onDirtyChange` fires when the editor gains or loses unsaved changes, relative to the loaded `document` (or an empty one) and the last `onSave`. Use it to warn before navigating away. Duration corrections the editor makes from the video's metadata do not count as changes.
 
 ## Strings and theming
 

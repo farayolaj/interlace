@@ -1677,3 +1677,94 @@ describe("InterlaceEditor", () => {
     expect(updateEditor).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("InterlaceEditor onDirtyChange", () => {
+  const lastDirty = (fn: ReturnType<typeof vi.fn>) =>
+    fn.mock.calls[fn.mock.calls.length - 1]?.[0];
+
+  it("stays clean after loading a document, including a duration correction", async () => {
+    const onDirtyChange = vi.fn();
+    const { container } = render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText("Quiz 1").length).toBeGreaterThan(0);
+    });
+
+    // The editor corrects the stored duration from the video's metadata;
+    // that is not an author edit.
+    const video = container.querySelector("video") as HTMLVideoElement;
+    Object.defineProperty(video, "duration", { configurable: true, value: 61.5 });
+    fireEvent.loadedMetadata(video);
+
+    expect(onDirtyChange).toHaveBeenCalledWith(false);
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+  });
+
+  it("reports dirty on an edit and clean again after save", async () => {
+    const onDirtyChange = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makePopulatedDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText("Quiz 1").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByText("Quiz 1")[0]!);
+    const titleInput = (await screen.findByTestId(
+      "inspector-panel-title",
+    )) as HTMLInputElement;
+    fireEvent.change(titleInput, { target: { value: "Renamed" } });
+    await waitFor(() => expect(lastDirty(onDirtyChange)).toBe(true));
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    await waitFor(() => expect(lastDirty(onDirtyChange)).toBe(false));
+  });
+
+  it("reports dirty while an unmaterialized pending hook exists", async () => {
+    const onDirtyChange = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+    expect(lastDirty(onDirtyChange)).toBe(false);
+
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    await waitFor(() => expect(lastDirty(onDirtyChange)).toBe(true));
+  });
+
+  it("resets to clean when a different document is loaded", async () => {
+    const onDirtyChange = vi.fn();
+    const props = {
+      contentTypeRegistry: makeRegistry(),
+      onUpload: vi.fn(async () => "x"),
+      onSave: vi.fn(),
+      onDirtyChange,
+    };
+    const { rerender } = render(
+      <InterlaceEditor {...props} document={makeDocument()} />,
+    );
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+    await waitFor(() => expect(lastDirty(onDirtyChange)).toBe(true));
+
+    rerender(<InterlaceEditor {...props} document={makePopulatedDocument()} />);
+    await waitFor(() => expect(lastDirty(onDirtyChange)).toBe(false));
+  });
+});
