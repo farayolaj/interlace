@@ -1,6 +1,6 @@
 {
   "name": "@interlacejs/editor",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Interlace content authoring and editing tools.",
   "type": "module",
   "main": "./dist/index.js",

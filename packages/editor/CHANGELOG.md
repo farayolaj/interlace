@@ -1,5 +1,11 @@
 # @interlace/editor
 
+## 1.1.0
+
+### Minor Changes
+
+- ea16aec: Add an `onDirtyChange` prop to `InterlaceEditor` that reports when the editor has unsaved changes relative to the loaded document and the last save.
+
 ## 1.0.3
 
 ### Patch Changes
