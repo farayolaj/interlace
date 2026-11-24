@@ -118,6 +118,134 @@ describe("InteractiveMediaController", () => {
     expect(seekCalls).toContainEqual(10);
   });
 
+  describe("forward jumps past blocking content", () => {
+    const blockingAt = (id: string, timestamp: number) =>
+      createInstance({
+        id,
+        hook: {
+          type: "blocking",
+          timestamp,
+          placement: { x: 50, y: 50, width: 20, height: 20 },
+        },
+      });
+
+    const track = (controller: InteractiveMediaController) => {
+      const seeks: number[] = [];
+      let pauses = 0;
+      controller.on("requestSeek", (e) => seeks.push(e.timeInSeconds));
+      controller.on("requestPause", () => pauses++);
+      return { seeks, pauses: () => pauses };
+    };
+
+    it("snaps back when a tick observes the seek before the seek event", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      controller.tick(5);
+      const calls = track(controller);
+
+      // rAF reads the new currentTime before the adapter's seek event fires.
+      controller.tick(25);
+      controller.handleUserSeek(25);
+
+      expect(calls.seeks).toEqual([10]);
+      expect(calls.pauses()).toBeGreaterThan(0);
+      expect(c1.getState()).toBe(ContentState.OPEN);
+      controller.tick(10);
+      expect(controller.getRenderState(10).activeBlockingContentId).toBe("c1");
+    });
+
+    it("snaps back when scrubbing forward while paused", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      controller.tick(5, false);
+      const calls = track(controller);
+
+      controller.tick(25, false);
+
+      expect(calls.seeks).toEqual([10]);
+      expect(c1.getState()).toBe(ContentState.OPEN);
+    });
+
+    it("catches a blocking hook skipped over by a dropped frame", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      controller.tick(9.98);
+      const calls = track(controller);
+
+      controller.tick(10.2);
+
+      expect(calls.seeks).toEqual([10]);
+      expect(c1.getState()).toBe(ContentState.OPEN);
+    });
+
+    it("snaps to the earliest unfinished hook and skips completed ones", () => {
+      const c1 = blockingAt("c1", 10);
+      const c2 = blockingAt("c2", 20);
+      const controller = new InteractiveMediaController([c1, c2], 60);
+      controller.tick(10);
+      c1.complete(1);
+      const calls = track(controller);
+
+      controller.tick(40);
+
+      expect(calls.seeks).toEqual([20]);
+      expect(c2.getState()).toBe(ContentState.OPEN);
+    });
+
+    it("re-pauses on a dismissed (still open) hook when jumping past it", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      controller.tick(5);
+      controller.tick(10); // opens; the user dismisses without completing
+      controller.tick(3); // rewinds
+      const calls = track(controller);
+
+      controller.tick(25);
+
+      expect(calls.seeks).toEqual([10]);
+      expect(calls.pauses()).toBe(1);
+    });
+
+    it("lets playback continue after a dismissed hook", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      controller.tick(5);
+      controller.tick(10);
+      const calls = track(controller);
+
+      controller.tick(10.016);
+      controller.tick(11);
+
+      expect(calls.seeks).toEqual([]);
+    });
+
+    it("treats the first tick as the baseline (host sought before ticking)", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      const calls = track(controller);
+
+      controller.tick(30);
+      controller.tick(30.016);
+
+      expect(calls.seeks).toEqual([]);
+      expect(c1.getState()).toBe(ContentState.PENDING);
+    });
+
+    it("does not snap back after setPosition (e.g. resuming)", () => {
+      const c1 = blockingAt("c1", 10);
+      const controller = new InteractiveMediaController([c1], 60);
+      controller.tick(0);
+      const calls = track(controller);
+
+      controller.setPosition(30);
+      controller.tick(30);
+      controller.tick(30.016);
+
+      expect(calls.seeks).toEqual([]);
+      expect(c1.getState()).toBe(ContentState.PENDING);
+    });
+  });
+
   it("skips content on play past it", () => {
     const instance = createInstance({
       id: "c1",

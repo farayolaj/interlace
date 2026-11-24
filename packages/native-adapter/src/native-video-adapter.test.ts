@@ -181,6 +181,20 @@ describe("NativeVideoAdapter", () => {
     // Player can get the actual seek time from adapter.getCurrentTime()
   });
 
+  it("emits programmaticSeek synchronously on seek(), not seek", async () => {
+    const seekHandler = vi.fn();
+    const times: number[] = [];
+    adapter.on("seek", seekHandler);
+    adapter.on("programmaticSeek", () => times.push(adapter.getCurrentTime()));
+
+    await adapter.seek(30);
+    expect(times).toEqual([30]);
+
+    videoElement.dispatchEvent(new Event("seeking"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(seekHandler).not.toHaveBeenCalled();
+  });
+
   it("emits waiting event", async () => {
     const handler = vi.fn();
     adapter.on("waiting", handler);

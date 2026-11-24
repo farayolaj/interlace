@@ -124,6 +124,7 @@ export class NativeVideoAdapter implements VideoAdapter {
   async seek(targetTime: number): Promise<void> {
     this.guard.markAsTriggered("seek");
     this.videoElement.currentTime = targetTime;
+    this.emit("programmaticSeek", { type: "programmaticSeek" });
   }
 
   /**

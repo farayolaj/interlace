@@ -42,6 +42,7 @@ function makeManualClockAdapter() {
     },
     seek(timeInSeconds: number): void {
       adapter.currentTime = timeInSeconds;
+      adapter.emit("programmaticSeek");
     },
     getCurrentTime(): number {
       return adapter.currentTime;
@@ -279,7 +280,7 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(finalState.completedTagIds).toContain("quiz-block");
   });
 
-  it("pins the Gate 2 boundary risk: a 0.5s tick cadence straddles the 16ms trigger window", () => {
+  it("snaps back when a 0.5s tick cadence straddles the 16ms trigger window", () => {
     const harness = makeHarness(10);
     const { adapter } = harness;
     const hook = renderHook((props) => useInteractiveMedia(props), {
@@ -289,18 +290,68 @@ describe("useInteractiveMedia runtime end-to-end", () => {
 
     // Real rAF cadence (~16.7ms) sampling at 0.5s clock granularity: a
     // frame can straddle the trigger timestamp without ever landing in its
-    // ±16ms window, so the hook never fires. Known core-side limitation —
-    // recorded, not fixed in the player.
+    // ±16ms window. The controller detects the crossing, seeks back to the
+    // hook and pauses there.
     act(() => void adapter.play());
     for (const boundary of [9.4, 9.9, 10.4, 10.9]) {
+      if (!adapter.isPlaying) break;
       adapter.currentTime = boundary;
       tick(adapter);
     }
+    tick(adapter);
 
-    const state = hook.result.current.controller?.getRenderState(10.4) as {
+    expect(adapter.isPlaying).toBe(false);
+    expect(adapter.currentTime).toBe(10);
+    const state = hook.result.current.controller?.getRenderState(10) as {
       activeBlockingContentId?: string;
     };
-    expect(state.activeBlockingContentId).toBeUndefined();
+    expect(state.activeBlockingContentId).toBe("quiz-block");
+    expect(
+      hook.result.current.items
+        ?.find((i) => i.getId() === "quiz-block")
+        ?.getState(),
+    ).toBe("open");
+  });
+
+  it("snaps back when the user seeks past an unanswered blocking hook", () => {
+    const harness = makeHarness(10);
+    const { adapter } = harness;
+    const hook = renderHook((props) => useInteractiveMedia(props), {
+      initialProps: harness.props,
+    });
+    adapter.currentTime = 2;
+    tick(adapter);
+    act(() => void adapter.play());
+
+    // A user seek changes the element's time directly (not adapter.seek).
+    adapter.currentTime = 25;
+    tick(adapter);
+    tick(adapter);
+
+    expect(adapter.currentTime).toBe(10);
+    expect(adapter.isPlaying).toBe(false);
+    expect(
+      hook.result.current.controller?.getRenderState(10)
+        .activeBlockingContentId,
+    ).toBe("quiz-block");
+  });
+
+  it("does not snap back when the host resumes past a hook via adapter.seek", () => {
+    const harness = makeHarness(10);
+    const { adapter } = harness;
+    const hook = renderHook((props) => useInteractiveMedia(props), {
+      initialProps: harness.props,
+    });
+    tick(adapter);
+
+    act(() => void adapter.seek(30));
+    tick(adapter);
+    act(() => void adapter.play());
+    adapter.currentTime = 30.016;
+    tick(adapter);
+
+    expect(adapter.currentTime).toBe(30.016);
+    expect(adapter.isPlaying).toBe(true);
     expect(
       hook.result.current.items
         ?.find((i) => i.getId() === "quiz-block")
@@ -532,8 +583,7 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     playSpy.mockClear();
     act(() => void fireEvent.click(option));
     act(
-      () =>
-        void fireEvent.click(screen.getByRole("button", { name: "Next" })),
+      () => void fireEvent.click(screen.getByRole("button", { name: "Next" })),
     );
 
     // Completion feedback shows, but playback stays PAUSED until the user
@@ -553,6 +603,27 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     expect(playSpy).toHaveBeenCalledTimes(1);
     expect(adapter.isPlaying).toBe(true);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("re-pauses when playback is started from outside while a blocking quiz shows", () => {
+    const harness = makeHarness(10);
+    const { adapter } = harness;
+    render(<InteractiveVideoPlayer {...harness.props} />);
+    act(() => void vi.advanceTimersByTime(TICK_MS));
+
+    walkIntoBlockingWindow(adapter, 10);
+    tick(adapter);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Native controls resume on scrub release: a user play the player did
+    // not initiate.
+    act(() => {
+      adapter.isPlaying = true;
+      adapter.emit("play");
+    });
+
+    expect(adapter.isPlaying).toBe(false);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("plays a canonical rich-media quiz through the full component", async () => {
@@ -578,8 +649,7 @@ describe("useInteractiveMedia runtime end-to-end", () => {
     playSpy.mockClear();
     act(() => void fireEvent.click(option));
     act(
-      () =>
-        void fireEvent.click(screen.getByRole("button", { name: "Next" })),
+      () => void fireEvent.click(screen.getByRole("button", { name: "Next" })),
     );
 
     // Completion feedback shows, but playback stays PAUSED until Continue.
