@@ -79,6 +79,20 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     }
   }, [renderState.activeBlockingContentId]);
 
+  // Keep playback paused while content is on screen. Play can be started
+  // from outside the player: native controls resume playback when a timeline
+  // scrub is released, even after a snap-back paused the video. Continue and
+  // Skip clear the ref before resuming, since their state updates land later.
+  const overlayShowingRef = useRef(false);
+  overlayShowingRef.current = (activeContentId ?? completingId) !== null;
+  useEffect(
+    () =>
+      adapter.on("play", () => {
+        if (overlayShowingRef.current) adapter.pause();
+      }),
+    [adapter],
+  );
+
   const handleContentComplete = useCallback(
     (score?: number) => {
       if (!controller || !activeContentId) return;
@@ -99,6 +113,7 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   const handleContinueAfterCompletion = useCallback(() => {
     setCompletingId(null);
     setCompletingScore(undefined);
+    overlayShowingRef.current = false;
     void adapter.play();
   }, [adapter]);
 
@@ -172,6 +187,7 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
               );
               item?.skip();
               setActiveContentId(null);
+              overlayShowingRef.current = false;
               void adapter.play();
             }}
             onContentComplete={handleContentComplete}

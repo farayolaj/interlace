@@ -85,6 +85,13 @@ export function useInteractiveMedia(options: UseInteractiveMediaOptions) {
       isPlayingRef.current = true;
     });
 
+    // Seeks made through adapter.seek() (resume, snap-back) are not the user
+    // skipping ahead, so move the controller's baseline instead of letting
+    // the next tick treat the jump as a skip.
+    const unsubscribeProgrammaticSeek = adapter.on("programmaticSeek", () => {
+      controller.setPosition(adapter.getCurrentTime());
+    });
+
     // Wire controller commands to adapter
     const unsubscribeRequestPause = controller.on("requestPause", () => {
       adapter.pause();
@@ -97,6 +104,7 @@ export function useInteractiveMedia(options: UseInteractiveMediaOptions) {
     return () => {
       unsubscribePause();
       unsubscribePlaying();
+      unsubscribeProgrammaticSeek();
       unsubscribeRequestPause();
       unsubscribeRequestSeek();
     };

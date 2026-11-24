@@ -7,7 +7,8 @@ export type VideoAdapterEventType =
   | "play"
   | "buffering"
   | "waiting"
-  | "seek";
+  | "seek"
+  | "programmaticSeek";
 
 export interface VideoAdapterEvent {
   type: VideoAdapterEventType;
@@ -26,6 +27,9 @@ export interface VideoAdapter {
 
   /**
    * Seek to a specific time (in seconds).
+   * Must emit "programmaticSeek" synchronously once the new time is readable
+   * from getCurrentTime(), so the player can tell the jump apart from a user
+   * skipping ahead (e.g. resuming from a saved position).
    */
   seek(timeInSeconds: number): void;
 
@@ -49,6 +53,8 @@ export interface VideoAdapter {
   /**
    * Register a listener for adapter events.
    * The adapter must emit events for pause, buffering, waiting, and seek.
+   * "seek" is for user-driven seeks only; seeks made through seek() emit
+   * "programmaticSeek" instead.
    *
    * Note: Self-triggered events (resulting from the library's own play/pause/seek calls)
    * must be distinguished and ignored to avoid feedback loops. Use createProgrammaticActionGuard()

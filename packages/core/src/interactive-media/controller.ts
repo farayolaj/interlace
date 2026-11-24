@@ -83,7 +83,21 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
       return; // No time advance, skip hook checks
     }
 
+    const previousTime = this.lastTickTime;
     this.lastTickTime = currentTime;
+
+    // A forward jump past unfinished blocking content (a seek, a scrub while
+    // paused, or a dropped frame) must not skip it. Checked here rather than
+    // only in handleUserSeek because a tick can observe the new time before
+    // the adapter's seek event arrives. The first tick only sets the baseline,
+    // so a host that seeks before ticking starts (e.g. resume) is not snapped.
+    if (
+      previousTime >= 0 &&
+      currentTime > previousTime &&
+      this.snapBackToBlocking(previousTime, currentTime)
+    ) {
+      return;
+    }
 
     // Check for video end
     if (currentTime >= this.videoEndsAt && !this.hasEnded) {
@@ -101,23 +115,18 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
    * Handle user-initiated seek. Implements snap-back and rewind rules.
    */
   handleUserSeek(targetTime: number): void {
-    const currentTime = this.lastTickTime;
+    // tick() snaps forward jumps back to unfinished blocking content.
+    this.tick(targetTime, targetTime > this.lastTickTime);
+  }
 
-    if (targetTime > currentTime) {
-      // Forward seek: snap back to earliest unfinished blocking content
-      const earliestBlockingTime = this.findEarliestUnfinishedBlockingTime(
-        currentTime,
-        targetTime,
-      );
-      if (earliestBlockingTime !== undefined) {
-        // Snap back
-        this.emit("requestSeek", { timeInSeconds: earliestBlockingTime });
-        return;
-      }
-    }
-
-    // Proceed with the seek
-    this.tick(targetTime, targetTime > currentTime);
+  /**
+   * Move the playhead baseline without enforcing hooks, for programmatic
+   * jumps such as resuming from a saved position. The player calls this on
+   * the adapter's "programmaticSeek" event, so hosts using adapter.seek()
+   * never need to call it themselves.
+   */
+  setPosition(timeInSeconds: number): void {
+    this.lastTickTime = Math.max(0, Math.min(timeInSeconds, this.videoEndsAt));
   }
 
   /**
@@ -217,6 +226,34 @@ export class InteractiveMediaController extends EventEmitter<InteractiveMediaCon
     }
 
     return earliest;
+  }
+
+  /**
+   * If unfinished blocking content lies in (fromTime, toTime] and toTime is
+   * past its frame, open it, pause, and seek back to it. Returns whether it
+   * snapped back.
+   */
+  private snapBackToBlocking(fromTime: number, toTime: number): boolean {
+    const timestamp = this.findEarliestUnfinishedBlockingTime(fromTime, toTime);
+    if (timestamp === undefined || Math.abs(toTime - timestamp) < 0.016) {
+      return false; // Nothing crossed, or still in frame: transition() handles it
+    }
+
+    for (const item of this.items) {
+      const hook = item.getHook();
+      if (
+        isBlockingHook(hook) &&
+        hook.timestamp === timestamp &&
+        item.getState() !== ContentState.COMPLETED
+      ) {
+        item.open(); // No-op if already open (dismissed without completing)
+      }
+    }
+
+    this.lastTickTime = timestamp;
+    this.emit("requestPause", {});
+    this.emit("requestSeek", { timeInSeconds: timestamp });
+    return true;
   }
 
   /**
