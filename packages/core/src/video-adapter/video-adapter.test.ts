@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ProgrammaticActionGuard } from "./types";
+import {
+  ProgrammaticActionGuard,
+  supportsQuality,
+  type VideoAdapter,
+} from "./types";
 
 describe("ProgrammaticActionGuard", () => {
   it("allows ignoring marked actions", () => {
@@ -49,5 +53,38 @@ describe("ProgrammaticActionGuard", () => {
     guard.markAsTriggered("seek");
     expect(guard.shouldIgnore("seek")).toBe(true);
     expect(guard.shouldIgnore("seek")).toBe(false);
+  });
+});
+
+describe("supportsQuality", () => {
+  const base: VideoAdapter = {
+    play: () => {},
+    pause: () => {},
+    seek: () => {},
+    getCurrentTime: () => 0,
+    getDuration: () => 0,
+    mountOverlay: () => {},
+    on: () => () => {},
+  };
+
+  it("is false for adapters without the quality capability", () => {
+    expect(supportsQuality(base)).toBe(false);
+  });
+
+  it("is false when only part of the capability is implemented", () => {
+    expect(
+      supportsQuality({ ...base, getQualityLevels: () => [] } as VideoAdapter),
+    ).toBe(false);
+  });
+
+  it("is true for adapters implementing every quality method", () => {
+    const adapter = {
+      ...base,
+      getQualityLevels: () => [],
+      getQualityLevel: () => -1,
+      getActiveQualityLevel: () => null,
+      setQualityLevel: () => {},
+    };
+    expect(supportsQuality(adapter)).toBe(true);
   });
 });

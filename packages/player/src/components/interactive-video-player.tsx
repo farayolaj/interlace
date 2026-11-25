@@ -4,6 +4,7 @@ import {
   type InterlaceTheme,
   RenderState,
   SerializedInteractiveMediaDocument,
+  supportsQuality,
   themeToCssVariables,
   VideoAdapter,
 } from "@interlacejs/core";
@@ -13,6 +14,10 @@ import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
 import { BlockingOverlay } from "./blocking-overlay";
 import { ContentErrorBoundary } from "./content-error-boundary";
 import { OverlayLayer } from "./overlay-layer";
+import { QualityControl, type QualityControlStrings } from "./quality-control";
+
+/** UI strings of the player (English defaults). */
+export type InteractiveVideoPlayerStrings = QualityControlStrings;
 
 export interface InteractiveVideoPlayerProps {
   adapter: VideoAdapter;
@@ -27,6 +32,14 @@ export interface InteractiveVideoPlayerProps {
   theme?: InterlaceTheme;
   /** Extra class name for the player's root element. */
   className?: string;
+  /**
+   * Show the built-in quality control (top-right of the video frame) when
+   * the adapter supports quality and reports at least two levels.
+   * Defaults to true.
+   */
+  showQualityControl?: boolean;
+  /** Overrides for the player's UI strings. */
+  strings?: Partial<InteractiveVideoPlayerStrings>;
 }
 
 /**
@@ -44,6 +57,8 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   onError,
   theme,
   className,
+  showQualityControl = true,
+  strings,
 }) => {
   const [renderState, setRenderState] = useState<RenderState>({
     visibleAnchorIds: [],
@@ -197,7 +212,12 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
           renderState={renderState}
           items={overlayItems}
           onAnchorClick={handleAnchorClick}
-        />
+        >
+          {/* Hidden while content covers the video. */}
+          {showQualityControl && !activeItem && supportsQuality(adapter) && (
+            <QualityControl adapter={adapter} strings={strings} />
+          )}
+        </OverlayLayer>
 
         {activeItem && activeContentType && (
           <BlockingOverlay
