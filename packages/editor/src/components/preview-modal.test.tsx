@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import {
@@ -173,9 +179,7 @@ describe("PreviewModal", () => {
         onClose={vi.fn()}
       />,
     );
-    expect(
-      screen.queryByTestId("preview-modal-video"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preview-modal-video")).not.toBeInTheDocument();
 
     rerender(
       <PreviewModal
@@ -210,9 +214,7 @@ describe("PreviewModal", () => {
         onClose={vi.fn()}
       />,
     );
-    expect(
-      screen.queryByTestId("preview-modal-video"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preview-modal-video")).not.toBeInTheDocument();
   });
 
   it("applies string overrides to the title and loading label", () => {
@@ -263,9 +265,53 @@ describe("PreviewModal", () => {
     render(<Harness />);
     fireEvent.click(screen.getByText("change"));
     // The effect re-runs and the video element's src attribute updates.
-    const video = screen.getByTestId(
-      "preview-modal-video",
-    ) as HTMLVideoElement;
+    const video = screen.getByTestId("preview-modal-video") as HTMLVideoElement;
     expect(video.src).toContain("other.mp4");
+  });
+
+  it("plays playbackSrc instead of videoSrc", () => {
+    render(
+      <PreviewModal
+        isOpen
+        videoSrc={VIDEO_SRC}
+        playbackSrc="https://example.com/stream.m3u8"
+        document={makeDocument()}
+        contentTypeRegistry={makeRegistry()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("preview-modal-video").getAttribute("src")).toBe(
+      "https://example.com/stream.m3u8",
+    );
+  });
+
+  it("attaches through attachMedia on open, keeps the adapter, and cleans up on close", async () => {
+    const cleanup = vi.fn();
+    const attachMedia = vi.fn(() => cleanup);
+    const props = {
+      videoSrc: VIDEO_SRC,
+      playbackSrc: "https://example.com/stream.m3u8",
+      attachMedia,
+      document: makeDocument(),
+      contentTypeRegistry: makeRegistry(),
+      onClose: vi.fn(),
+    };
+    const { rerender } = render(<PreviewModal isOpen={false} {...props} />);
+    expect(attachMedia).not.toHaveBeenCalled();
+
+    rerender(<PreviewModal isOpen {...props} />);
+    const video = screen.getByTestId("preview-modal-video");
+    expect(video.hasAttribute("src")).toBe(false);
+    expect(attachMedia).toHaveBeenCalledTimes(1);
+    expect(attachMedia).toHaveBeenCalledWith(
+      video,
+      "https://example.com/stream.m3u8",
+    );
+    expect(
+      await screen.findByTestId("preview-modal-player-container"),
+    ).toBeInTheDocument();
+
+    rerender(<PreviewModal isOpen={false} {...props} />);
+    expect(cleanup).toHaveBeenCalledTimes(1);
   });
 });

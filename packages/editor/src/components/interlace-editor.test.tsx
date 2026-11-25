@@ -1690,6 +1690,190 @@ describe("InterlaceEditor", () => {
   });
 });
 
+describe("InterlaceEditor playback source", () => {
+  const HLS_SRC = "https://example.com/stream/master.m3u8";
+
+  it("plays playbackSrc instead of the document src but saves the document src", () => {
+    const onSave = vi.fn();
+    const onDirtyChange = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        playbackSrc={HLS_SRC}
+        onUpload={vi.fn(async () => "x")}
+        onSave={onSave}
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+
+    const video = screen.getByTestId(
+      "interlace-editor-preview-video",
+    ) as HTMLVideoElement;
+    expect(video.getAttribute("src")).toBe(HLS_SRC);
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    const doc = onSave.mock.calls[0]?.[0] as SerializedInteractiveMediaDocument;
+    expect(doc.video.src).toBe(VIDEO_SRC);
+  });
+
+  it("sets the src attribute to the document src without attachMedia", () => {
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByTestId("interlace-editor-preview-video").getAttribute("src"),
+    ).toBe(VIDEO_SRC);
+  });
+
+  it("calls attachMedia with the video element and playbackSrc instead of setting src", () => {
+    const attachMedia = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        playbackSrc={HLS_SRC}
+        attachMedia={attachMedia}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const video = screen.getByTestId("interlace-editor-preview-video");
+    expect(video.hasAttribute("src")).toBe(false);
+    expect(attachMedia).toHaveBeenCalledTimes(1);
+    expect(attachMedia).toHaveBeenCalledWith(video, HLS_SRC);
+  });
+
+  it("attaches the document src when only attachMedia is given", () => {
+    const attachMedia = vi.fn();
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        attachMedia={attachMedia}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(attachMedia).toHaveBeenCalledWith(
+      screen.getByTestId("interlace-editor-preview-video"),
+      VIDEO_SRC,
+    );
+  });
+
+  it("cleans up before re-attaching on a source change and on unmount", () => {
+    const cleanups: Array<ReturnType<typeof vi.fn>> = [];
+    const attachMedia = vi.fn(() => {
+      const cleanup = vi.fn();
+      cleanups.push(cleanup);
+      return cleanup;
+    });
+    const props = {
+      contentTypeRegistry: makeRegistry(),
+      document: makeDocument(),
+      onUpload: vi.fn(async () => "x"),
+      onSave: vi.fn(),
+    };
+    const { rerender, unmount } = render(
+      <InterlaceEditor
+        {...props}
+        playbackSrc={HLS_SRC}
+        attachMedia={attachMedia}
+      />,
+    );
+    const video = screen.getByTestId("interlace-editor-preview-video");
+
+    // A new loader identity alone does not re-attach.
+    rerender(
+      <InterlaceEditor
+        {...props}
+        playbackSrc={HLS_SRC}
+        attachMedia={(v, s) => attachMedia(v, s)}
+      />,
+    );
+    expect(attachMedia).toHaveBeenCalledTimes(1);
+
+    const NEXT = "https://example.com/stream/saver.m3u8";
+    rerender(
+      <InterlaceEditor
+        {...props}
+        playbackSrc={NEXT}
+        attachMedia={attachMedia}
+      />,
+    );
+    expect(cleanups[0]).toHaveBeenCalledTimes(1);
+    expect(attachMedia).toHaveBeenCalledTimes(2);
+    // Same element: a playback-src change does not remount the video.
+    expect(attachMedia).toHaveBeenLastCalledWith(video, NEXT);
+    expect(screen.getByTestId("interlace-editor-preview-video")).toBe(video);
+
+    unmount();
+    expect(cleanups[1]).toHaveBeenCalledTimes(1);
+  });
+
+  it("detaches while the source step is shown and re-attaches on cancel", () => {
+    const cleanup = vi.fn();
+    const attachMedia = vi.fn(() => cleanup);
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        attachMedia={attachMedia}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
+    expect(cleanup).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("interlace-editor-cancel-replace"));
+    expect(attachMedia).toHaveBeenCalledTimes(2);
+    expect(attachMedia).toHaveBeenLastCalledWith(
+      screen.getByTestId("interlace-editor-preview-video"),
+      VIDEO_SRC,
+    );
+  });
+
+  it("uses the same loader for the preview and cleans it up on close", async () => {
+    const previewCleanup = vi.fn();
+    const attachMedia = vi.fn(
+      (video: HTMLVideoElement): (() => void) | undefined =>
+        video.dataset.testid === "preview-modal-video"
+          ? previewCleanup
+          : undefined,
+    );
+    render(
+      <InterlaceEditor
+        contentTypeRegistry={makeRegistry()}
+        document={makeDocument()}
+        playbackSrc={HLS_SRC}
+        attachMedia={attachMedia}
+        onUpload={vi.fn(async () => "x")}
+        onSave={vi.fn()}
+      />,
+    );
+    (
+      screen.getByTestId("interlace-editor-preview-video") as HTMLVideoElement
+    ).pause = vi.fn();
+
+    fireEvent.click(screen.getByTestId("interlace-editor-open-preview"));
+    const previewVideo = await screen.findByTestId("preview-modal-video");
+    expect(previewVideo.hasAttribute("src")).toBe(false);
+    expect(attachMedia).toHaveBeenCalledWith(previewVideo, HLS_SRC);
+
+    fireEvent.click(screen.getByTestId("preview-modal-close"));
+    await waitFor(() => expect(previewCleanup).toHaveBeenCalledTimes(1));
+  });
+});
+
 describe("InterlaceEditor onDirtyChange", () => {
   const lastDirty = (fn: ReturnType<typeof vi.fn>) =>
     fn.mock.calls[fn.mock.calls.length - 1]?.[0];

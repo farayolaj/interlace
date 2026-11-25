@@ -70,6 +70,33 @@ All Interlace UI (editor, player and quiz) draws its colours, fonts and corner r
 
 3. **Class names.** Controls carry stable classes (`interlace-btn`, `interlace-btn--primary|secondary|ghost|danger`, `interlace-input`, `interlace-field`, `interlace-label`, `interlace-choice`, `interlace-badge`), and the root takes a `className`. The built-in rules use zero-specificity `:where()` selectors, so your own rules for these classes win without `!important`.
 
+## Playing a different source (HLS)
+
+The document keeps its original `video.src` (e.g. the uploaded MP4), but you can author against another stream. `playbackSrc` replaces the source played by the authoring video and the preview; it is never written into the document or the `onSave` output and does not mark the editor dirty.
+
+For formats the browser can't play natively, pass `attachMedia`. The editor then leaves the `<video>`'s `src` attribute unset and calls `attachMedia(video, playbackSrc ?? document src)` for the authoring video and for the preview's video, calling the returned cleanup before re-attaching (source change, video replaced) and on unmount or preview close. Interlace does not depend on hls.js; you bring the loader:
+
+```tsx
+import Hls from "hls.js";
+import type { MediaAttacher } from "@interlacejs/editor";
+
+const attachMedia: MediaAttacher = (video, src) => {
+  const hls = new Hls();
+  hls.attachMedia(video);
+  hls.loadSource(src);
+  return () => hls.destroy();
+};
+
+<InterlaceEditor
+  document={doc} // doc.video.src stays the MP4
+  playbackSrc={hlsUrl}
+  attachMedia={attachMedia}
+  /* … */
+/>;
+```
+
+A new `attachMedia` function on each render does not re-attach; only a change of source or video element does.
+
 ## Saving
 
 Save is blocked while any hook needs attention: no title, no content type yet, or problems reported by the content type's `validate()`. The editor lists them with links to each hook. Hooks without a content type are kept as drafts on the timeline until you finish or delete them.
