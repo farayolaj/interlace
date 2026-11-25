@@ -1,5 +1,16 @@
 # @interlace/editor
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [c7fa8c1]
+- Updated dependencies [c7fa8c1]
+  - @interlacejs/core@0.3.0
+  - @interlacejs/player@0.3.0
+  - @interlacejs/native-adapter@0.0.6
+  - @interlacejs/quiz@0.2.2
+
 ## 1.3.0
 
 ### Minor Changes

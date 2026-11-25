@@ -1,5 +1,12 @@
 # @interlace/quiz
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [c7fa8c1]
+  - @interlacejs/core@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes

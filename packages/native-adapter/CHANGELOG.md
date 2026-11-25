@@ -1,5 +1,12 @@
 # @interlace/native-adapter
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [c7fa8c1]
+  - @interlacejs/core@0.3.0
+
 ## 0.0.5
 
 ### Patch Changes
