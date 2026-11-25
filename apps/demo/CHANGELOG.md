@@ -1,5 +1,12 @@
 # @interlace/demo
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [75102d5]
+  - @interlacejs/editor@1.2.1
+
 ## 0.0.6
 
 ### Patch Changes

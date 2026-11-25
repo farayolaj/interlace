@@ -1,5 +1,11 @@
 # @interlace/editor
 
+## 1.2.1
+
+### Patch Changes
+
+- 75102d5: The timeline's last ruler label no longer overflows the strip, which made the timeline scroll sideways even when the whole video fit.
+
 ## 1.2.0
 
 ### Minor Changes
