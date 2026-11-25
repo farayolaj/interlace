@@ -12,6 +12,7 @@ import {
   type ContentType,
   type SerializedInteractiveMediaDocument,
 } from "@interlacejs/core";
+import { NativeVideoAdapter } from "@interlacejs/native-adapter";
 import { PreviewModal } from "./preview-modal";
 
 afterEach(() => {
@@ -313,5 +314,39 @@ describe("PreviewModal", () => {
 
     rerender(<PreviewModal isOpen={false} {...props} />);
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+  it("uses createVideoAdapter instead of attachMedia and destroys it on close", async () => {
+    const attachMedia = vi.fn();
+    const created: NativeVideoAdapter[] = [];
+    const createVideoAdapter = vi.fn((video: HTMLVideoElement) => {
+      const adapter = new NativeVideoAdapter(video);
+      vi.spyOn(adapter, "destroy");
+      created.push(adapter);
+      return adapter;
+    });
+    const props = {
+      videoSrc: VIDEO_SRC,
+      playbackSrc: "https://example.com/stream.m3u8",
+      attachMedia,
+      createVideoAdapter,
+      document: makeDocument(),
+      contentTypeRegistry: makeRegistry(),
+      onClose: vi.fn(),
+    };
+    const { rerender } = render(<PreviewModal isOpen {...props} />);
+    const video = screen.getByTestId("preview-modal-video");
+    expect(video.hasAttribute("src")).toBe(false);
+    expect(createVideoAdapter).toHaveBeenCalledWith(
+      video,
+      "https://example.com/stream.m3u8",
+    );
+    expect(attachMedia).not.toHaveBeenCalled();
+    expect(
+      await screen.findByTestId("preview-modal-player-container"),
+    ).toBeInTheDocument();
+
+    rerender(<PreviewModal isOpen={false} {...props} />);
+    expect(created).toHaveLength(1);
+    expect(created[0]!.destroy).toHaveBeenCalledTimes(1);
   });
 });

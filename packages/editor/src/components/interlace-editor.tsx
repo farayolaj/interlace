@@ -10,8 +10,10 @@ import {
   Placement,
   SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
+  supportsQuality,
   themeToCssVariables,
 } from "@interlacejs/core";
+import { QualityControl } from "@interlacejs/player";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
@@ -26,6 +28,7 @@ import type { VideoSourceInputStrings } from "./video-source-input";
 import { VideoSourceInput } from "./video-source-input";
 import { Button, IssueList, SectionHeading, useInterlaceStyles } from "./ui";
 import { type MediaAttacher, useAttachMedia } from "./use-attach-media";
+import { type VideoAdapterFactory, useVideoAdapter } from "./use-video-adapter";
 
 /**
  * Editor-local strings layered on top of the core `Strings`. Hosts pass
@@ -226,6 +229,16 @@ export interface InterlaceEditorProps {
    * alone does not re-attach.
    */
   attachMedia?: MediaAttacher;
+  /**
+   * Host-supplied video adapter factory (e.g.
+   * `(video, src) => new HlsVideoAdapter(video, { src })`). When provided,
+   * the editor creates an adapter for the authoring video and for the
+   * preview with `src = playbackSrc ?? document src`, and destroys it on
+   * source change, close and unmount; `attachMedia` is then ignored. An
+   * adapter that supports quality levels gets the player's quality control
+   * in the authoring video's top-right corner (and in the preview).
+   */
+  createVideoAdapter?: VideoAdapterFactory;
 }
 
 const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
@@ -482,6 +495,7 @@ export function InterlaceEditor({
   onError,
   playbackSrc,
   attachMedia,
+  createVideoAdapter,
 }: InterlaceEditorProps) {
   const strings = { ...DEFAULT_EDITOR_STRINGS, ...stringsOverride };
   const {
@@ -549,7 +563,19 @@ export function InterlaceEditor({
   const pendingSeekRef = useRef<number | null>(null);
   /** What the authoring video plays; never serialized. */
   const srcToPlay = playbackSrc ?? state.videoSrc;
-  useAttachMedia(videoRef, srcToPlay, attachMedia, onError);
+  useAttachMedia(
+    videoRef,
+    srcToPlay,
+    createVideoAdapter ? undefined : attachMedia,
+    onError,
+  );
+  const authoringAdapter = useVideoAdapter(
+    videoRef,
+    srcToPlay,
+    createVideoAdapter,
+    onError,
+  );
+  const hostLoadsMedia = Boolean(attachMedia || createVideoAdapter);
 
   // Load the initial document once per document identity. The effect is
   // keyed on the document only (not the registry) so a consumer that
@@ -1378,6 +1404,10 @@ export function InterlaceEditor({
         data-testid="interlace-editor-video"
         style={{
           position: "relative",
+          // Column flex: an adapter's inline-block wrapper around the
+          // <video> would otherwise add a line-height gap below it.
+          display: "flex",
+          flexDirection: "column",
           borderRadius: RADIUS.md,
           overflow: "hidden",
           backgroundColor: COLORS.black,
@@ -1386,31 +1416,39 @@ export function InterlaceEditor({
         {/*
           Keyed on the document src only: a playback-src change re-attaches
           on the same element (no remount, so a host's player instance is
-          only torn down through its cleanup).
+          only torn down through its cleanup). The key sits on a container
+          because an adapter may move the <video> into its own wrapper.
         */}
-        <video
-          ref={videoRef}
-          key={state.videoSrc}
-          src={attachMedia ? undefined : srcToPlay}
-          controls
-          preload="metadata"
-          onLoadedMetadata={(e) =>
-            handlePreviewLoadedMetadata(e.currentTarget.duration)
-          }
-          onTimeUpdate={handleTimeUpdate}
-          data-testid="interlace-editor-preview-video"
-          style={{
-            width: "100%",
-            height: "auto",
-            display: "block",
-            backgroundColor: COLORS.black,
-          }}
-        />
+        <div key={state.videoSrc} style={{ display: "contents" }}>
+          <video
+            ref={videoRef}
+            src={hostLoadsMedia ? undefined : srcToPlay}
+            controls
+            preload="metadata"
+            onLoadedMetadata={(e) =>
+              handlePreviewLoadedMetadata(e.currentTarget.duration)
+            }
+            onTimeUpdate={handleTimeUpdate}
+            data-testid="interlace-editor-preview-video"
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              backgroundColor: COLORS.black,
+            }}
+          />
+        </div>
         {selectedHook ? (
           <PlacementEditor
             placement={selectedHook.placement}
             onPlacementChange={handlePlacementChange}
           />
+        ) : null}
+        {/* Hidden while placing a hook: the gear would cover its handles. */}
+        {!selectedHook &&
+        authoringAdapter &&
+        supportsQuality(authoringAdapter) ? (
+          <QualityControl adapter={authoringAdapter} />
         ) : null}
       </div>
       <EditorVideoToolbar
@@ -1630,6 +1668,7 @@ export function InterlaceEditor({
         videoSrc={state.videoSrc}
         playbackSrc={playbackSrc}
         attachMedia={attachMedia}
+        createVideoAdapter={createVideoAdapter}
         document={previewDocument}
         contentTypeRegistry={contentTypeRegistry}
         onClose={handleClosePreview}

@@ -97,6 +97,28 @@ const attachMedia: MediaAttacher = (video, src) => {
 
 A new `attachMedia` function on each render does not re-attach; only a change of source or video element does.
 
+### Video adapters (HLS with a quality menu)
+
+Pass `createVideoAdapter` to let an adapter load the video instead. The editor calls it with the `<video>` and `playbackSrc ?? document src` for the authoring video and for the preview, and destroys the adapter on a source change, preview close and unmount; `attachMedia` is then ignored. If the adapter supports quality levels (like `HlsVideoAdapter`), the authoring video gets the player's quality control in its top-right corner, as the preview does.
+
+```tsx
+import { HlsVideoAdapter } from "@interlacejs/hls-adapter";
+
+<InterlaceEditor
+  {...props}
+  playbackSrc={hlsUrl}
+  createVideoAdapter={(video, src) =>
+    new HlsVideoAdapter(video, {
+      src,
+      fallbackSrc: mp4Url,
+      rememberQualityKey: "my-app:video-quality",
+    })
+  }
+/>;
+```
+
+As with `attachMedia`, a new function on each render does not re-create the adapter.
+
 ## Saving
 
 Save is blocked while any hook needs attention: no title, no content type yet, or problems reported by the content type's `validate()`. The editor lists them with links to each hook. Hooks without a content type are kept as drafts on the timeline until you finish or delete them.
