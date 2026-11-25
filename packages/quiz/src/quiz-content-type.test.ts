@@ -66,10 +66,10 @@ describe("QuizContentType.validate", () => {
     };
     expect(QuizContentType.validate?.(data)).toEqual([
       "Question 1 needs text",
-      "Question 1 needs at least 2 answers",
+      "Question 1 needs at least 2 options",
       "Question 1 needs a correct answer",
-      "Question 2, answer 3 needs text",
-      "Question 3 needs at least 2 answers",
+      "Question 2, option 3 needs text",
+      "Question 3 needs at least 2 options",
       "Question 3 needs a correct answer",
     ]);
   });

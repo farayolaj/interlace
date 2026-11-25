@@ -119,40 +119,40 @@ describe("QuizEditorType", () => {
     expect(
       query<HTMLInputElement>(container, ".quiz-question").className,
     ).toContain("interlace-input");
-    const removeAnswer = query<HTMLButtonElement>(
+    const removeOption = query<HTMLButtonElement>(
       container,
       ".quiz-option-remove",
     );
-    expect(removeAnswer.className).toContain("interlace-btn--ghost");
-    expect(removeAnswer.className).not.toContain("interlace-btn--danger");
+    expect(removeOption.className).toContain("interlace-btn--ghost");
+    expect(removeOption.className).not.toContain("interlace-btn--danger");
   });
 
-  it("labels the question, answers section and each answer", () => {
+  it("labels the question, options section and each option", () => {
     const { container } = mountEditor(CANONICAL);
     expect(getByLabelText(container, "Question")).toBe(
       query(container, ".quiz-question"),
     );
-    const answerInputs = container.querySelectorAll(".quiz-option-text");
-    answerInputs.forEach((input, i) => {
-      expect(getByLabelText(container, `Answer ${i + 1}`)).toBe(input);
-      expect((input as HTMLInputElement).placeholder).toBe("Answer text");
+    const optionInputs = container.querySelectorAll(".quiz-option-text");
+    optionInputs.forEach((input, i) => {
+      expect(getByLabelText(container, `Option ${i + 1}`)).toBe(input);
+      expect((input as HTMLInputElement).placeholder).toBe("Option text");
     });
-    expect(query(container, ".quiz-answers-heading").textContent).toBe(
-      "Answers",
+    expect(query(container, ".quiz-options-heading").textContent).toBe(
+      "Options",
     );
-    expect(query(container, ".quiz-answers-hint").textContent).toBe(
+    expect(query(container, ".quiz-options-hint").textContent).toBe(
       "Select the correct answer.",
     );
     const group = query(container, '[role="radiogroup"]');
     expect(group.getAttribute("aria-labelledby")).toBe(
-      query(container, ".quiz-answers-heading").id,
+      query(container, ".quiz-options-heading").id,
     );
     expect(
       radiosOf(container).map((r) => r.getAttribute("aria-label")),
     ).toEqual([
-      "Mark answer 1 as correct",
-      "Mark answer 2 as correct",
-      "Mark answer 3 as correct",
+      "Mark option 1 as correct",
+      "Mark option 2 as correct",
+      "Mark option 3 as correct",
     ]);
   });
 
@@ -300,7 +300,7 @@ describe("QuizEditorType", () => {
     expect(container.querySelectorAll(".quiz-question-tab").length).toBe(1);
   });
 
-  it("adds an answer with a generated id via the Add answer button", () => {
+  it("adds an option with a generated id via the Add option button", () => {
     const { container, onChange } = mountEditor(CANONICAL);
     const add = query<HTMLButtonElement>(container, ".quiz-add-option");
     add.click();
@@ -349,7 +349,7 @@ describe("QuizEditorType", () => {
     ]);
   });
 
-  it("disables answer removal below two answers", () => {
+  it("disables option removal below two options", () => {
     const { container } = mountEditor(MULTI);
     const removes = container.querySelectorAll<HTMLButtonElement>(
       ".quiz-option-remove",
@@ -357,8 +357,8 @@ describe("QuizEditorType", () => {
     expect(removes.length).toBe(2);
     removes.forEach((button, i) => {
       expect(button.disabled).toBe(true);
-      expect(button.title).toBe("A question needs at least 2 answers");
-      expect(button.getAttribute("aria-label")).toBe(`Remove answer ${i + 1}`);
+      expect(button.title).toBe("A question needs at least 2 options");
+      expect(button.getAttribute("aria-label")).toBe(`Remove option ${i + 1}`);
     });
   });
 
@@ -509,7 +509,7 @@ describe("QuizEditorType", () => {
     )[1];
     expect(secondRowPreview?.querySelector(".quiz-option-thumb")).toBeNull();
 
-    // Only the answer with media starts expanded.
+    // Only the option with media starts expanded.
     const panels = container.querySelectorAll<HTMLElement>(
       ".quiz-option-media-panel",
     );
@@ -519,7 +519,7 @@ describe("QuizEditorType", () => {
       container
         .querySelectorAll(".quiz-option-media-add")[1]
         ?.getAttribute("aria-label"),
-    ).toBe("Add image to answer 2");
+    ).toBe("Add image to option 2");
 
     // Emptying the src on the first option removes the thumbnail.
     const mediaSrcs = container.querySelectorAll(".quiz-option-media-src");
@@ -595,7 +595,7 @@ describe("QuizEditorType", () => {
     expect(question.hasAttribute("aria-describedby")).toBe(false);
   });
 
-  it("shows an answer error after blur and keeps it across updateEditor", () => {
+  it("shows an option error after blur and keeps it across updateEditor", () => {
     const { container, onChange } = mountEditor(CANONICAL);
     const answers =
       container.querySelectorAll<HTMLInputElement>(".quiz-option-text");
@@ -604,7 +604,7 @@ describe("QuizEditorType", () => {
 
     const errors =
       container.querySelectorAll<HTMLElement>(".quiz-option-error");
-    expect(errors[1]?.textContent).toBe("Answer 2 needs text");
+    expect(errors[1]?.textContent).toBe("Option 2 needs text");
     expect(answers[1]?.getAttribute("aria-invalid")).toBe("true");
     expect(answers[0]?.hasAttribute("aria-invalid")).toBe(false);
 

@@ -23,8 +23,8 @@ const quizEditorControllers = new WeakMap<HTMLElement, QuizEditorController>();
 /** Gives each mounted editor unique element ids and radio group names. */
 let editorInstanceCount = 0;
 
-/** Fewest answers a question may be reduced to via the remove buttons. */
-const MIN_ANSWERS = 2;
+/** Fewest options a question may be reduced to via the remove buttons. */
+const MIN_OPTIONS = 2;
 
 /** Builds a media ref from src/alt text; `undefined` when src is blank. */
 function buildMediaRef(src: string, alt: string): QuizMediaRef | undefined {
@@ -84,7 +84,7 @@ function nextQuestionId(questions: QuizQuestionSpec[], index: number): string {
 }
 
 /** An empty question stub so the form is never without a question. */
-/** A new question starts with the minimum of two answers, the first correct. */
+/** A new question starts with the minimum of two options, the first correct. */
 function emptyQuestion(id: string): QuizQuestionSpec {
   return {
     id,
@@ -342,10 +342,10 @@ interface OptionRow {
  * Builds the quiz authoring form once and returns a controller whose
  * `syncTo` patches inputs in place (preserving focus) instead of rebuilding
  * the DOM on every keystroke. The form has a question tab list (add,
- * select); the ACTIVE question's text, image and answers are edited in the
+ * select); the ACTIVE question's text, image and options are edited in the
  * tab panel below it, with the correct answer chosen by a radio on each
- * answer row. Switching the selected question rebuilds that question's
- * answer rows (an explicit action); within the active question, edits patch
+ * option row. Switching the selected question rebuilds that question's
+ * option rows (an explicit action); within the active question, edits patch
  * in place. All edits emit canonical multi-question {@link QuizData}.
  */
 function createQuizEditorController(
@@ -393,7 +393,7 @@ function createQuizEditorController(
     emit(questions);
   };
 
-  /** Stable state key for the active question (or one of its answers). */
+  /** Stable state key for the active question (or one of its options). */
   const activeKey = (optionIndex?: number): string => {
     const active = currentData.questions[selectedIndex];
     const questionKey = active?.id ?? `#${selectedIndex}`;
@@ -533,38 +533,38 @@ function createQuizEditorController(
   questionField.appendChild(questionMedia.root);
   body.appendChild(questionField);
 
-  // Answers: heading + hint, then one row per answer with a correct radio.
-  const answersSection = document.createElement("div");
-  answersSection.style.display = "flex";
-  answersSection.style.flexDirection = "column";
-  answersSection.style.gap = `${SPACE[2]}px`;
+  // Options: heading + hint, then one row per option with a correct radio.
+  const optionsSection = document.createElement("div");
+  optionsSection.style.display = "flex";
+  optionsSection.style.flexDirection = "column";
+  optionsSection.style.gap = `${SPACE[2]}px`;
 
-  const answersHeading = document.createElement("div");
-  answersHeading.id = `${uid}-answers-label`;
-  answersHeading.className = "interlace-label quiz-answers-heading";
-  answersHeading.textContent = "Answers";
-  answersHeading.style.fontSize = `${TYPE.sm}px`;
-  answersHeading.style.fontWeight = "600";
+  const optionsHeading = document.createElement("div");
+  optionsHeading.id = `${uid}-options-label`;
+  optionsHeading.className = "interlace-label quiz-options-heading";
+  optionsHeading.textContent = "Options";
+  optionsHeading.style.fontSize = `${TYPE.sm}px`;
+  optionsHeading.style.fontWeight = "600";
 
-  const answersHint = document.createElement("p");
-  answersHint.id = `${uid}-answers-hint`;
-  answersHint.className = "interlace-hint quiz-answers-hint";
-  answersHint.textContent = "Select the correct answer.";
-  answersHint.style.margin = "0";
-  answersHint.style.fontSize = `${TYPE.sm}px`;
-  answersHint.style.color = COLORS.textMuted;
+  const optionsHint = document.createElement("p");
+  optionsHint.id = `${uid}-options-hint`;
+  optionsHint.className = "interlace-hint quiz-options-hint";
+  optionsHint.textContent = "Select the correct answer.";
+  optionsHint.style.margin = "0";
+  optionsHint.style.fontSize = `${TYPE.sm}px`;
+  optionsHint.style.color = COLORS.textMuted;
 
   const optionsContainer = document.createElement("div");
   optionsContainer.className = "quiz-options";
   optionsContainer.setAttribute("role", "radiogroup");
-  optionsContainer.setAttribute("aria-labelledby", answersHeading.id);
-  optionsContainer.setAttribute("aria-describedby", answersHint.id);
+  optionsContainer.setAttribute("aria-labelledby", optionsHeading.id);
+  optionsContainer.setAttribute("aria-describedby", optionsHint.id);
   optionsContainer.style.display = "flex";
   optionsContainer.style.flexDirection = "column";
   optionsContainer.style.gap = `${SPACE[2]}px`;
 
   const addOptionButton = createButton(
-    "+ Add answer",
+    "+ Add option",
     "secondary",
     "quiz-add-option",
   );
@@ -591,13 +591,13 @@ function createQuizEditorController(
     });
   });
 
-  answersSection.append(
-    answersHeading,
-    answersHint,
+  optionsSection.append(
+    optionsHeading,
+    optionsHint,
     optionsContainer,
     addOptionButton,
   );
-  body.appendChild(answersSection);
+  body.appendChild(optionsSection);
 
   container.appendChild(root);
 
@@ -628,7 +628,7 @@ function createQuizEditorController(
     radio.value = option.id;
     radio.checked =
       option.id === currentData.questions[selectedIndex]?.correctOptionId;
-    radio.setAttribute("aria-label", `Mark answer ${number} as correct`);
+    radio.setAttribute("aria-label", `Mark option ${number} as correct`);
     radio.style.width = "18px";
     radio.style.height = "18px";
     radio.style.margin = "0";
@@ -647,12 +647,12 @@ function createQuizEditorController(
     const textInput = createInput(
       "quiz-option-text",
       `${idPrefix}-text`,
-      "Answer text",
+      "Option text",
     );
     textInput.value = option.text;
     textInput.style.gridColumn = "2";
     textInput.style.gridRow = "2";
-    const label = createLabel(`Answer ${number}`, textInput.id);
+    const label = createLabel(`Option ${number}`, textInput.id);
     label.style.gridColumn = "2";
     label.style.gridRow = "1";
 
@@ -664,7 +664,7 @@ function createQuizEditorController(
       setFieldError(
         textInput,
         error,
-        show ? `Answer ${number} needs text` : null,
+        show ? `Option ${number} needs text` : null,
       );
     };
     textInput.addEventListener("input", () => {
@@ -693,7 +693,7 @@ function createQuizEditorController(
     const media = createMediaEditor({
       classPrefix: "quiz-option-media",
       idPrefix: `${idPrefix}-media`,
-      addLabel: `Add image to answer ${number}`,
+      addLabel: `Add image to option ${number}`,
       previewSlotClass: "quiz-option-media-preview",
       previewClass: "quiz-option-thumb",
       onEdit: (next) => {
@@ -718,13 +718,13 @@ function createQuizEditorController(
     details.append(error, media.root);
 
     const remove = createRemoveButton("quiz-option-remove");
-    remove.setAttribute("aria-label", `Remove answer ${number}`);
+    remove.setAttribute("aria-label", `Remove option ${number}`);
     remove.style.gridColumn = "3";
     remove.style.gridRow = "2";
     setRemoveAllowed(
       remove,
-      optionCount > MIN_ANSWERS,
-      `A question needs at least ${MIN_ANSWERS} answers`,
+      optionCount > MIN_OPTIONS,
+      `A question needs at least ${MIN_OPTIONS} options`,
     );
     remove.addEventListener("click", () => {
       patchActiveQuestion((question) => {
@@ -855,7 +855,7 @@ function createQuizEditorController(
       setFieldError(
         row.textInput,
         row.error,
-        show ? `Answer ${optionIndex + 1} needs text` : null,
+        show ? `Option ${optionIndex + 1} needs text` : null,
       );
     });
   };
