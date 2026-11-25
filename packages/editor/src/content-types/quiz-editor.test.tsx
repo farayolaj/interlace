@@ -48,7 +48,7 @@ function lastEmitted(onChange: Mock<(next: QuizData) => void>): QuizData {
 }
 
 describe("QuizEditor", () => {
-  it("mounts the question input, options list, and correct-answer select", () => {
+  it("mounts the question input, answers, and a correct-answer radio per answer", () => {
     const { container } = mountQuizEditor({
       data: {
         questions: [
@@ -75,11 +75,11 @@ describe("QuizEditor", () => {
     // One option text input per option (media inputs are separate).
     const optionTexts = editor.querySelectorAll(".quiz-option-text");
     expect(optionTexts.length).toBe(2);
-    const select = editor.querySelector("select");
-    if (!(select instanceof HTMLSelectElement)) {
-      throw new Error("expected select");
-    }
-    expect(select.options.length).toBe(2);
+    const radios = editor.querySelectorAll<HTMLInputElement>(
+      ".quiz-option-correct",
+    );
+    expect(radios.length).toBe(2);
+    expect(radios[0]?.checked).toBe(true);
   });
 
   it("reports question edits through onChange with canonical emission", () => {
@@ -98,7 +98,9 @@ describe("QuizEditor", () => {
         ],
       },
     });
-    const question = container.querySelector(".quiz-question") as HTMLInputElement | null;
+    const question = container.querySelector(
+      ".quiz-question",
+    ) as HTMLInputElement | null;
     if (!question) throw new Error("expected question input");
     question.focus();
     fireEvent.input(question, { target: { value: "Hello" } });
@@ -125,7 +127,9 @@ describe("QuizEditor", () => {
         ],
       },
     });
-    const question = container.querySelector(".quiz-question") as HTMLInputElement | null;
+    const question = container.querySelector(
+      ".quiz-question",
+    ) as HTMLInputElement | null;
     if (!question) throw new Error("expected question input");
     question.focus();
     fireEvent.input(question, { target: { value: "H" } });
@@ -150,11 +154,14 @@ describe("QuizEditor", () => {
         ],
       },
     });
-    const select = container.querySelector("select") as HTMLSelectElement | null;
-    if (!select) throw new Error("expected select");
-    expect(select.selectedOptions[0]?.value).toBe("opt-1");
+    const radios = container.querySelectorAll<HTMLInputElement>(
+      ".quiz-option-correct",
+    );
+    expect([...radios].map((r) => r.checked)).toEqual([false, true]);
 
-    const question = container.querySelector(".quiz-question") as HTMLInputElement | null;
+    const question = container.querySelector(
+      ".quiz-question",
+    ) as HTMLInputElement | null;
     if (!question) throw new Error("expected question input");
     fireEvent.input(question, { target: { value: "Edited" } });
 
@@ -167,7 +174,7 @@ describe("QuizEditor", () => {
     expect(data.questions[0]?.correctOptionId).toBe("opt-1");
   });
 
-  it("adds a new option via the Add option button with a generated id", () => {
+  it("adds a new answer via the Add answer button with a generated id", () => {
     const { container, onChange } = mountQuizEditor({
       data: {
         questions: [
@@ -185,10 +192,9 @@ describe("QuizEditor", () => {
     });
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
-    const add = Array.from(editor.querySelectorAll("button")).find(
-      (b) => b.textContent === "Add option",
-    );
-    if (!add) throw new Error("expected Add option button");
+    const add = editor.querySelector<HTMLButtonElement>(".quiz-add-option");
+    if (!add) throw new Error("expected Add answer button");
+    expect(add.textContent).toContain("Add answer");
     fireEvent.click(add);
     expect(onChange).toHaveBeenCalled();
     const data = lastEmitted(onChange);
@@ -264,7 +270,7 @@ describe("QuizEditor", () => {
     });
   });
 
-  it("reports the correct-answer change via the select", () => {
+  it("reports the correct-answer change via the answer's radio", () => {
     const { container, onChange } = mountQuizEditor({
       data: {
         questions: [
@@ -281,9 +287,10 @@ describe("QuizEditor", () => {
         ],
       },
     });
-    const select = container.querySelector("select") as HTMLSelectElement | null;
-    if (!select) throw new Error("expected select");
-    fireEvent.change(select, { target: { value: "opt-2" } });
+    const radios = container.querySelectorAll<HTMLInputElement>(
+      ".quiz-option-correct",
+    );
+    fireEvent.click(radios[2]!);
     expect(onChange).toHaveBeenCalled();
     expect(lastEmitted(onChange).questions[0]?.correctOptionId).toBe("opt-2");
   });

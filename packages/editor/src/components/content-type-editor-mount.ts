@@ -46,6 +46,13 @@ export function useContentTypeEditorMount<TData = unknown>({
   const mountedSessionRef = useRef<MountedSession<TData> | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  // Content types may keep the callback they were last given (it is only
+  // re-sent when `data` changes), so hand them a stable forwarder that
+  // always reaches the latest `onChange`. Otherwise an edit made after an
+  // unrelated change (e.g. renaming the hook) would write stale state.
+  const stableOnChange = useRef((newData: TData) =>
+    onChangeRef.current(newData),
+  ).current;
 
   const contentType = contentTypeId
     ? (registry.get(contentTypeId) as ContentType<TData> | undefined)
@@ -81,14 +88,14 @@ export function useContentTypeEditorMount<TData = unknown>({
       !currentSession || currentSession.contentType !== contentType;
     if (isNewSession) {
       container.innerHTML = "";
-      contentType.renderEditor(container, data, onChangeRef.current);
+      contentType.renderEditor(container, data, stableOnChange);
       mountedSessionRef.current = { container, contentType };
     } else if (contentType.updateEditor) {
-      contentType.updateEditor(container, data, onChangeRef.current);
+      contentType.updateEditor(container, data, stableOnChange);
     } else {
       contentType.unmount?.(container);
       container.innerHTML = "";
-      contentType.renderEditor(container, data, onChangeRef.current);
+      contentType.renderEditor(container, data, stableOnChange);
       mountedSessionRef.current = { container, contentType };
     }
   }, [active, contentTypeId, contentType, data, containerRef]);

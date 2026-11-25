@@ -243,15 +243,11 @@ export function PreviewModal({
             onClick={onClose}
             data-testid="preview-modal-close"
             aria-label={strings.closeLabel}
+            className="interlace-btn"
             style={{
-              padding: `${SPACE[1]}px ${SPACE[3]}px`,
               backgroundColor: "transparent",
-              border: `1px solid ${COLORS.borderStrong}`,
+              border: "1px solid rgba(255, 255, 255, 0.4)",
               color: COLORS.white,
-              borderRadius: RADIUS.sm,
-              cursor: "pointer",
-              fontSize: TYPE.sm,
-              transition: "background-color 150ms ease, border-color 150ms ease",
             }}
           >
             {strings.closeLabel}

@@ -6,12 +6,14 @@ import {
   ContentTypeRegistry,
   DEFAULT_STRINGS,
   Hook,
+  type InterlaceTheme,
   Placement,
   SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
+  themeToCssVariables,
 } from "@interlacejs/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
+import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
 import { useAuthoringStore } from "../hooks/use-authoring-store";
 import { ContentTypeEditor } from "./content-type-editor";
@@ -22,6 +24,7 @@ import type { PreviewModalStrings } from "./preview-modal";
 import { PreviewModal } from "./preview-modal";
 import type { VideoSourceInputStrings } from "./video-source-input";
 import { VideoSourceInput } from "./video-source-input";
+import { Button, IssueList, SectionHeading, useInterlaceStyles } from "./ui";
 
 /**
  * Editor-local strings layered on top of the core `Strings`. Hosts pass
@@ -31,7 +34,12 @@ import { VideoSourceInput } from "./video-source-input";
 export interface EditorStrings extends CoreStrings {
   /** Heading for the video source step when no document is loaded. */
   videoSourceInputTitle: string;
-  /** Title for the preview surface. */
+  /**
+   * Title for the preview surface.
+   *
+   * @deprecated Unused since the editor header shows the save status
+   * instead of a heading. Retained for backward compatibility.
+   */
   previewTitle: string;
   /** Label for the button that opens the preview modal. */
   previewLabel: string;
@@ -79,6 +87,26 @@ export interface EditorStrings extends CoreStrings {
   loadErrorTitle: string;
   /** Shown when the video element has not yet reported a duration. */
   durationUnknownLabel: string;
+  /** Prefix for the video duration under the video. */
+  durationLabel: string;
+  /** Header status while there are unsaved changes. */
+  unsavedChangesLabel: string;
+  /** Header status after a save with no further changes. */
+  savedLabel: string;
+  /** Header badge when hooks need attention; `{count}` is replaced. */
+  hooksNeedAttentionLabel: string;
+  /** Heading of the list shown when Save is blocked by problems. */
+  saveBlockedTitle: string;
+  /** Button next to each problem that selects the hook. */
+  goToHookLabel: string;
+  /** Problem: a hook has no title. */
+  needsTitleIssue: string;
+  /** Problem: a hook has no content type yet. */
+  needsContentTypeIssue: string;
+  /** Name shown for hooks without a title. */
+  untitledHookLabel: string;
+  /** Heading of the details column when no hook is selected. */
+  noHookSelectedTitle: string;
   /**
    * String overrides forwarded to the embedded `VideoSourceInput`. The
    * first screen of the drop-in component is otherwise unreachable to a
@@ -106,7 +134,8 @@ export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
   replaceVideoLabel: "Replace video",
   replaceCancelLabel: "Cancel replace",
   saveLabel: "Save",
-  noItemSelectedLabel: "Select an item to edit its placement.",
+  noItemSelectedLabel:
+    "Select a hook on the timeline to edit it, or add one at the playhead.",
   placementLabel: "Placement",
   timelineHeading: "Hooks",
   addContentHeading: "Add content",
@@ -115,22 +144,25 @@ export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
   editContentLabel: "Edit content",
   loadErrorTitle: "Could not load the document",
   durationUnknownLabel: "Duration unknown",
+  durationLabel: "Duration",
+  unsavedChangesLabel: "Unsaved changes",
+  savedLabel: "All changes saved",
+  hooksNeedAttentionLabel: "{count} need attention",
+  saveBlockedTitle: "Fix these before saving",
+  goToHookLabel: "Go to hook",
+  needsTitleIssue: "Add a title",
+  needsContentTypeIssue: "Choose a content type",
+  untitledHookLabel: "Untitled hook",
+  noHookSelectedTitle: "No hook selected",
 };
 
 /**
- * Optional theme overrides. Hosts that want to recolor the editor without
- * shipping a CSS file can pass a `theme`; the editor applies these via
- * inline `style` on its root wrapper and on the save button. Anything not
- * provided falls back to a neutral default.
+ * Optional theme overrides. Every field becomes a `--interlace-*` CSS
+ * variable on the editor's root, so it reaches every surface inside it
+ * (timeline, Hook details, content editors, preview). Hosts can set the
+ * same variables from CSS instead; see `InterlaceTheme` in core.
  */
-export interface EditorTheme {
-  accentColor?: string;
-  backgroundColor?: string;
-  surfaceColor?: string;
-  borderColor?: string;
-  textColor?: string;
-  mutedTextColor?: string;
-}
+export type EditorTheme = InterlaceTheme;
 
 export interface InterlaceEditorProps {
   /** Registry of content types available for authoring. */
@@ -163,8 +195,10 @@ export interface InterlaceEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
   /** Optional string overrides. */
   strings?: Partial<EditorStrings>;
-  /** Optional theme overrides. */
+  /** Optional theme overrides (see `EditorTheme`). */
   theme?: EditorTheme;
+  /** Extra class name for the editor's root element. */
+  className?: string;
   /** Optional error callback for upload, load, and runtime failures. */
   onError?: (error: Error) => void;
   /**
@@ -176,6 +210,18 @@ export interface InterlaceEditorProps {
 }
 
 const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
+
+/** Editor width (px) at which Hook details moves beside the video. */
+const WIDE_LAYOUT_MIN_WIDTH = 900;
+
+/** Formats seconds as m:ss (or h:mm:ss). */
+function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
 
 function makeDefaultData(contentTypeId: string): unknown {
   if (contentTypeId === "quiz" || contentTypeId === "quiz-editor") {
@@ -324,15 +370,11 @@ function EditorVideoToolbar({
   duration,
   strings,
   onReplaceVideo,
-  onOpenPreview,
-  theme,
   hint,
 }: {
   duration: number | undefined;
   strings: EditorStrings;
   onReplaceVideo: () => void;
-  onOpenPreview: () => void;
-  theme?: EditorTheme;
   /** Shown next to the duration when no item is selected. */
   hint?: string;
 }) {
@@ -343,64 +385,38 @@ function EditorVideoToolbar({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: `${SPACE[2]}px 0`,
+        gap: SPACE[3],
+        flexWrap: "wrap",
+        padding: `${SPACE[2]}px 0 0`,
         fontSize: TYPE.sm,
-        color: theme?.mutedTextColor ?? COLORS.textMuted,
+        color: COLORS.textMuted,
       }}
     >
       <span
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: SPACE[3],
+          flexWrap: "wrap",
+          minWidth: 0,
         }}
       >
         <span data-testid="interlace-editor-video-duration">
           {duration === undefined || !Number.isFinite(duration)
             ? strings.durationUnknownLabel
-            : `${duration.toFixed(1)}s`}
+            : `${strings.durationLabel} ${formatDuration(duration)}`}
         </span>
         {hint ? (
           <span data-testid="interlace-editor-selection-hint">{hint}</span>
         ) : null}
       </span>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button
-          type="button"
-          onClick={onReplaceVideo}
-          data-testid="interlace-editor-replace-video"
-          style={{
-            padding: `${SPACE[1]}px ${SPACE[3]}px`,
-            backgroundColor: "transparent",
-            border: `1px solid ${COLORS.borderStrong}`,
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            color: COLORS.text,
-            transition: "background-color 150ms ease, border-color 150ms ease",
-          }}
-        >
-          {strings.replaceVideoLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onOpenPreview}
-          data-testid="interlace-editor-open-preview"
-          style={{
-            padding: `${SPACE[1]}px ${SPACE[3]}px`,
-            backgroundColor: theme?.accentColor ?? COLORS.accent,
-            color: COLORS.white,
-            border: "none",
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            fontWeight: 600,
-            transition: "background-color 150ms ease",
-          }}
-        >
-          {strings.previewLabel}
-        </button>
-      </div>
+      <Button
+        variant="ghost"
+        onClick={onReplaceVideo}
+        data-testid="interlace-editor-replace-video"
+      >
+        {strings.replaceVideoLabel}
+      </Button>
     </div>
   );
 }
@@ -443,6 +459,7 @@ export function InterlaceEditor({
   onDirtyChange,
   strings: stringsOverride,
   theme,
+  className,
   onError,
 }: InterlaceEditorProps) {
   const strings = { ...DEFAULT_EDITOR_STRINGS, ...stringsOverride };
@@ -466,7 +483,16 @@ export function InterlaceEditor({
    * details, but `Save` does not serialize it. Choosing a content type
    * in Hook details materializes it into the store.
    */
-  const [pendingHook, setPendingHook] = useState<PendingHook | null>(null);
+  const [pendingHooks, setPendingHooks] = useState<PendingHook[]>([]);
+  /** Updates one pending hook in place (no-op if it is gone). */
+  const updatePendingHook = useCallback(
+    (id: string, update: (prev: PendingHook) => PendingHook) => {
+      setPendingHooks((prev) =>
+        prev.map((pending) => (pending.id === id ? update(pending) : pending)),
+      );
+    },
+    [],
+  );
   /** Bumped on each document load; marks where the dirty baseline resets. */
   const [loadVersion, setLoadVersion] = useState(0);
   const [replaceMode, setReplaceMode] = useState(false);
@@ -474,7 +500,6 @@ export function InterlaceEditor({
   /** Authoring-video playhead position in seconds (drives the timeline). */
   const [currentTime, setCurrentTime] = useState(0);
   /** Whether the authoring video is currently playing (drives the timeline's play button). */
-  const [isPlaying, setIsPlaying] = useState(false);
   const nextIdRef = useRef(1);
   const registryRef = useRef(contentTypeRegistry);
   registryRef.current = contentTypeRegistry;
@@ -514,15 +539,15 @@ export function InterlaceEditor({
       // draft on those runs.
       if (loadedInitialDocRef.current !== null) {
         loadedInitialDocRef.current = null;
-        setPendingHook(null);
+        setPendingHooks([]);
       }
       return;
     }
     if (loadedInitialDocRef.current === document) return;
     loadedInitialDocRef.current = document;
     // Loading a different document starts a new authoring session; a
-    // pending hook from the old one is dropped.
-    setPendingHook(null);
+    // pending hooks from the old one are dropped.
+    setPendingHooks([]);
     // Batched with loadDocument's setState, so the render that sees the
     // new version also sees the loaded items (the dirty baseline).
     setLoadVersion((v) => v + 1);
@@ -568,16 +593,16 @@ export function InterlaceEditor({
       null,
     [state.items, selectedItemId],
   );
-  const isPendingSelected =
-    !selectedStoreItem &&
-    pendingHook != null &&
-    pendingHook.id === selectedItemId;
+  const selectedPendingHook = selectedStoreItem
+    ? null
+    : (pendingHooks.find((pending) => pending.id === selectedItemId) ?? null);
+  const isPendingSelected = selectedPendingHook !== null;
   /** The selected hook's time data — store item or pending, unified. */
   const selectedHook: Hook | null = isPendingSelected
-    ? (pendingHook?.hook ?? null)
+    ? selectedPendingHook.hook
     : (selectedStoreItem?.hook ?? null);
   const selectedTitle: string | null = isPendingSelected
-    ? (pendingHook?.title ?? null)
+    ? selectedPendingHook.title
     : (selectedStoreItem?.content.getTitle() ?? null);
   /**
    * `null` for a pending hook (content type not yet chosen) — the
@@ -598,6 +623,50 @@ export function InterlaceEditor({
     () => contentTypeRegistry.getAll().map((ct) => ct.getId()),
     [contentTypeRegistry],
   );
+  const contentTypeOptions = useMemo(
+    () =>
+      contentTypeRegistry.getAll().map((ct) => ({
+        id: ct.getId(),
+        label: ct.getDisplayName?.() ?? ct.getId(),
+        description: ct.getDescription?.(),
+      })),
+    [contentTypeRegistry],
+  );
+
+  /**
+   * Problems that block saving, per hook id: a missing title, no content
+   * type yet (pending), or messages from the content type's `validate`.
+   */
+  const { needsTitleIssue, needsContentTypeIssue } = strings;
+  const hookIssues = useMemo(() => {
+    const issues = new Map<string, string[]>();
+    for (const pending of pendingHooks) {
+      issues.set(pending.id, [
+        ...(pending.title.trim() ? [] : [needsTitleIssue]),
+        needsContentTypeIssue,
+      ]);
+    }
+    for (const item of state.items) {
+      const list: string[] = [];
+      if (!item.content.getTitle().trim()) list.push(needsTitleIssue);
+      const contentType = contentTypeRegistry.get(
+        item.content.getContentTypeId(),
+      );
+      try {
+        list.push(...(contentType?.validate?.(item.content.getData()) ?? []));
+      } catch (err) {
+        list.push(err instanceof Error ? err.message : String(err));
+      }
+      if (list.length > 0) issues.set(item.content.getId(), list);
+    }
+    return issues;
+  }, [
+    pendingHooks,
+    state.items,
+    contentTypeRegistry,
+    needsTitleIssue,
+    needsContentTypeIssue,
+  ]);
 
   const timelineEntries = useMemo(() => {
     const fromStore = state.items.map((item) => {
@@ -618,29 +687,35 @@ export function InterlaceEditor({
         end: hook.end,
       };
     });
-    // The pending hook (created at the playhead, content type not yet
-    // chosen) is a first-class timeline entry — it just is not part of
-    // the store until it is materialized.
-    if (!pendingHook) return fromStore;
-    const hook = pendingHook.hook;
-    return [
-      ...fromStore,
-      hook.type === "blocking"
+    // Pending hooks (created at the playhead, content type not yet
+    // chosen) are first-class timeline entries — they just are not part
+    // of the store until they are materialized.
+    const fromPending = pendingHooks.map((pending) => {
+      const hook = pending.hook;
+      return hook.type === "blocking"
         ? {
-            id: pendingHook.id,
-            title: pendingHook.title,
+            id: pending.id,
+            title: pending.title,
             hookType: "blocking" as const,
             timestamp: hook.timestamp,
           }
         : {
-            id: pendingHook.id,
-            title: pendingHook.title,
+            id: pending.id,
+            title: pending.title,
             hookType: "non-blocking" as const,
             start: hook.start,
             end: hook.end,
-          },
-    ];
-  }, [state.items, pendingHook]);
+          };
+    });
+    return [...fromStore, ...fromPending].map((entry) => {
+      const issues = hookIssues.get(entry.id) ?? [];
+      return {
+        ...entry,
+        needsAttention: issues.length > 0,
+        attentionLabel: issues.length > 0 ? issues.join(", ") : undefined,
+      };
+    });
+  }, [state.items, pendingHooks, hookIssues]);
 
   /**
    * The serialized document fed to the preview modal. Memoized on the
@@ -703,7 +778,8 @@ export function InterlaceEditor({
     saved?.version === loadVersion
       ? saved.snapshot
       : baselineRef.current.snapshot;
-  const isDirty = authoredSnapshot !== baselineSnapshot || pendingHook != null;
+  const isDirty =
+    authoredSnapshot !== baselineSnapshot || pendingHooks.length > 0;
 
   const lastReportedDirtyRef = useRef<boolean | null>(null);
   useEffect(() => {
@@ -722,9 +798,7 @@ export function InterlaceEditor({
       const item = state.items.find((it) => it.content.getId() === id);
       const hook = item
         ? item.content.getHook()
-        : pendingHook?.id === id
-          ? pendingHook.hook
-          : null;
+        : (pendingHooks.find((pending) => pending.id === id)?.hook ?? null);
       if (!hook) return;
       const target = hook.type === "blocking" ? hook.timestamp : hook.start;
       if (!Number.isFinite(target)) return;
@@ -747,7 +821,7 @@ export function InterlaceEditor({
       // `timeupdate` confirms once the seek lands.
       setCurrentTime(Math.max(0, target));
     },
-    [state.items, pendingHook, setCurrentTime],
+    [state.items, pendingHooks, setCurrentTime],
   );
 
   /** Clicking the timeline track background deselects the hook. */
@@ -764,7 +838,8 @@ export function InterlaceEditor({
       // the store. Until then the hook is editor-local only and `Save`
       // does not serialize it.
       const hook = makeHook(hookType, currentTime, state.videoDuration);
-      setPendingHook({ id, title: "New hook", hook });
+      // Untitled until the author names it (the title is shown to students).
+      setPendingHooks((prev) => [...prev, { id, title: "", hook }]);
       setSelectedItemId(id);
     },
     [currentTime, state.videoDuration],
@@ -772,15 +847,15 @@ export function InterlaceEditor({
 
   const handleDeleteEntry = useCallback(
     (id: string) => {
-      if (pendingHook?.id === id) {
-        setPendingHook(null);
+      if (pendingHooks.some((pending) => pending.id === id)) {
+        setPendingHooks((prev) => prev.filter((pending) => pending.id !== id));
         setSelectedItemId((prev) => (prev === id ? null : prev));
         return;
       }
       removeItem(id);
       setSelectedItemId((prev) => (prev === id ? null : prev));
     },
-    [pendingHook, removeItem],
+    [pendingHooks, removeItem],
   );
 
   const handleUpdateEntry = useCallback(
@@ -793,10 +868,9 @@ export function InterlaceEditor({
         end?: number;
       },
     ) => {
-      if (pendingHook?.id === id) {
+      if (pendingHooks.some((pending) => pending.id === id)) {
         // Pending hook: times and title live in editor-local state.
-        setPendingHook((prev) => {
-          if (!prev || prev.id !== id) return prev;
+        updatePendingHook(id, (prev) => {
           const hook = prev.hook;
           const nextHook =
             hook.type === "blocking"
@@ -843,18 +917,23 @@ export function InterlaceEditor({
         hook,
       });
     },
-    [pendingHook, state.items, contentTypeRegistry, updateItem],
+    [
+      pendingHooks,
+      updatePendingHook,
+      state.items,
+      contentTypeRegistry,
+      updateItem,
+    ],
   );
 
   const handlePlacementChange = useCallback(
     (nextPlacement: Placement) => {
       if (!selectedItemId) return;
-      if (pendingHook?.id === selectedItemId) {
-        setPendingHook((prev) =>
-          prev && prev.id === selectedItemId
-            ? { ...prev, hook: { ...prev.hook, placement: nextPlacement } }
-            : prev,
-        );
+      if (pendingHooks.some((pending) => pending.id === selectedItemId)) {
+        updatePendingHook(selectedItemId, (prev) => ({
+          ...prev,
+          hook: { ...prev.hook, placement: nextPlacement },
+        }));
         return;
       }
       const current = state.items.find(
@@ -873,7 +952,14 @@ export function InterlaceEditor({
         hook: nextHook,
       });
     },
-    [selectedItemId, pendingHook, state.items, contentTypeRegistry, updateItem],
+    [
+      selectedItemId,
+      pendingHooks,
+      updatePendingHook,
+      state.items,
+      contentTypeRegistry,
+      updateItem,
+    ],
   );
 
   /** Content editor onChange for a materialized (typed) hook. */
@@ -916,17 +1002,18 @@ export function InterlaceEditor({
       if (!selectedItemId) return;
       const contentType = contentTypeRegistry.get(typeId);
       if (!contentType) return;
-      if (pendingHook?.id === selectedItemId) {
+      const pending = pendingHooks.find((p) => p.id === selectedItemId);
+      if (pending) {
         const id = `hook-${nextIdRef.current++}`;
         const item = buildContentInstance(
           id,
-          pendingHook.title,
+          pending.title,
           contentType,
-          pendingHook.hook,
+          pending.hook,
           makeDefaultData(contentType.getId()),
         );
-        addItem({ content: item, hook: pendingHook.hook });
-        setPendingHook(null);
+        addItem({ content: item, hook: pending.hook });
+        setPendingHooks((prev) => prev.filter((p) => p.id !== pending.id));
         setSelectedItemId(id);
         return;
       }
@@ -945,7 +1032,7 @@ export function InterlaceEditor({
       updateItem(selectedItemId, { content: rebuilt, hook: current.hook });
     },
     [
-      pendingHook,
+      pendingHooks,
       selectedItemId,
       contentTypeRegistry,
       addItem,
@@ -958,25 +1045,25 @@ export function InterlaceEditor({
   const handleTimeChange = useCallback(
     (updates: { timestamp?: number; start?: number; end?: number }) => {
       if (!selectedItemId) return;
-      const isPending = pendingHook?.id === selectedItemId;
-      const hook = isPending
-        ? pendingHook?.hook
+      const pending = pendingHooks.find((p) => p.id === selectedItemId);
+      const hook = pending
+        ? pending.hook
         : state.items.find((it) => it.content.getId() === selectedItemId)?.hook;
       if (!hook) return;
       const clamped = clampTimeUpdates(hook, updates, state.videoDuration);
-      if (isPending) {
-        setPendingHook((prev) =>
-          prev && prev.id === selectedItemId
-            ? { ...prev, hook: { ...prev.hook, ...clamped } as Hook }
-            : prev,
-        );
+      if (pending) {
+        updatePendingHook(selectedItemId, (prev) => ({
+          ...prev,
+          hook: { ...prev.hook, ...clamped } as Hook,
+        }));
         return;
       }
       handleUpdateEntry(selectedItemId, clamped);
     },
     [
       selectedItemId,
-      pendingHook,
+      pendingHooks,
+      updatePendingHook,
       state.items,
       state.videoDuration,
       handleUpdateEntry,
@@ -998,10 +1085,10 @@ export function InterlaceEditor({
       // times reference — drop it, matching the document-load path
       // (both start a new authoring session for hook times). Also
       // close any open preview so the user lands on a clean surface.
-      setPendingHook(null);
+      setPendingHooks([]);
       setPreviewOpen(false);
     },
-    [setVideoMetadata, setPendingHook, state.videoSrc, state.videoDuration],
+    [setVideoMetadata, state.videoSrc, state.videoDuration],
   );
 
   const handleReplaceVideo = useCallback(() => {
@@ -1041,29 +1128,6 @@ export function InterlaceEditor({
       pendingSeekRef.current = t;
     }
     setCurrentTime(t);
-  }, []);
-
-  /** Play/pause for the authoring video (drives the timeline button). */
-  const handleTogglePlay = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      try {
-        const p = video.play() as unknown as Promise<void> | undefined;
-        p?.catch?.(() => {
-          // Autoplay policy or engine restriction; the button state
-          // corrects on the next play/pause event.
-        });
-      } catch {
-        // jsdom and some engines throw synchronously.
-      }
-    } else {
-      try {
-        video.pause();
-      } catch {
-        // ignore
-      }
-    }
   }, []);
 
   const handleOpenPreview = useCallback(() => {
@@ -1120,43 +1184,114 @@ export function InterlaceEditor({
     [state.videoSrc, setVideoMetadata],
   );
 
+  // Save is blocked while any hook has problems; the list stays visible
+  // (and shrinks as problems are fixed) once a save has been attempted.
+  const [saveAttempted, setSaveAttempted] = useState(false);
   const handleSave = useCallback(() => {
+    if (hookIssues.size > 0) {
+      setSaveAttempted(true);
+      return;
+    }
+    setSaveAttempted(false);
     onSave(serialize());
     setSaved({ version: loadVersion, snapshot: authoredSnapshot });
-  }, [onSave, serialize, authoredSnapshot, loadVersion]);
+  }, [hookIssues, onSave, serialize, authoredSnapshot, loadVersion]);
 
-  // Styling derived from the optional theme prop.
+  /** Switches the selected hook between blocking and non-blocking. */
+  const handleHookTypeChange = useCallback(
+    (hookType: "blocking" | "non-blocking") => {
+      if (!selectedItemId || !selectedHook) return;
+      if (selectedHook.type === hookType) return;
+      const anchor =
+        selectedHook.type === "blocking"
+          ? selectedHook.timestamp
+          : selectedHook.start;
+      const nextHook: Hook = {
+        ...makeHook(hookType, anchor, state.videoDuration),
+        placement: selectedHook.placement,
+      };
+      if (pendingHooks.some((pending) => pending.id === selectedItemId)) {
+        updatePendingHook(selectedItemId, (prev) => ({
+          ...prev,
+          hook: nextHook,
+        }));
+        return;
+      }
+      const current = state.items.find(
+        (item) => item.content.getId() === selectedItemId,
+      );
+      if (!current) return;
+      const contentType = contentTypeRegistry.get(
+        current.content.getContentTypeId(),
+      );
+      if (!contentType) return;
+      updateItem(selectedItemId, {
+        content: rebuildContentInstance(current.content, contentType, {
+          hook: nextHook,
+        }),
+        hook: nextHook,
+      });
+    },
+    [
+      selectedItemId,
+      selectedHook,
+      state.videoDuration,
+      state.items,
+      pendingHooks,
+      updatePendingHook,
+      contentTypeRegistry,
+      updateItem,
+    ],
+  );
+
+  // Two columns (video + timeline | Hook details) when the editor is wide.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [isWide, setIsWide] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setIsWide(entry.contentRect.width >= WIDE_LAYOUT_MIN_WIDTH);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showSourceStep]);
+
+  useInterlaceStyles();
+
+  const rootClassName = ["interlace-editor", className]
+    .filter(Boolean)
+    .join(" ");
   const rootStyle: React.CSSProperties = {
-    backgroundColor: theme?.backgroundColor ?? COLORS.surface,
-    color: theme?.textColor ?? COLORS.text,
-    borderColor: theme?.borderColor ?? COLORS.border,
+    ...themeToCssVariables(theme),
+    boxSizing: "border-box",
+    padding: SPACE[4],
+    borderRadius: RADIUS.lg,
+    border: `1px solid ${COLORS.border}`,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
+    fontFamily: FONTS.body,
+    fontSize: TYPE.base - 1,
   };
-  const saveButtonStyle: React.CSSProperties = {
-    backgroundColor: theme?.accentColor ?? COLORS.accent,
-    color: COLORS.white,
-  };
-  const surfaceStyle: React.CSSProperties = {
-    backgroundColor: theme?.surfaceColor ?? COLORS.surfaceRaised,
-    borderColor: theme?.borderColor ?? COLORS.border,
+  const panelStyle: React.CSSProperties = {
+    boxSizing: "border-box",
+    padding: SPACE[4],
+    borderRadius: RADIUS.md,
+    border: `1px solid ${COLORS.border}`,
+    backgroundColor: COLORS.surfaceRaised,
+    minWidth: 0,
   };
 
   if (showSourceStep) {
     return (
-      <div
-        className="interlace-editor"
-        style={{
-          ...rootStyle,
-          padding: 16,
-          borderRadius: 8,
-          border: "1px solid",
-        }}
-      >
+      <div ref={rootRef} className={rootClassName} style={rootStyle}>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: 16,
+            gap: SPACE[3],
+            marginBottom: SPACE[4],
           }}
         >
           <h2
@@ -1170,23 +1305,13 @@ export function InterlaceEditor({
             {strings.videoSourceInputTitle}
           </h2>
           {replaceMode ? (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={handleCancelReplace}
               data-testid="interlace-editor-cancel-replace"
-              style={{
-                padding: `${SPACE[1]}px ${SPACE[3]}px`,
-                backgroundColor: COLORS.surface,
-                border: `1px solid ${COLORS.borderStrong}`,
-                borderRadius: RADIUS.sm,
-                cursor: "pointer",
-                fontSize: TYPE.sm,
-                color: COLORS.text,
-                transition: "background-color 150ms ease",
-              }}
             >
               {strings.replaceCancelLabel}
-            </button>
+            </Button>
           ) : null}
         </div>
         <VideoSourceInput
@@ -1203,108 +1328,273 @@ export function InterlaceEditor({
     );
   }
 
-  return (
-    <div
-      className="interlace-editor"
-      style={{
-        ...rootStyle,
-        padding: 16,
-        borderRadius: 8,
-        border: "1px solid",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <h2
-          style={{
-            margin: 0,
-            fontFamily: FONTS.display,
-            fontSize: TYPE.lg,
-            fontWeight: 600,
-          }}
-        >
-          {strings.previewTitle}
-        </h2>
-        <button
-          type="button"
-          onClick={handleSave}
-          data-testid="interlace-editor-save"
-          style={{
-            ...saveButtonStyle,
-            padding: `${SPACE[2]}px ${SPACE[4]}px`,
-            border: "none",
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.md,
-            fontWeight: 600,
-            boxShadow: SHADOWS.sm,
-            transition: "background-color 150ms ease",
-          }}
-        >
-          {strings.saveLabel}
-        </button>
-      </header>
+  const issueCount = hookIssues.size;
+  const hookLabel = (id: string) => {
+    const entry = timelineEntries.find((e) => e.id === id);
+    if (!entry) return strings.untitledHookLabel;
+    const time = entry.hookType === "blocking" ? entry.timestamp : entry.start;
+    const name = entry.title.trim() || strings.untitledHookLabel;
+    return `${name} (${formatDuration(time ?? 0)})`;
+  };
+  const statusText = isDirty
+    ? strings.unsavedChangesLabel
+    : saved?.version === loadVersion
+      ? strings.savedLabel
+      : null;
 
+  const videoSection = (
+    <section className="interlace-editor-video" style={{ minWidth: 0 }}>
       {/*
         The positioning context for the placement overlay must wrap
         exactly the video: an in-flow toolbar inside this wrapper would
         offset every rectangle by the toolbar's height (Gate 3
         Material #2). The toolbar therefore sits below the frame.
       */}
-      <section
-        className="interlace-editor-video"
+      <div
+        data-testid="interlace-editor-video"
         style={{
-          width: "100%",
-          maxWidth: 720,
-          margin: "0 auto",
+          position: "relative",
+          borderRadius: RADIUS.md,
+          overflow: "hidden",
+          backgroundColor: COLORS.black,
+        }}
+      >
+        <video
+          ref={videoRef}
+          key={state.videoSrc}
+          src={state.videoSrc}
+          controls
+          preload="metadata"
+          onLoadedMetadata={(e) =>
+            handlePreviewLoadedMetadata(e.currentTarget.duration)
+          }
+          onTimeUpdate={handleTimeUpdate}
+          data-testid="interlace-editor-preview-video"
+          style={{
+            width: "100%",
+            height: "auto",
+            display: "block",
+            backgroundColor: COLORS.black,
+          }}
+        />
+        {selectedHook ? (
+          <PlacementEditor
+            placement={selectedHook.placement}
+            onPlacementChange={handlePlacementChange}
+          />
+        ) : null}
+      </div>
+      <EditorVideoToolbar
+        duration={state.videoDuration || undefined}
+        strings={strings}
+        onReplaceVideo={handleReplaceVideo}
+        // In the wide layout the empty Hook details column says this.
+        hint={selectedHook || isWide ? undefined : strings.noItemSelectedLabel}
+      />
+    </section>
+  );
+
+  const timelineSection = (
+    <section className="interlace-editor-timeline" style={{ minWidth: 0 }}>
+      <SectionHeading style={{ marginBottom: SPACE[2] }}>
+        {strings.timelineHeading}
+      </SectionHeading>
+      <KeyframeTimeline
+        entries={timelineEntries}
+        selectedId={selectedItemId ?? undefined}
+        videoDuration={state.videoDuration || 0}
+        currentTime={currentTime}
+        onSeek={handleTimelineSeek}
+        onSelectEntry={handleSelectEntry}
+        onUpdateEntry={handleUpdateEntry}
+        onDeleteEntry={handleDeleteEntry}
+        onAddEntry={handleAddEntry}
+        onDeselect={handleDeselect}
+      />
+    </section>
+  );
+
+  const hookSection =
+    selectedItemId && selectedHook ? (
+      <section
+        className="interlace-editor-hook"
+        data-testid="interlace-editor-hook"
+        aria-label={strings.hookHeading}
+        style={panelStyle}
+      >
+        <InspectorPanel
+          entry={{
+            id: selectedItemId,
+            title: selectedTitle ?? "",
+            hookType: selectedHook.type,
+            timestamp:
+              selectedHook.type === "blocking"
+                ? selectedHook.timestamp
+                : undefined,
+            start:
+              selectedHook.type === "non-blocking"
+                ? selectedHook.start
+                : undefined,
+            end:
+              selectedHook.type === "non-blocking"
+                ? selectedHook.end
+                : undefined,
+            videoDuration: state.videoDuration || 0,
+            contentTypeId: selectedContentTypeId,
+            registeredTypes: registeredTypeIds,
+            contentTypeOptions,
+            issues: hookIssues.get(selectedItemId),
+          }}
+          onTitleChange={(title) =>
+            handleUpdateEntry(selectedItemId, { title })
+          }
+          onTimeChange={handleTimeChange}
+          onHookTypeChange={handleHookTypeChange}
+          onContentTypeSelect={handleContentTypeSelect}
+          placement={selectedHook.placement}
+          onPlacementChange={handlePlacementChange}
+          onDelete={() => handleDeleteEntry(selectedItemId)}
+        />
+        {/* Content editor: shown once the hook has a content type. A
+            newly created hook (pending) hides it until the type is
+            chosen in Hook details. */}
+        {selectedContentTypeId ? (
+          <div
+            style={{
+              marginTop: SPACE[4],
+              paddingTop: SPACE[4],
+              borderTop: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <SectionHeading style={{ marginBottom: SPACE[3] }}>
+              {strings.contentEditorHeading}
+            </SectionHeading>
+            <ContentTypeEditor
+              contentTypeId={selectedContentTypeId}
+              registry={contentTypeRegistry}
+              data={selectedData}
+              onChange={handleContentChange}
+            />
+          </div>
+        ) : null}
+      </section>
+    ) : isWide ? (
+      <section
+        className="interlace-editor-hook"
+        data-testid="interlace-editor-no-hook"
+        style={{
+          ...panelStyle,
+          display: "flex",
+          flexDirection: "column",
+          gap: SPACE[2],
+          justifyContent: "center",
+          alignItems: "center",
+          textAlign: "center",
+          minHeight: 200,
+          borderStyle: "dashed",
+        }}
+      >
+        <SectionHeading>{strings.noHookSelectedTitle}</SectionHeading>
+        <p className="interlace-hint" style={{ maxWidth: 280 }}>
+          {strings.noItemSelectedLabel}
+        </p>
+      </section>
+    ) : null;
+
+  return (
+    <div ref={rootRef} className={rootClassName} style={rootStyle}>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: SPACE[3],
+          flexWrap: "wrap",
+          marginBottom: SPACE[4],
         }}
       >
         <div
-          data-testid="interlace-editor-video"
-          style={{ position: "relative" }}
+          role="status"
+          aria-live="polite"
+          data-testid="interlace-editor-status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: SPACE[2],
+            flexWrap: "wrap",
+            color: COLORS.textMuted,
+            fontSize: TYPE.sm,
+          }}
         >
-          <video
-            ref={videoRef}
-            key={state.videoSrc}
-            src={state.videoSrc}
-            controls
-            preload="metadata"
-            onLoadedMetadata={(e) =>
-              handlePreviewLoadedMetadata(e.currentTarget.duration)
-            }
-            onTimeUpdate={handleTimeUpdate}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            data-testid="interlace-editor-preview-video"
-            style={{
-              width: "100%",
-              height: "auto",
-              display: "block",
-              backgroundColor: "#000",
-            }}
-          />
-          {selectedHook ? (
-            <PlacementEditor
-              placement={selectedHook.placement}
-              onPlacementChange={handlePlacementChange}
-            />
+          {statusText ? <span>{statusText}</span> : null}
+          {issueCount > 0 ? (
+            <span className="interlace-badge interlace-badge--warning">
+              {strings.hooksNeedAttentionLabel.replace(
+                "{count}",
+                String(issueCount),
+              )}
+            </span>
           ) : null}
         </div>
-        <EditorVideoToolbar
-          duration={state.videoDuration || undefined}
-          strings={strings}
-          onReplaceVideo={handleReplaceVideo}
-          onOpenPreview={handleOpenPreview}
-          theme={theme}
-          hint={selectedHook ? undefined : strings.noItemSelectedLabel}
-        />
-      </section>
+        <div style={{ display: "flex", gap: SPACE[2] }}>
+          <Button
+            variant="secondary"
+            onClick={handleOpenPreview}
+            data-testid="interlace-editor-open-preview"
+          >
+            {strings.previewLabel}
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            data-testid="interlace-editor-save"
+          >
+            {strings.saveLabel}
+          </Button>
+        </div>
+      </header>
+
+      {saveAttempted && issueCount > 0 ? (
+        <div
+          style={{ marginBottom: SPACE[4] }}
+          data-testid="interlace-editor-save-issues"
+        >
+          <IssueList
+            title={strings.saveBlockedTitle}
+            issues={[...hookIssues.entries()].map(([id, issues]) => (
+              <span
+                key={id}
+                style={{
+                  display: "inline-flex",
+                  gap: SPACE[2],
+                  alignItems: "baseline",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>
+                  <strong>{hookLabel(id)}</strong>: {issues.join(", ")}
+                </span>
+                <button
+                  type="button"
+                  className="interlace-focusable"
+                  onClick={() => handleSelectEntry(id)}
+                  style={{
+                    padding: 0,
+                    border: "none",
+                    background: "none",
+                    color: "inherit",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                    font: "inherit",
+                  }}
+                >
+                  {strings.goToHookLabel}
+                </button>
+              </span>
+            ))}
+          />
+        </div>
+      ) : null}
 
       <PreviewModal
         isOpen={previewOpen}
@@ -1316,121 +1606,39 @@ export function InterlaceEditor({
         strings={strings.previewModal}
       />
 
-      <section
-        className="interlace-editor-timeline"
-        style={{
-          ...surfaceStyle,
-          marginTop: 16,
-          padding: 16,
-          borderRadius: 8,
-          border: "1px solid",
-        }}
-      >
-        <h3
+      {isWide ? (
+        <div
+          data-testid="interlace-editor-layout-wide"
           style={{
-            marginTop: 0,
-            fontFamily: FONTS.display,
-            fontSize: TYPE.md,
-            fontWeight: 600,
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 3fr) minmax(320px, 2fr)",
+            gap: SPACE[4],
+            alignItems: "start",
           }}
         >
-          {strings.timelineHeading}
-        </h3>
-        <KeyframeTimeline
-          entries={timelineEntries}
-          selectedId={selectedItemId ?? undefined}
-          videoDuration={state.videoDuration || 0}
-          currentTime={currentTime}
-          isPlaying={isPlaying}
-          onSeek={handleTimelineSeek}
-          onTogglePlay={handleTogglePlay}
-          onSelectEntry={handleSelectEntry}
-          onUpdateEntry={handleUpdateEntry}
-          onDeleteEntry={handleDeleteEntry}
-          onAddEntry={handleAddEntry}
-          onDeselect={handleDeselect}
-        />
-      </section>
-
-      {selectedItemId && selectedHook ? (
-        <section
-          className="interlace-editor-hook"
-          data-testid="interlace-editor-hook"
-          style={{
-            ...surfaceStyle,
-            marginTop: 16,
-            padding: 16,
-            borderRadius: 8,
-            border: "1px solid",
-          }}
-        >
-          <h3
+          <div
             style={{
-              marginTop: 0,
-              fontFamily: FONTS.display,
-              fontSize: TYPE.md,
-              fontWeight: 600,
+              display: "grid",
+              gap: SPACE[4],
+              position: "sticky",
+              top: SPACE[4],
+              minWidth: 0,
             }}
           >
-            {strings.hookHeading}
-          </h3>
-          {/* Hook details: title, type, time/timespan, manual placement
-              inputs, content type selection. */}
-          <InspectorPanel
-            entry={{
-              id: selectedItemId,
-              title: selectedTitle ?? "",
-              hookType: selectedHook.type,
-              timestamp:
-                selectedHook.type === "blocking"
-                  ? selectedHook.timestamp
-                  : undefined,
-              start:
-                selectedHook.type === "non-blocking"
-                  ? selectedHook.start
-                  : undefined,
-              end:
-                selectedHook.type === "non-blocking"
-                  ? selectedHook.end
-                  : undefined,
-              videoDuration: state.videoDuration || 0,
-              contentTypeId: selectedContentTypeId,
-              registeredTypes: registeredTypeIds,
-            }}
-            onTitleChange={(title) =>
-              handleUpdateEntry(selectedItemId, { title })
-            }
-            onTimeChange={handleTimeChange}
-            onContentTypeSelect={handleContentTypeSelect}
-            placement={selectedHook.placement}
-            onPlacementChange={handlePlacementChange}
-            onDelete={() => handleDeleteEntry(selectedItemId)}
-          />
-          {/* Content editor: shown once the hook has a content type. A
-              newly created hook (pending) hides it until the type is
-              chosen in Hook details. */}
-          {selectedContentTypeId ? (
-            <div style={{ marginTop: 12 }}>
-              <h4
-                style={{
-                  margin: `0 0 ${SPACE[1]}px 0`,
-                  fontSize: TYPE.sm,
-                  color: theme?.mutedTextColor ?? COLORS.textMuted,
-                  fontWeight: 600,
-                }}
-              >
-                {strings.contentEditorHeading}
-              </h4>
-              <ContentTypeEditor
-                contentTypeId={selectedContentTypeId}
-                registry={contentTypeRegistry}
-                data={selectedData}
-                onChange={handleContentChange}
-              />
-            </div>
-          ) : null}
-        </section>
-      ) : null}
+            {videoSection}
+            {timelineSection}
+          </div>
+          {hookSection}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: SPACE[4] }}>
+          <div style={{ width: "100%", maxWidth: 720, margin: "0 auto" }}>
+            {videoSection}
+          </div>
+          {timelineSection}
+          {hookSection}
+        </div>
+      )}
     </div>
   );
 }

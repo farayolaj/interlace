@@ -163,8 +163,8 @@ describe("KeyframeTimeline", () => {
   it("renders the blocking keyframe positioned at its timestamp", () => {
     const { container } = renderTimeline();
     const kf = keyframeEl(container, "b1");
-    // left = timestamp * zoom - half diamond (10*8 - 7).
-    expect(kf.style.left).toBe("73px");
+    // left = timestamp * zoom - half hit area (10*8 - 16).
+    expect(kf.style.left).toBe("64px");
     expect(kf.getAttribute("aria-label")).toContain("Quiz");
   });
 
@@ -316,14 +316,14 @@ describe("KeyframeTimeline", () => {
   it("zoom buttons reposition keyframes", () => {
     const { container } = renderTimeline();
     const kf = keyframeEl(container, "b1");
-    expect(kf.style.left).toBe("73px");
+    expect(kf.style.left).toBe("64px");
     fireEvent.click(
       container.querySelector(
         '[data-testid="keyframe-timeline-zoom-in"]',
       ) as HTMLElement,
     );
-    // zoom 8 → 12: left = 10*12 - 7.
-    expect(kf.style.left).toBe("113px");
+    // zoom 8 → 12: left = 10*12 - 16.
+    expect(kf.style.left).toBe("104px");
   });
 
   it("ctrl+wheel zooms via the non-passive listener", () => {
@@ -333,8 +333,8 @@ describe("KeyframeTimeline", () => {
       '[data-testid="keyframe-timeline-scroll"]',
     ) as HTMLElement;
     fireEvent.wheel(scroll, { ctrlKey: true, deltaY: -100 });
-    // zoom 8 → 9.6: left = 10*9.6 - 7 = 89.
-    expect(kf.style.left).toBe("89px");
+    // zoom 8 → 9.6: left = 10*9.6 - 16 = 80.
+    expect(kf.style.left).toBe("80px");
   });
 
   it("add buttons report the hook type to onAddEntry", () => {
@@ -353,12 +353,35 @@ describe("KeyframeTimeline", () => {
     expect(props.onAddEntry).toHaveBeenCalledWith("non-blocking");
   });
 
+  it("add buttons are named by their label, with the hint as a tooltip", () => {
+    const { getByRole } = renderTimeline();
+    const blocking = getByRole("button", { name: "Blocking hook" });
+    expect(blocking.getAttribute("title")).toBe(
+      "Add a hook that pauses the video at the playhead",
+    );
+    expect(blocking.className).toContain("interlace-btn--secondary");
+    const nonBlocking = getByRole("button", { name: "Non-blocking hook" });
+    expect(nonBlocking.getAttribute("title")).toBe(
+      "Add a hook that floats over the video from the playhead",
+    );
+  });
+
+  it("zoom buttons are labelled icon buttons", () => {
+    const { getByRole } = renderTimeline();
+    expect(getByRole("button", { name: "Zoom out" }).className).toContain(
+      "interlace-btn--icon",
+    );
+    expect(getByRole("button", { name: "Zoom in" }).className).toContain(
+      "interlace-btn--icon",
+    );
+  });
+
   it("the play button reports to onTogglePlay and reflects isPlaying", () => {
     const props = renderTimeline();
     const play = props.container.querySelector(
       '[data-testid="keyframe-timeline-play"]',
     ) as HTMLElement;
-    expect(play.textContent).toBe("Play");
+    expect(play.getAttribute("aria-label")).toBe("Play");
     fireEvent.click(play);
     expect(props.onTogglePlay).toHaveBeenCalledTimes(1);
 
@@ -366,7 +389,17 @@ describe("KeyframeTimeline", () => {
     const pause = container.querySelector(
       '[data-testid="keyframe-timeline-play"]',
     ) as HTMLElement;
-    expect(pause.textContent).toBe("Pause");
+    expect(pause.getAttribute("aria-label")).toBe("Pause");
+  });
+
+  it("renders no play button without onTogglePlay", () => {
+    const { container } = renderTimeline({
+      onTogglePlay: undefined,
+      isPlaying: undefined,
+    });
+    expect(
+      container.querySelector('[data-testid="keyframe-timeline-play"]'),
+    ).toBeNull();
   });
 
   it("shows the empty state when there are no entries", () => {
@@ -399,14 +432,14 @@ describe("KeyframeTimeline", () => {
     expect(diamonds.length).toBe(2);
     const firstTop = (diamonds[0] as HTMLElement).style.top;
     const secondTop = (diamonds[1] as HTMLElement).style.top;
-    // Lane 0: top = 3 + 0*28 + 5 = 8; lane 1: top = 3 + 1*28 + 5 = 36.
-    expect(firstTop).toBe("8px");
-    expect(secondTop).toBe("36px");
-    // The track grows with the lane count (2 lanes → 2*28 + 6 = 62).
+    // Lane 0: top = 3 + 0*32 = 3; lane 1: top = 3 + 1*32 = 35.
+    expect(firstTop).toBe("3px");
+    expect(secondTop).toBe("35px");
+    // The track grows with the lane count (2 lanes → 2*32 + 6 = 70).
     const track = container.querySelector(
       '[data-testid="keyframe-timeline-track"]',
     ) as HTMLElement;
-    expect(track.style.height).toBe("62px");
+    expect(track.style.height).toBe("70px");
   });
 
   it("a blocking keyframe overlapping a range stacks into a lane", () => {
@@ -423,10 +456,10 @@ describe("KeyframeTimeline", () => {
     const range = container.querySelector(
       '[data-testid="timeline-range"]',
     ) as HTMLElement;
-    // The range (anchor 10) takes lane 0; the diamond (anchor 15,
-    // extent 14/8 = 1.75s → [15, 16.75]) overlaps [10, 30] → lane 1.
-    expect(range.style.top).toBe("3px");
-    expect(diamond.style.top).toBe("36px");
+    // The range ([10, 30]) takes lane 0; the diamond's extent (hit area
+    // + label, starting at 15 - 16/8 = 13s) overlaps it → lane 1.
+    expect(range.style.top).toBe("7px"); // 3 + 4px inset
+    expect(diamond.style.top).toBe("35px");
   });
 
   it("non-overlapping keyframes share a lane", () => {
@@ -440,8 +473,8 @@ describe("KeyframeTimeline", () => {
     );
     const firstTop = (diamonds[0] as HTMLElement).style.top;
     const secondTop = (diamonds[1] as HTMLElement).style.top;
-    // t=30 is after lane 0's occupied extent (10 + 14/8 = 11.75s), so
-    // both fit in lane 0.
+    // t=30 (extent starting at 28s) is after lane 0's occupied extent
+    // (10 + (16 + 5*7 + 8)/8 ≈ 17.4s), so both fit in lane 0.
     expect(firstTop).toBe(secondTop);
   });
 
@@ -486,23 +519,64 @@ describe("KeyframeTimeline", () => {
   it("wheel up zooms in and wheel down zooms out (plain wheel)", () => {
     const { container, scroll } = renderTimeline();
     const kf = keyframeEl(container, "b1");
-    expect(kf.style.left).toBe("73px"); // zoom 8 → 10*8 - 7
+    expect(kf.style.left).toBe("64px"); // zoom 8 → 10*8 - 16
     fireEvent.wheel(scroll, { deltaY: -100 });
-    // zoom 8 → 9.6: left = 10*9.6 - 7.
-    expect(kf.style.left).toBe("89px");
+    // zoom 8 → 9.6: left = 10*9.6 - 16.
+    expect(kf.style.left).toBe("80px");
     fireEvent.wheel(scroll, { deltaY: 100 });
     // zoom 9.6 → 8: back to the fitted zoom.
-    expect(kf.style.left).toBe("73px");
+    expect(kf.style.left).toBe("64px");
   });
 
-  it("eliminates vertical scrolling: overflow-y is hidden and lanes compress", () => {
-    const { scroll } = renderTimeline();
-    // Horizontal scoping stays; vertical scrolling is gone.
-    expect(scroll.style.overflowX).toBe("auto");
-    expect(scroll.style.overflowY).toBe("hidden");
+  it("horizontal wheel pans instead of zooming", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    scroll.scrollLeft = 0;
+    fireEvent.wheel(scroll, { deltaX: 40, deltaY: 2 });
+    expect(scroll.scrollLeft).toBe(40);
+    expect(kf.style.left).toBe("64px"); // zoom unchanged
+  });
 
-    // Five overlapping hooks stack into five lanes; the adaptive lane
-    // height compresses the track to the fixed budget instead of growing.
+  it("shift+wheel pans with a mouse wheel", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    scroll.scrollLeft = 0;
+    fireEvent.wheel(scroll, { deltaY: 30, shiftKey: true });
+    expect(scroll.scrollLeft).toBe(30);
+    expect(kf.style.left).toBe("64px");
+  });
+
+  it("small trackpad deltas zoom proportionally", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    fireEvent.wheel(scroll, { deltaY: -50 });
+    // zoom 8 * 1.2^0.5 ≈ 8.764: left = 10*8.764 - 16 ≈ 71.6.
+    expect(parseFloat(kf.style.left)).toBeCloseTo(71.64, 1);
+  });
+
+  it("wheel zoom keeps the time under the pointer in place", () => {
+    const { container, scroll } = renderTimeline();
+    const strip = container.querySelector(
+      '[data-testid="keyframe-timeline-strip"]',
+    ) as HTMLElement;
+    scroll.scrollLeft = 0;
+    // The strip starts 50px from the viewport's left, shifted by scroll.
+    strip.getBoundingClientRect = () =>
+      ({ left: 50 - scroll.scrollLeft }) as DOMRect;
+    // Pointer over t=10s at zoom 8 (x = 50 + 80).
+    fireEvent.wheel(scroll, { deltaY: -100, clientX: 130 });
+    // Zoom 9.6: t=10s is at 96px, so scroll by 16px to keep it at x=130.
+    expect(scroll.scrollLeft).toBeCloseTo(16, 5);
+  });
+
+  it("lanes never compress: the track grows and scrolls vertically past the max", () => {
+    const { scroll } = renderTimeline();
+    expect(scroll.style.overflowX).toBe("auto");
+    expect(scroll.style.overflowY).toBe("auto");
+    // Ruler (24) + 4 visible lanes (4*32 + 6).
+    expect(scroll.style.maxHeight).toBe("158px");
+
+    // Five overlapping hooks stack into five full-height lanes.
     const entries: KeyframeTimelineEntry[] = [1, 2, 3, 4, 5].map((n) => ({
       id: `b${n}`,
       title: `Q${n}`,
@@ -513,10 +587,144 @@ describe("KeyframeTimeline", () => {
     const track = container.querySelector(
       '[data-testid="keyframe-timeline-track"]',
     ) as HTMLElement;
-    // laneHeight = floor((96 - 6) / 5) = 18 → track = 5*18 + 6 = 96.
-    // A fixed 28px lane would have been 146px — the compression is pinned.
-    expect(track.style.height).toBe("96px");
-    expect(track.style.height).not.toBe("146px");
+    // 5*32 + 6 = 166 (taller than the scroll viewport → scrolls).
+    expect(track.style.height).toBe("166px");
+  });
+
+  it("renders the keyframe label beside the diamond, truncated with the full title", () => {
+    const longTitle =
+      "A very long hook title that would never fit in the timeline lane";
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: longTitle, hookType: "blocking", timestamp: 10 },
+    ];
+    const { container } = renderTimeline({ entries });
+    const kf = keyframeEl(container, "b1");
+    const label = container.querySelector(
+      '[data-testid="timeline-keyframe-label"][data-content-id="b1"]',
+    ) as HTMLElement;
+    // A sibling of the (hit-area) button, not inside the rotated diamond.
+    expect(kf.contains(label)).toBe(false);
+    expect(label.textContent).toBe(longTitle);
+    expect(label.getAttribute("title")).toBe(longTitle);
+    expect(label.style.maxWidth).toBe("140px");
+    expect(label.style.textOverflow).toBe("ellipsis");
+    expect(label.style.left).toBe("96px"); // 10*8 + 16
+  });
+
+  it("the blocking keyframe hit area is 32px around a 14px diamond", () => {
+    const { container } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    expect(kf.style.width).toBe("32px");
+    expect(kf.style.height).toBe("32px");
+    const diamond = kf.querySelector(
+      '[data-testid="timeline-keyframe-diamond"]',
+    ) as HTMLElement;
+    expect(diamond.style.width).toBe("14px");
+  });
+
+  it("range edges have 12px grab areas", () => {
+    const { container } = renderTimeline();
+    expect(rangeEdge(container, "r1", "start").style.width).toBe("12px");
+    expect(rangeEdge(container, "r1", "end").style.width).toBe("12px");
+  });
+
+  it("near-coincident keyframes go to separate lanes so labels never overlap", () => {
+    // 0.6s apart = 4.8px: diamonds alone would nearly coincide and the
+    // labels would print over each other ("NewNew hookhook").
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "New hook", hookType: "blocking", timestamp: 10 },
+      { id: "b2", title: "New hook", hookType: "blocking", timestamp: 10.6 },
+    ];
+    const { container } = renderTimeline({ entries });
+    expect(keyframeEl(container, "b1").style.top).toBe("3px");
+    expect(keyframeEl(container, "b2").style.top).toBe("35px");
+  });
+
+  it("a keyframe whose label would reach a later hook pushes it to a new lane", () => {
+    // Without the label in the packing these would share a lane: the
+    // label (12 chars ≈ 84px ≈ 10.5s at 8px/s) runs past t=15.
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "Mid-roll one", hookType: "blocking", timestamp: 10 },
+      { id: "b2", title: "Two", hookType: "blocking", timestamp: 15 },
+    ];
+    const { container } = renderTimeline({ entries });
+    expect(keyframeEl(container, "b1").style.top).not.toBe(
+      keyframeEl(container, "b2").style.top,
+    );
+  });
+
+  it("renders 'Untitled hook' for empty titles, in labels and aria-labels", () => {
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "", hookType: "blocking", timestamp: 10 },
+      { id: "r1", title: "  ", hookType: "non-blocking", start: 30, end: 40 },
+    ];
+    const { container } = renderTimeline({ entries });
+    const kf = keyframeEl(container, "b1");
+    expect(kf.getAttribute("aria-label")).toBe(
+      "Untitled hook — blocking at 10s",
+    );
+    const label = container.querySelector(
+      '[data-testid="timeline-keyframe-label"]',
+    ) as HTMLElement;
+    expect(label.textContent).toBe("Untitled hook");
+    const body = keyframeEl(container, "r1");
+    expect(body.getAttribute("aria-label")).toBe(
+      "Untitled hook — non-blocking from 30s to 40s",
+    );
+    expect(body.textContent).toBe("Untitled hook");
+  });
+
+  it("the untitled label is overridable through strings", () => {
+    const entries: KeyframeTimelineEntry[] = [
+      { id: "b1", title: "", hookType: "blocking", timestamp: 10 },
+    ];
+    const { container } = renderTimeline({
+      entries,
+      strings: { untitledLabel: "Sans titre" },
+    });
+    expect(keyframeEl(container, "b1").getAttribute("aria-label")).toContain(
+      "Sans titre",
+    );
+  });
+
+  it("marks hooks that need attention with an indicator and aria-label suffix", () => {
+    const entries: KeyframeTimelineEntry[] = [
+      {
+        id: "b1",
+        title: "Quiz",
+        hookType: "blocking",
+        timestamp: 10,
+        needsAttention: true,
+      },
+      {
+        id: "r1",
+        title: "Poll",
+        hookType: "non-blocking",
+        start: 20,
+        end: 30,
+        needsAttention: true,
+        attentionLabel: "has no content",
+      },
+      { id: "b2", title: "Fine", hookType: "blocking", timestamp: 50 },
+    ];
+    const { container } = renderTimeline({ entries });
+    const kf = keyframeEl(container, "b1");
+    expect(
+      kf.querySelector('[data-testid="timeline-attention"]'),
+    ).not.toBeNull();
+    expect(kf.getAttribute("aria-label")).toBe(
+      "Quiz — blocking at 10s, needs attention",
+    );
+    const range = rangeEl(container, "r1");
+    expect(
+      range.querySelector('[data-testid="timeline-attention"]'),
+    ).not.toBeNull();
+    expect(keyframeEl(container, "r1").getAttribute("aria-label")).toBe(
+      "Poll — non-blocking from 20s to 30s, has no content",
+    );
+    const fine = keyframeEl(container, "b2");
+    expect(fine.querySelector('[data-testid="timeline-attention"]')).toBeNull();
+    expect(fine.getAttribute("aria-label")).toBe("Fine — blocking at 50s");
   });
 
   it("a manual zoom locks the auto-fit: a duration change does not reset it", () => {
@@ -524,8 +732,8 @@ describe("KeyframeTimeline", () => {
       videoDuration: 100,
     });
     const kf = keyframeEl(container, "b1");
-    // Fit zoom 4.8 → keyframe at 10s: left = 10*4.8 - 7.
-    expect(kf.style.left).toBe("41px");
+    // Fit zoom 4.8 → keyframe at 10s: left = 10*4.8 - 16.
+    expect(kf.style.left).toBe("32px");
 
     // Manual zoom in via the slider (4.8 → 7.2).
     fireEvent.click(
@@ -533,8 +741,8 @@ describe("KeyframeTimeline", () => {
         '[data-testid="keyframe-timeline-zoom-in"]',
       ) as HTMLElement,
     );
-    const afterManual = kf.style.left; // 10*7.2 - 7 = 65
-    expect(afterManual).toBe("65px");
+    const afterManual = kf.style.left; // 10*7.2 - 16 = 56
+    expect(afterManual).toBe("56px");
 
     // The video reloads with a new duration: the auto-fit would reset the
     // zoom to 480/120 = 4, but the userZoomed lock keeps the manual zoom.

@@ -28,24 +28,51 @@ registry.register(QuizContentType);
 <div style={{ width: 960, height: 640 }}>
   <InterlaceEditor
     contentTypeRegistry={registry}
-    document={existingDoc}        // optional: omit for a fresh document
-    onUpload={async (file) => URL.createObjectURL(file)}   // your upload story
-    onSave={(doc) => save(doc)}   // the host owns persistence
+    document={existingDoc} // optional: omit for a fresh document
+    onUpload={async (file) => URL.createObjectURL(file)} // your upload story
+    onSave={(doc) => save(doc)} // the host owns persistence
     onError={(e) => showError(e.message)}
-    onDirtyChange={(dirty) => setHasUnsavedChanges(dirty)}   // optional
+    onDirtyChange={(dirty) => setHasUnsavedChanges(dirty)} // optional
   />
-</div>
+</div>;
 ```
 
 `onSave` receives the serialized document (JSON) ready for the player (`@interlacejs/player`). The editor never persists on its own — bring your own storage.
 
 `onDirtyChange` fires when the editor gains or loses unsaved changes, relative to the loaded `document` (or an empty one) and the last `onSave`. Use it to warn before navigating away. Duration corrections the editor makes from the video's metadata do not count as changes.
 
-## Strings and theming
+## Strings
 
-Both `InterlaceEditor` and sub-components accept `strings`/`theme` overrides; the built-in default strings derive from `@interlacejs/core`'s `DEFAULT_STRINGS` so hosts can localize once.
+`InterlaceEditor` and its sub-components accept `strings` overrides; the defaults derive from `@interlacejs/core`'s `DEFAULT_STRINGS`, so hosts can localize once.
 
-See the [root README](https://github.com/farayolaj/interlace) for the document format and the `apps/demo` for a working wiring.
+## Styling and theming
+
+All Interlace UI (editor, player and quiz) draws its colours, fonts and corner radius from `--interlace-*` CSS custom properties, with the default look as the fallback. There are three ways to restyle it, from broadest to most specific:
+
+1. **CSS variables.** Set them anywhere above the component; no JavaScript needed, and one rule covers the editor, player and quiz together.
+
+   ```css
+   :root {
+     --interlace-accent: #6f42c1;
+     --interlace-radius: 4px;
+     --interlace-font-body: "Inter", system-ui, sans-serif;
+     --interlace-font-display: "Inter", system-ui, sans-serif;
+   }
+   ```
+
+   Variables: `accent`, `accent-hover`, `accent-contrast`, `accent-soft`, `text`, `text-muted`, `surface`, `surface-raised`, `border`, `border-strong`, `danger`, `danger-soft`, `warning`, `warning-soft`, `font-body`, `font-display`, `radius` (each prefixed `--interlace-`). Hover and soft tints are derived from the accent when you don't set them.
+
+2. **The `theme` prop.** `InterlaceEditor` and `InteractiveVideoPlayer` accept a typed `theme` (`InterlaceTheme` from `@interlacejs/core`). It is applied as the same variables on the component's root, so it reaches everything inside, including the preview and content editors.
+
+   ```tsx
+   <InterlaceEditor theme={{ accentColor: "#6f42c1", radius: 4 }} /* … */ />
+   ```
+
+3. **Class names.** Controls carry stable classes (`interlace-btn`, `interlace-btn--primary|secondary|ghost|danger`, `interlace-input`, `interlace-field`, `interlace-label`, `interlace-choice`, `interlace-badge`), and the root takes a `className`. The built-in rules use zero-specificity `:where()` selectors, so your own rules for these classes win without `!important`.
+
+## Saving
+
+Save is blocked while any hook needs attention: no title, no content type yet, or problems reported by the content type's `validate()`. The editor lists them with links to each hook. Hooks without a content type are kept as drafts on the timeline until you finish or delete them.
 
 ## License
 

@@ -1,9 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  InspectorPanel,
-  type InspectorPanelEntry,
-} from "./inspector-panel";
+import { InspectorPanel, type InspectorPanelEntry } from "./inspector-panel";
 import type { Placement } from "@interlacejs/core";
 
 afterEach(() => {
@@ -47,6 +44,7 @@ function renderPanel(
     placement?: Placement;
     onPlacementChange?: (placement: Placement) => void;
     onDelete?: () => void;
+    onHookTypeChange?: (hookType: "blocking" | "non-blocking") => void;
     strings?: Record<string, string>;
   } = {},
 ) {
@@ -63,6 +61,7 @@ function renderPanel(
       placement={overrides.placement}
       onPlacementChange={overrides.onPlacementChange}
       onDelete={overrides.onDelete ?? onDelete}
+      onHookTypeChange={overrides.onHookTypeChange}
       strings={overrides.strings}
     />,
   );
@@ -90,21 +89,23 @@ describe("InspectorPanel", () => {
 
   it("shows the picker with the selected type for a typed hook (re-typing)", () => {
     const { onContentTypeSelect } = renderPanel(TYPED_BLOCKING);
-    // The picker button reflects the hook's current type.
-    expect(screen.getByText("quiz-editor")).toBeInTheDocument();
+    // The hook's current type is shown, with a way to change it.
+    expect(
+      screen.getByTestId("inspector-panel-content-type"),
+    ).toHaveTextContent("quiz-editor");
 
-    // Choosing a different type re-types the hook (data reset is the
-    // parent's concern; the panel just reports the selection).
-    fireEvent.click(screen.getByText("quiz-editor"));
-    fireEvent.click(screen.getByText("poll"));
+    // Changing warns that content is cleared, then reports the new type
+    // (the data reset itself is the parent's concern).
+    fireEvent.click(screen.getByTestId("inspector-panel-change-type"));
+    expect(screen.getByText(/clears this hook's content/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "poll" }));
     expect(onContentTypeSelect).toHaveBeenCalledWith("poll");
   });
 
   it("shows the content type picker for a pending hook", () => {
     const { onContentTypeSelect } = renderPanel(PENDING_NON_BLOCKING);
-    // Open the picker dropdown and choose a type.
-    fireEvent.click(screen.getByText(/Select content type/i));
-    fireEvent.click(screen.getByText("poll"));
+    // The choices are shown straight away for a hook without a type.
+    fireEvent.click(screen.getByRole("radio", { name: "poll" }));
     expect(onContentTypeSelect).toHaveBeenCalledWith("poll");
   });
 
@@ -194,9 +195,8 @@ describe("InspectorPanel", () => {
       },
     });
     expect(screen.getByText("Hook")).toBeInTheDocument();
-    expect(screen.getByTestId("inspector-panel-title")).toHaveAttribute(
-      "aria-label",
-      "Name",
+    expect(screen.getByLabelText("Name")).toBe(
+      screen.getByTestId("inspector-panel-title"),
     );
     expect(screen.getByTestId("inspector-panel-delete")).toHaveTextContent(
       "Remove",
@@ -205,5 +205,39 @@ describe("InspectorPanel", () => {
       "Pauses video",
     );
     expect(screen.getByText("At (s)")).toBeInTheDocument();
+  });
+
+  it("shows a type switch when onHookTypeChange is given", () => {
+    const onHookTypeChange = vi.fn();
+    renderPanel(TYPED_BLOCKING, { onHookTypeChange });
+    const nonBlocking = screen.getByRole("radio", { name: /Non-blocking/ });
+    expect(screen.getByRole("radio", { name: /^Blocking/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    fireEvent.click(nonBlocking);
+    expect(onHookTypeChange).toHaveBeenCalledWith("non-blocking");
+  });
+
+  it("lists the hook's issues", () => {
+    renderPanel({
+      ...TYPED_BLOCKING,
+      issues: ["Add a title", "Question 1 needs text"],
+    });
+    expect(screen.getByText("This hook needs attention")).toBeInTheDocument();
+    expect(screen.getByText("Question 1 needs text")).toBeInTheDocument();
+  });
+
+  it("shows readable content type names", () => {
+    renderPanel({
+      ...TYPED_BLOCKING,
+      contentTypeOptions: [
+        { id: "quiz-editor", label: "Quiz", description: "Questions" },
+      ],
+    });
+    expect(
+      screen.getByTestId("inspector-panel-content-type"),
+    ).toHaveTextContent("Quiz");
+    expect(screen.getByText("Questions")).toBeInTheDocument();
   });
 });

@@ -27,11 +27,11 @@ const registry = new ContentTypeRegistry();
 registry.register(QuizContentType);
 
 <InteractiveVideoPlayer
-  adapter={adapter}            // a VideoAdapter (NativeVideoAdapter works)
-  document={doc}               // SerializedInteractiveMediaDocument
+  adapter={adapter} // a VideoAdapter (NativeVideoAdapter works)
+  document={doc} // SerializedInteractiveMediaDocument
   registry={registry}
   onError={(e) => showError(e)}
-/>
+/>;
 ```
 
 Behavior notes:
@@ -42,6 +42,10 @@ Behavior notes:
 ## Types and authoring
 
 Documents are produced by [`@interlacejs/editor`](https://github.com/farayolaj/interlace) but they are plain JSON — see the [root README](https://github.com/farayolaj/interlace) for the full document shape and the `apps/demo` source for a working wiring.
+
+## Theming
+
+Pass `theme` (an `InterlaceTheme` from `@interlacejs/core`) or set `--interlace-*` CSS variables on any ancestor. See the editor README's "Styling and theming" section for the full list.
 
 ## License
 

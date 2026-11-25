@@ -3,10 +3,20 @@ import {
   type Placement,
   type Strings,
 } from "@interlacejs/core";
-import React, { useCallback, useRef } from "react";
-import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
-import { ContentTypePicker } from "./content-type-picker";
+import React, { useCallback, useRef, useState } from "react";
+import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
+import {
+  type ContentTypeOption,
+  ContentTypePicker,
+} from "./content-type-picker";
 import { PlacementInputs } from "./placement-editor";
+import {
+  Button,
+  Field,
+  IssueList,
+  SectionHeading,
+  useInterlaceStyles,
+} from "./ui";
 
 /**
  * Localized strings consumed by `InspectorPanel`. Extends the core
@@ -36,6 +46,24 @@ export interface InspectorPanelStrings extends Strings {
   placementLabel: string;
   /** Label above the content type row. */
   contentTypeLabel: string;
+  /** Placeholder for the title input. */
+  titlePlaceholder: string;
+  /** Help text under the title input. */
+  titleHint: string;
+  /** Description of the blocking type, shown in the type switch. */
+  blockingTypeDescription: string;
+  /** Description of the non-blocking type, shown in the type switch. */
+  nonBlockingTypeDescription: string;
+  /** Help text under the position & size inputs. */
+  placementHint: string;
+  /** Button that reveals the content type choices for a typed hook. */
+  changeContentTypeLabel: string;
+  /** Warning shown while changing an existing hook's content type. */
+  changeContentTypeWarning: string;
+  /** Button that cancels changing the content type. */
+  cancelChangeContentTypeLabel: string;
+  /** Heading for the list of problems with this hook. */
+  issuesHeading: string;
 }
 
 export const DEFAULT_INSPECTOR_PANEL_STRINGS: InspectorPanelStrings = {
@@ -46,11 +74,21 @@ export const DEFAULT_INSPECTOR_PANEL_STRINGS: InspectorPanelStrings = {
   hookTypeLabel: "Type",
   blockingTypeLabel: "Blocking",
   nonBlockingTypeLabel: "Non-blocking",
-  timestampLabel: "Timestamp (s)",
-  startLabel: "Start (s)",
-  endLabel: "End (s)",
-  placementLabel: "Placement",
+  timestampLabel: "Pauses at (seconds)",
+  startLabel: "Starts at (seconds)",
+  endLabel: "Ends at (seconds)",
+  placementLabel: "Position & size (%)",
   contentTypeLabel: "Content type",
+  titlePlaceholder: "e.g. Check your understanding",
+  titleHint: "Students see this above the content.",
+  blockingTypeDescription: "Pauses the video until answered",
+  nonBlockingTypeDescription: "Floats over the video for a time range",
+  placementHint: "Drag the box on the video, or type exact values.",
+  changeContentTypeLabel: "Change type",
+  changeContentTypeWarning:
+    "Choosing a different type clears this hook's content.",
+  cancelChangeContentTypeLabel: "Keep current type",
+  issuesHeading: "This hook needs attention",
 };
 
 export interface InspectorPanelEntry {
@@ -72,6 +110,10 @@ export interface InspectorPanelEntry {
   contentTypeId: string | null;
   /** Registered content type ids (drives the picker for pending hooks). */
   registeredTypes: string[];
+  /** Readable names/descriptions for the picker; ids are used when omitted. */
+  contentTypeOptions?: ContentTypeOption[];
+  /** Problems to fix before this hook can be saved. */
+  issues?: string[];
 }
 
 export interface InspectorPanelProps {
@@ -87,17 +129,13 @@ export interface InspectorPanelProps {
   placement?: Placement;
   onPlacementChange?: (placement: Placement) => void;
   onDelete: () => void;
+  /**
+   * Switches between blocking and non-blocking. When omitted the type is
+   * shown read-only.
+   */
+  onHookTypeChange?: (hookType: "blocking" | "non-blocking") => void;
   strings?: Partial<InspectorPanelStrings>;
 }
-
-const INPUT_STYLE: React.CSSProperties = {
-  width: "70px",
-  padding: `${SPACE[1]}px ${SPACE[2]}px`,
-  border: `1px solid ${COLORS.borderStrong}`,
-  borderRadius: RADIUS.sm,
-  fontSize: TYPE.sm,
-  color: COLORS.text,
-};
 
 /**
  * InspectorPanel - the "Hook details" panel for the currently selected
@@ -119,8 +157,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   placement,
   onPlacementChange,
   onDelete,
+  onHookTypeChange,
   strings: stringsOverride,
 }) => {
+  useInterlaceStyles();
+  const [changingType, setChangingType] = useState(false);
   const strings = { ...DEFAULT_INSPECTOR_PANEL_STRINGS, ...stringsOverride };
   // Latest props for the handlers (stable callbacks, render-time sync —
   // the PlacementEditor pattern).
@@ -144,164 +185,265 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   );
 
   const isBlocking = entry.hookType === "blocking";
+  const issues = entry.issues ?? [];
+  const showPicker = entry.contentTypeId === null || changingType;
+  const selectedOption = entry.contentTypeOptions?.find(
+    (option) => option.id === entry.contentTypeId,
+  );
+  const timeInput = (
+    testId: string,
+    value: number | undefined,
+    key: "timestamp" | "start" | "end",
+  ) =>
+    function TimeInput({
+      id,
+      describedBy,
+    }: {
+      id: string;
+      describedBy: string | undefined;
+    }) {
+      return (
+        <input
+          id={id}
+          type="number"
+          className="interlace-input"
+          inputMode="decimal"
+          min={0}
+          max={entry.videoDuration || undefined}
+          step={0.1}
+          aria-describedby={describedBy}
+          data-testid={testId}
+          value={(value ?? 0).toFixed(1)}
+          onChange={(e) =>
+            onTimeChange({ [key]: parseFloat(e.target.value) || 0 })
+          }
+        />
+      );
+    };
 
   return (
     <div
       className="inspector-panel"
       data-testid="inspector-panel"
-      tabIndex={0}
+      tabIndex={-1}
       onKeyDown={handleKeyDown}
       style={{
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: RADIUS.md,
-        backgroundColor: COLORS.surfaceRaised,
-        padding: SPACE[3],
         display: "flex",
         flexDirection: "column",
-        gap: SPACE[2],
+        gap: SPACE[4],
         fontSize: TYPE.sm,
+        outline: "none",
       }}
     >
-      <h4
+      <div
         style={{
-          margin: 0,
-          fontFamily: FONTS.display,
-          fontSize: TYPE.md,
-          fontWeight: 600,
-          color: COLORS.text,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: SPACE[2],
         }}
       >
-        {strings.inspectorHeading}
-      </h4>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {strings.titleLabel}
-        <input
-          type="text"
-          data-testid="inspector-panel-title"
-          value={entry.title}
-          onChange={(e) => onTitleChange(e.target.value)}
-          aria-label={strings.titleLabel}
-          style={{
-            padding: `${SPACE[2]}px ${SPACE[2]}px`,
-            border: `1px solid ${COLORS.borderStrong}`,
-            borderRadius: RADIUS.sm,
-            fontSize: TYPE.sm,
-            color: COLORS.text,
-          }}
-        />
-      </label>
-      <div style={{ display: "flex", gap: 16, color: COLORS.textMuted }}>
-        <span>
-          {strings.hookTypeLabel}:{" "}
-          <strong data-testid="inspector-panel-type">
-            {isBlocking ? strings.blockingTypeLabel : strings.nonBlockingTypeLabel}
-          </strong>
+        <SectionHeading>{strings.inspectorHeading}</SectionHeading>
+        <Button
+          variant="danger"
+          onClick={onDelete}
+          data-testid="inspector-panel-delete"
+        >
+          {strings.deleteLabel}
+        </Button>
+      </div>
+
+      {issues.length > 0 ? (
+        <IssueList title={strings.issuesHeading} issues={issues} />
+      ) : null}
+
+      <Field label={strings.titleLabel} hint={strings.titleHint}>
+        {({ id, describedBy }) => (
+          <input
+            id={id}
+            type="text"
+            className="interlace-input"
+            data-testid="inspector-panel-title"
+            value={entry.title}
+            placeholder={strings.titlePlaceholder}
+            aria-describedby={describedBy}
+            onChange={(e) => onTitleChange(e.target.value)}
+          />
+        )}
+      </Field>
+
+      <div className="interlace-field">
+        <span className="interlace-label" id={`${entry.id}-type-label`}>
+          {strings.hookTypeLabel}
+        </span>
+        {onHookTypeChange ? (
+          <div
+            role="radiogroup"
+            aria-labelledby={`${entry.id}-type-label`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: SPACE[2],
+            }}
+          >
+            {(
+              [
+                [
+                  "blocking",
+                  strings.blockingTypeLabel,
+                  strings.blockingTypeDescription,
+                ],
+                [
+                  "non-blocking",
+                  strings.nonBlockingTypeLabel,
+                  strings.nonBlockingTypeDescription,
+                ],
+              ] as const
+            ).map(([value, label, description]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={entry.hookType === value}
+                className="interlace-choice interlace-focusable"
+                data-testid={`inspector-panel-type-${value}`}
+                onClick={() => {
+                  if (entry.hookType !== value) onHookTypeChange(value);
+                }}
+                style={{ flexDirection: "column", gap: 2 }}
+              >
+                <strong style={{ fontSize: TYPE.sm }}>{label}</strong>
+                <span style={{ fontSize: TYPE.sm, color: COLORS.textMuted }}>
+                  {description}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <span
+          data-testid="inspector-panel-type"
+          style={
+            onHookTypeChange
+              ? {
+                  position: "absolute",
+                  width: 1,
+                  height: 1,
+                  overflow: "hidden",
+                  clip: "rect(0 0 0 0)",
+                }
+              : { fontWeight: 600 }
+          }
+        >
+          {isBlocking
+            ? strings.blockingTypeLabel
+            : strings.nonBlockingTypeLabel}
         </span>
       </div>
 
-      {/* Time / timespan inputs (clamped by the parent's onTimeChange) */}
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: SPACE[3],
+        }}
+      >
         {isBlocking ? (
-          <label>
-            {strings.timestampLabel}
-            <input
-              type="number"
-              data-testid="inspector-panel-timestamp"
-              value={(entry.timestamp ?? 0).toFixed(1)}
-              onChange={(e) =>
-                onTimeChange({ timestamp: parseFloat(e.target.value) || 0 })
-              }
-              style={INPUT_STYLE}
-            />
-          </label>
+          <Field label={strings.timestampLabel}>
+            {timeInput(
+              "inspector-panel-timestamp",
+              entry.timestamp,
+              "timestamp",
+            )}
+          </Field>
         ) : (
           <>
-            <label>
-              {strings.startLabel}
-              <input
-                type="number"
-                data-testid="inspector-panel-start"
-                value={(entry.start ?? 0).toFixed(1)}
-                onChange={(e) =>
-                  onTimeChange({ start: parseFloat(e.target.value) || 0 })
-                }
-                style={INPUT_STYLE}
-              />
-            </label>
-            <label>
-              {strings.endLabel}
-              <input
-                type="number"
-                data-testid="inspector-panel-end"
-                value={(entry.end ?? 0).toFixed(1)}
-                onChange={(e) =>
-                  onTimeChange({ end: parseFloat(e.target.value) || 0 })
-                }
-                style={INPUT_STYLE}
-              />
-            </label>
+            <Field label={strings.startLabel}>
+              {timeInput("inspector-panel-start", entry.start, "start")}
+            </Field>
+            <Field label={strings.endLabel}>
+              {timeInput("inspector-panel-end", entry.end, "end")}
+            </Field>
           </>
         )}
       </div>
 
-      {/* Manual placement inputs */}
       {placement && onPlacementChange ? (
-        <div>
-          <div
-            style={{
-              color: COLORS.textMuted,
-              marginBottom: SPACE[1],
-              fontWeight: 600,
-            }}
-          >
-            {strings.placementLabel}
-          </div>
+        <div
+          className="interlace-field"
+          role="group"
+          aria-label={strings.placementLabel}
+        >
+          <span className="interlace-label">{strings.placementLabel}</span>
           <PlacementInputs
             placement={placement}
             onPlacementChange={onPlacementChange}
           />
+          <p className="interlace-hint">{strings.placementHint}</p>
         </div>
       ) : null}
 
-      {/* Content type: picker for pending hooks and for re-typing
-          typed hooks (re-typing resets the content data to the new
-          type's default shape). */}
-      <div>
-        <div
-          style={{
-            color: COLORS.textMuted,
-            marginBottom: SPACE[1],
-            fontWeight: 600,
-          }}
-        >
-          {strings.contentTypeLabel}
-        </div>
-        <ContentTypePicker
-          registeredTypes={entry.registeredTypes}
-          selectedType={entry.contentTypeId ?? null}
-          onSelect={onContentTypeSelect}
-        />
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          onClick={onDelete}
-          data-testid="inspector-panel-delete"
-          style={{
-            padding: `${SPACE[1]}px ${SPACE[3]}px`,
-            backgroundColor: COLORS.errorBg,
-            border: `1px solid ${COLORS.errorBorder}`,
-            borderRadius: RADIUS.sm,
-            color: COLORS.errorText,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            fontWeight: 600,
-            transition: "background-color 150ms ease",
-          }}
-        >
-          {strings.deleteLabel}
-        </button>
+      <div className="interlace-field">
+        <span className="interlace-label">{strings.contentTypeLabel}</span>
+        {showPicker ? (
+          <>
+            {changingType ? (
+              <p
+                className="interlace-hint"
+                style={{ color: COLORS.warningText }}
+              >
+                {strings.changeContentTypeWarning}
+              </p>
+            ) : null}
+            <ContentTypePicker
+              registeredTypes={entry.registeredTypes}
+              options={entry.contentTypeOptions}
+              selectedType={entry.contentTypeId ?? null}
+              label={strings.contentTypeLabel}
+              onSelect={(typeId) => {
+                setChangingType(false);
+                if (typeId !== entry.contentTypeId) onContentTypeSelect(typeId);
+              }}
+            />
+            {changingType ? (
+              <div>
+                <Button variant="ghost" onClick={() => setChangingType(false)}>
+                  {strings.cancelChangeContentTypeLabel}
+                </Button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: SPACE[2],
+              padding: `${SPACE[2]}px ${SPACE[3]}px`,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: RADIUS.md,
+              background: COLORS.surface,
+            }}
+          >
+            <span style={{ display: "grid", gap: 2 }}>
+              <strong data-testid="inspector-panel-content-type">
+                {selectedOption?.label ?? entry.contentTypeId}
+              </strong>
+              {selectedOption?.description ? (
+                <span style={{ color: COLORS.textMuted }}>
+                  {selectedOption.description}
+                </span>
+              ) : null}
+            </span>
+            <Button
+              variant="ghost"
+              onClick={() => setChangingType(true)}
+              data-testid="inspector-panel-change-type"
+            >
+              {strings.changeContentTypeLabel}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

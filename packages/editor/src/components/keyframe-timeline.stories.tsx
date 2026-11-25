@@ -32,9 +32,7 @@ const meta: Meta<typeof KeyframeTimeline> = {
     entries: makeEntries(),
     videoDuration: 60,
     currentTime: 18,
-    isPlaying: false,
     onSeek: fn(),
-    onTogglePlay: fn(),
     onSelectEntry: fn(),
     onUpdateEntry: fn(),
     onAddEntry: fn(),
@@ -60,18 +58,72 @@ export const ZoomedIn: Story = {
   },
 };
 
-export const Playing: Story = {
+/** With `onTogglePlay`, a quiet play/pause icon button is shown. */
+export const WithPlayButton: Story = {
   args: {
     isPlaying: true,
     currentTime: 32,
+    onTogglePlay: fn(),
+  },
+};
+
+/** Nearby hooks stack into lanes so markers and labels never overlap. */
+export const NearbyHooks: Story = {
+  args: {
+    entries: [
+      { id: "n1", title: "New hook", hookType: "blocking", timestamp: 10 },
+      { id: "n2", title: "New hook", hookType: "blocking", timestamp: 10.6 },
+      {
+        id: "n3",
+        title: "A rather long hook title that truncates",
+        hookType: "blocking",
+        timestamp: 14,
+      },
+      {
+        id: "n4",
+        title: "Overlay",
+        hookType: "non-blocking",
+        start: 12,
+        end: 30,
+      },
+      { id: "n5", title: "Late check", hookType: "blocking", timestamp: 40 },
+    ],
+  },
+};
+
+/** Untitled hooks and hooks flagged as needing attention. */
+export const UntitledAndNeedsAttention: Story = {
+  args: {
+    entries: [
+      {
+        id: "a1",
+        title: "",
+        hookType: "blocking",
+        timestamp: 8,
+        needsAttention: true,
+        attentionLabel: "has no content",
+      },
+      {
+        id: "a2",
+        title: "Side poll",
+        hookType: "non-blocking",
+        start: 25,
+        end: 45,
+        needsAttention: true,
+      },
+      { id: "a3", title: "Ready quiz", hookType: "blocking", timestamp: 50 },
+    ],
+    selectedId: "a1",
   },
 };
 
 export const StringsOverride: Story = {
   args: {
     strings: {
-      addBlockingLabel: "+ Pause video here",
-      addNonBlockingLabel: "+ Overlay here",
+      addBlockingLabel: "Pause point",
+      addNonBlockingLabel: "Overlay",
+      addBlockingHint: "Pause the video here",
+      addNonBlockingHint: "Show an overlay from here",
       emptyLabel: "Nothing scheduled yet.",
     },
   },
@@ -88,9 +140,7 @@ export function Interactive() {
         entries={entries}
         videoDuration={60}
         currentTime={currentTime}
-        isPlaying={false}
         onSeek={setCurrentTime}
-        onTogglePlay={fn()}
         onSelectEntry={fn()}
         onUpdateEntry={(id, updates) =>
           setEntries((prev) =>

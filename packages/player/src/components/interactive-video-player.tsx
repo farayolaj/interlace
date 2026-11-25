@@ -1,7 +1,10 @@
 import {
   ContentTypeRegistry,
+  ensureInterlaceStyles,
+  type InterlaceTheme,
   RenderState,
   SerializedInteractiveMediaDocument,
+  themeToCssVariables,
   VideoAdapter,
 } from "@interlacejs/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -16,6 +19,14 @@ export interface InteractiveVideoPlayerProps {
   document: SerializedInteractiveMediaDocument;
   registry: ContentTypeRegistry;
   onError?: (error: Error) => void;
+  /**
+   * Optional theme overrides, applied as `--interlace-*` CSS variables on
+   * the player's root so they reach overlays and content. The same
+   * variables can be set from host CSS instead.
+   */
+  theme?: InterlaceTheme;
+  /** Extra class name for the player's root element. */
+  className?: string;
 }
 
 /**
@@ -31,6 +42,8 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   document: doc,
   registry,
   onError,
+  theme,
+  className,
 }) => {
   const [renderState, setRenderState] = useState<RenderState>({
     visibleAnchorIds: [],
@@ -46,6 +59,10 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
     undefined,
   );
   const lastAutoOpenedBlockingIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    ensureInterlaceStyles();
+  }, []);
 
   const { controller, items, initialized, error } = useInteractiveMedia({
     adapter,
@@ -125,7 +142,7 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
           color: COLORS.errorText,
           backgroundColor: COLORS.errorBg,
           border: `1px solid ${COLORS.errorBorder}`,
-          borderRadius: `${RADIUS.md}px`,
+          borderRadius: `${RADIUS.md}`,
           fontSize: TYPE.md,
           lineHeight: 1.5,
         }}
@@ -167,7 +184,15 @@ export const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
 
   return (
     <ContentErrorBoundary onError={onError}>
-      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <div
+        className={["interlace-player", className].filter(Boolean).join(" ")}
+        style={{
+          ...themeToCssVariables(theme),
+          position: "relative",
+          width: "100%",
+          height: "100%",
+        }}
+      >
         <OverlayLayer
           renderState={renderState}
           items={overlayItems}

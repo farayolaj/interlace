@@ -23,6 +23,24 @@ export type {
   HookValidationOptions,
 } from "./hook/validation";
 
+// Theme
+export {
+  COLORS,
+  CONTROL_HEIGHT,
+  FOCUS_RING,
+  FONTS,
+  RADIUS,
+  SHADOWS,
+  SPACE,
+  TYPE,
+} from "./theme/tokens";
+export {
+  ensureInterlaceStyles,
+  INTERLACE_STYLESHEET,
+  themeToCssVariables,
+} from "./theme/theme";
+export type { InterlaceTheme } from "./theme/theme";
+
 // Content types
 export { ContentTypeRegistry } from "./content-type/types";
 export type {

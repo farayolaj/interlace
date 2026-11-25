@@ -7,74 +7,82 @@ afterEach(() => {
 });
 
 describe("ContentTypePicker", () => {
-  it("renders dropdown with registered types", () => {
+  it("renders a radio per registered type, named by id when unlabelled", () => {
     render(
       <ContentTypePicker
-        registeredTypes={["quiz", "survey", "poll"]}
+        registeredTypes={["quiz", "poll"]}
         selectedType={null}
         onSelect={vi.fn()}
       />,
     );
 
-    const button = screen.getByRole("button");
-    fireEvent.click(button);
-
-    expect(screen.getByText("quiz")).toBeInTheDocument();
-    expect(screen.getByText("survey")).toBeInTheDocument();
-    expect(screen.getByText("poll")).toBeInTheDocument();
+    expect(
+      screen.getByRole("radiogroup", { name: "Content type" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "poll" })).toBeInTheDocument();
   });
 
-  it("calls onSelect when type is clicked", () => {
-    const onSelect = vi.fn();
-
+  it("shows readable names and descriptions from options", () => {
     render(
       <ContentTypePicker
-        registeredTypes={["quiz", "survey"]}
+        registeredTypes={["quiz-editor"]}
+        options={[
+          { id: "quiz-editor", label: "Quiz", description: "Multiple choice" },
+        ]}
+        selectedType={null}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /Quiz/ })).toBeInTheDocument();
+    expect(screen.getByText("Multiple choice")).toBeInTheDocument();
+    expect(screen.queryByText("quiz-editor")).not.toBeInTheDocument();
+  });
+
+  it("calls onSelect with the id when a type is clicked", () => {
+    const onSelect = vi.fn();
+    render(
+      <ContentTypePicker
+        registeredTypes={["quiz", "poll"]}
         selectedType={null}
         onSelect={onSelect}
       />,
     );
 
-    const button = screen.getByRole("button");
-    fireEvent.click(button);
-
-    const quizOption = screen.getByText("quiz");
-    fireEvent.click(quizOption);
-
-    expect(onSelect).toHaveBeenCalledWith("quiz");
+    fireEvent.click(screen.getByRole("radio", { name: "poll" }));
+    expect(onSelect).toHaveBeenCalledWith("poll");
   });
 
-  it("displays selected type", () => {
+  it("marks the selected type checked and makes it the tab stop", () => {
     render(
       <ContentTypePicker
-        registeredTypes={["quiz", "survey"]}
-        selectedType="quiz"
+        registeredTypes={["quiz", "poll"]}
+        selectedType="poll"
         onSelect={vi.fn()}
       />,
     );
 
-    const buttons = screen.getAllByRole("button");
-    expect(buttons.length).toBeGreaterThan(0);
-    // Check that quiz appears in the document (either in button or dropdown)
-    expect(screen.getByText("quiz")).toBeInTheDocument();
+    const poll = screen.getByRole("radio", { name: "poll" });
+    const quiz = screen.getByRole("radio", { name: "quiz" });
+    expect(poll).toHaveAttribute("aria-checked", "true");
+    expect(quiz).toHaveAttribute("aria-checked", "false");
+    expect(poll).toHaveAttribute("tabindex", "0");
+    expect(quiz).toHaveAttribute("tabindex", "-1");
   });
 
-  it("toggles dropdown on button click", () => {
+  it("moves focus between choices with arrow keys", () => {
     render(
       <ContentTypePicker
-        registeredTypes={["quiz", "survey"]}
+        registeredTypes={["quiz", "poll"]}
         selectedType={null}
         onSelect={vi.fn()}
       />,
     );
 
-    const button = screen.getByRole("button");
-
-    // Open
-    fireEvent.click(button);
-    expect(screen.getByText("quiz")).toBeInTheDocument();
-
-    // Close
-    fireEvent.click(button);
+    const quiz = screen.getByRole("radio", { name: "quiz" });
+    quiz.focus();
+    fireEvent.keyDown(quiz, { key: "ArrowDown" });
+    expect(screen.getByRole("radio", { name: "poll" })).toHaveFocus();
   });
 });

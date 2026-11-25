@@ -2,6 +2,7 @@ import { ContentType } from "@interlacejs/core";
 import { QuizEditorType, unmountQuizEditor } from "./quiz-editor";
 import { renderQuizPlayback, unmountQuizPlayback } from "./quiz-player";
 import type { QuizData } from "./schema";
+import { getQuizAuthoringIssues } from "./validate";
 
 /**
  * Built-in Quiz content type for Interlace. Authors the canonical
@@ -13,6 +14,12 @@ import type { QuizData } from "./schema";
 export const QuizContentType: ContentType<QuizData> = {
   getId: () => "quiz-editor",
   getVersion: () => 1,
+  getDisplayName: () => "Quiz",
+  getDescription: () => "Multiple-choice questions that check understanding",
+
+  validate(data: QuizData): string[] {
+    return getQuizAuthoringIssues(data);
+  },
 
   getMaximumScore(data): number | undefined {
     return data.questions.length;

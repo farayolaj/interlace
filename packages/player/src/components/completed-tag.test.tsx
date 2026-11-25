@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { CompletedTag } from "./completed-tag";
+import { COLORS } from "../tokens";
 
 describe("CompletedTag", () => {
   it("renders completed tag with title", () => {
@@ -41,7 +42,7 @@ describe("CompletedTag", () => {
     const tag = container.firstChild as HTMLElement;
 
     // Uses the Interlace blue accent instead of an extra green.
-    expect(tag).toHaveStyle("backgroundColor: #0066cc");
-    expect(tag).toHaveStyle("color: #fff");
+    expect(tag.style.backgroundColor).toBe(COLORS.accent);
+    expect(tag.style.color).toBe(COLORS.accentContrast);
   });
 });

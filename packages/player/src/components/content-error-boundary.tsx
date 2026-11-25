@@ -43,7 +43,7 @@ export class ContentErrorBoundary extends React.Component<
               backgroundColor: COLORS.errorBg,
               color: COLORS.errorText,
               border: `1px solid ${COLORS.errorBorder}`,
-              borderRadius: `${RADIUS.md}px`,
+              borderRadius: `${RADIUS.md}`,
               fontSize: TYPE.md,
               lineHeight: 1.5,
             }}

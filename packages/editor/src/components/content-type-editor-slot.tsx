@@ -2,6 +2,7 @@ import React, { useRef } from "react";
 import { ContentTypeRegistry } from "@interlacejs/core";
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
 import { useContentTypeEditorMount } from "./content-type-editor-mount";
+import { Button } from "./ui";
 
 export interface ContentTypeEditorSlotProps<TData = unknown> {
   contentTypeId: string | null;
@@ -68,7 +69,7 @@ export function ContentTypeEditorSlot<TData = unknown>({
         className="content-type-editor-container"
         style={{
           backgroundColor: COLORS.surface,
-          borderRadius: `${RADIUS.lg}px`,
+          borderRadius: `${RADIUS.lg}`,
           padding: `${SPACE[5]}px`,
           maxWidth: "600px",
           width: "90%",
@@ -111,42 +112,23 @@ export function ContentTypeEditorSlot<TData = unknown>({
             marginTop: `${SPACE[5]}px`,
           }}
         >
-          <button
+          <Button
+            variant="secondary"
             className="content-type-editor-cancel-button"
             onClick={onClose}
-            style={{
-              padding: `${SPACE[2]}px ${SPACE[4]}px`,
-              backgroundColor: COLORS.surfaceRaised,
-              border: `1px solid ${COLORS.borderStrong}`,
-              borderRadius: `${RADIUS.sm}px`,
-              cursor: "pointer",
-              fontSize: TYPE.md,
-              color: COLORS.text,
-              transition: "background-color 150ms ease",
-            }}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             className="content-type-editor-save-button"
             onClick={() => {
               onSave?.(data);
               onClose();
             }}
-            style={{
-              padding: `${SPACE[2]}px ${SPACE[4]}px`,
-              backgroundColor: COLORS.accent,
-              color: COLORS.white,
-              border: "none",
-              borderRadius: `${RADIUS.sm}px`,
-              cursor: "pointer",
-              fontSize: TYPE.md,
-              fontWeight: 600,
-              transition: "background-color 150ms ease",
-            }}
           >
             Save
-          </button>
+          </Button>
         </div>
       </div>
     </div>
