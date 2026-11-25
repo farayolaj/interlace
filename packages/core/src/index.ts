@@ -54,8 +54,13 @@ export type { ContentInstanceEvents } from "./content/content-instance";
 export type { ContentRecord, ContentState } from "./content/types";
 
 // Video adapter
-export { ProgrammaticActionGuard } from "./video-adapter/types";
+export {
+  ProgrammaticActionGuard,
+  supportsQuality,
+} from "./video-adapter/types";
 export type {
+  QualityCapableAdapter,
+  QualityLevel,
   VideoAdapter,
   VideoAdapterEvent,
   VideoAdapterEventType,

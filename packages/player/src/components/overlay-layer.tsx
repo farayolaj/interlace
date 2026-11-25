@@ -7,6 +7,11 @@ export interface OverlayLayerProps {
   renderState: RenderState;
   items: any[];
   onAnchorClick?: (contentId: string) => void;
+  /**
+   * Player controls drawn over the video frame above the anchors (e.g. the
+   * quality control). They must re-enable pointer events for themselves.
+   */
+  children?: React.ReactNode;
 }
 
 /**
@@ -21,6 +26,7 @@ export const OverlayLayer: React.FC<OverlayLayerProps> = ({
   renderState,
   items,
   onAnchorClick,
+  children,
 }) => {
   // Build a map of items by content ID for easy lookup
   const itemMap = useMemo(() => {
@@ -105,6 +111,8 @@ export const OverlayLayer: React.FC<OverlayLayerProps> = ({
           );
         })}
       </div>
+
+      {children}
     </div>
   );
 };

@@ -10,6 +10,7 @@ Interlace is a TypeScript monorepo library for building interactive video experi
 | --- | --- |
 | [`@interlacejs/core`](packages/core) | The playback state machine (`InteractiveMediaController`), content lifecycle (`ContentInstance`), hook types + validation, serialization (`serialize`/`deserialize`), and the `VideoAdapter` interface |
 | [`@interlacejs/native-adapter`](packages/native-adapter) | A ready `VideoAdapter` implementation wrapping an HTML5 `<video>` element (overlay mounting, fullscreen, programmatic-event suppression) |
+| [`@interlacejs/hls-adapter`](packages/hls-adapter) | An HLS `VideoAdapter` built on hls.js: selectable quality levels (shown in the player's quality menu), native HLS on Safari/iOS, and MP4 fallback |
 | [`@interlacejs/player`](packages/player) | The React playback runtime: `InteractiveVideoPlayer`, the `useInteractiveMedia` hook, the overlay system (anchors, blocking overlays, completed tags), completion feedback, and error boundaries |
 | [`@interlacejs/editor`](packages/editor) | The React authoring UI: `InterlaceEditor` (host component), keyframe timeline, hook inspector, placement editor, preview, and content-type slots |
 | [`@interlacejs/quiz`](packages/quiz) | The canonical quiz content type — authoring many questions at once, playback with Previous/Next navigation, one point per question |
@@ -166,6 +167,7 @@ interlace/
 ├── packages/
 │   ├── core/               # State machine, hooks, serialization, adapter contract
 │   ├── native-adapter/     # HTML5 <video> adapter
+│   ├── hls-adapter/        # HLS adapter (hls.js, quality levels)
 │   ├── player/             # React playback runtime
 │   ├── editor/             # React authoring UI
 │   ├── quiz/               # Canonical quiz content type

@@ -383,6 +383,34 @@ importers:
         specifier: ^8.50.0
         version: 8.50.0(eslint@9.39.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.2)
 
+  packages/hls-adapter:
+    dependencies:
+      '@interlacejs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@interlacejs/native-adapter':
+        specifier: workspace:*
+        version: link:../native-adapter
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:^
+        version: link:../eslint-config
+      '@repo/typescript-config':
+        specifier: workspace:^
+        version: link:../typescript-config
+      hls.js:
+        specifier: ^1.5.20
+        version: 1.7.4
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1(supports-color@7.2.0)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.16)(supports-color@7.2.0)(typescript@5.9.2)
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.15.3)(jsdom@25.0.1(supports-color@7.2.0))(supports-color@7.2.0)
+
   packages/native-adapter:
     dependencies:
       '@interlacejs/core':
@@ -2423,6 +2451,9 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
+
+  hls.js@1.7.4:
+    resolution: {integrity: sha512-3GlxGdPvT2YHvQYOt+yOzT/DEior/qJVNIylHA77kgeoBTdQQqi70GwefNEUmHQeNGyjC8U62+bruqW/Tpm+tg==}
 
   html-encoding-sniffer@4.0.0:
     resolution: {integrity: sha512-Y22oTqIU4uuPgEemfz7NDJz6OeKf12Lsu+QC+s3BVpda64lTiMYCyGwg5ki4vFxkMwQdeZDl2adZoqUgdFuTgQ==}
@@ -5706,6 +5737,8 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  hls.js@1.7.4: {}
 
   html-encoding-sniffer@4.0.0:
     dependencies:

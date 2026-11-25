@@ -39,6 +39,30 @@ Behavior notes:
 - Blocking hooks pause the video and open content; only completion lets playback continue (the completion surface needs **Continue** click). Blocking content cannot be dismissed.
 - Non-blocking hooks stay anchored inside their time window, can be opened or **skipped** (skip hides it for that window visit; re-approaching the window re-arms it), and completion swaps the anchor for a tag that cannot be re-taken.
 
+## Quality menu
+
+When the adapter implements the optional quality capability (`supportsQuality(adapter)` from `@interlacejs/core`, e.g. [`@interlacejs/hls-adapter`](https://github.com/farayolaj/interlace/tree/main/packages/hls-adapter)) and reports at least two levels, the player draws a quality button in the top-right corner of the video frame. It opens a menu with **Auto** (showing the level playing, e.g. "Auto · 480p"), each level from high to low, and "Data saver" on the lowest one.
+
+- It stays visible while the video is paused, the menu is open, or the button has focus. While playing, it fades out after 2.5 s without pointer movement over the video and comes back on movement, touch or keyboard focus.
+- It is hidden while content (such as a blocking quiz) is open, and only the button and menu take pointer events.
+- It follows the menu-button pattern: arrow keys, Home/End, Enter/Space to select, Escape or an outside click to close.
+
+```tsx
+<InteractiveVideoPlayer
+  adapter={hlsAdapter}
+  document={doc}
+  registry={registry}
+  showQualityControl // default true; pass false to hide it
+  strings={{
+    qualityLabel: "Qualité",
+    qualityAutoLabel: "Auto",
+    qualityDataSaverLabel: "Économie de données",
+  }}
+/>
+```
+
+`QualityControl` is also exported if you want to place it yourself.
+
 ## Types and authoring
 
 Documents are produced by [`@interlacejs/editor`](https://github.com/farayolaj/interlace) but they are plain JSON — see the [root README](https://github.com/farayolaj/interlace) for the full document shape and the `apps/demo` source for a working wiring.

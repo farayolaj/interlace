@@ -1,0 +1,58 @@
+{
+  "name": "@interlacejs/hls-adapter",
+  "version": "0.1.0",
+  "description": "HLS VideoAdapter for Interlace: hls.js playback with selectable quality levels, native HLS and MP4 fallback.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist/**"
+  ],
+  "keywords": [
+    "interlace",
+    "interactive-video",
+    "adapter",
+    "hls",
+    "edtech",
+    "lms"
+  ],
+  "author": {
+    "name": "Joshua Farayola",
+    "email": "farayolajoshua@gmail.com"
+  },
+  "license": "ISC",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint \"src/**/*.ts*\"",
+    "test": "vitest run",
+    "clean": "rm -rf .turbo && rm -rf node_modules && rm -rf dist"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "hls.js": "^1.5.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:^",
+    "@repo/typescript-config": "workspace:^",
+    "hls.js": "^1.5.20",
+    "jsdom": "^25.0.1",
+    "tsup": "^8.5.1",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "@interlacejs/core": "workspace:*",
+    "@interlacejs/native-adapter": "workspace:*"
+  }
+}
