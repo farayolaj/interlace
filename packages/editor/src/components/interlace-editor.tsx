@@ -25,6 +25,7 @@ import { PreviewModal } from "./preview-modal";
 import type { VideoSourceInputStrings } from "./video-source-input";
 import { VideoSourceInput } from "./video-source-input";
 import { Button, IssueList, SectionHeading, useInterlaceStyles } from "./ui";
+import { type MediaAttacher, useAttachMedia } from "./use-attach-media";
 
 /**
  * Editor-local strings layered on top of the core `Strings`. Hosts pass
@@ -207,6 +208,24 @@ export interface InterlaceEditorProps {
    * reload. The editor does not pass it to `serialize()`.
    */
   adapterType?: string;
+  /**
+   * URL to play in the authoring video and the preview instead of
+   * `document.video.src` (e.g. an HLS stream of the stored MP4). Playback
+   * only: it is never written into the document or the `onSave` output
+   * and does not affect dirty tracking.
+   */
+  playbackSrc?: string;
+  /**
+   * Host-supplied media loader (e.g. hls.js). When provided, the editor
+   * does not set the `<video>` elements' `src` attribute; it calls
+   * `attachMedia(video, src)` with `src = playbackSrc ?? document src`
+   * once each element mounts and whenever that source changes, and calls
+   * the returned cleanup before re-attaching and on unmount (or when the
+   * preview closes). Applies to both the authoring video and the preview.
+   * The latest function is always used, but a new function identity
+   * alone does not re-attach.
+   */
+  attachMedia?: MediaAttacher;
 }
 
 const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
@@ -461,6 +480,8 @@ export function InterlaceEditor({
   theme,
   className,
   onError,
+  playbackSrc,
+  attachMedia,
 }: InterlaceEditorProps) {
   const strings = { ...DEFAULT_EDITOR_STRINGS, ...stringsOverride };
   const {
@@ -526,6 +547,9 @@ export function InterlaceEditor({
    * fires.
    */
   const pendingSeekRef = useRef<number | null>(null);
+  /** What the authoring video plays; never serialized. */
+  const srcToPlay = playbackSrc ?? state.videoSrc;
+  useAttachMedia(videoRef, srcToPlay, attachMedia, onError);
 
   // Load the initial document once per document identity. The effect is
   // keyed on the document only (not the registry) so a consumer that
@@ -1359,10 +1383,15 @@ export function InterlaceEditor({
           backgroundColor: COLORS.black,
         }}
       >
+        {/*
+          Keyed on the document src only: a playback-src change re-attaches
+          on the same element (no remount, so a host's player instance is
+          only torn down through its cleanup).
+        */}
         <video
           ref={videoRef}
           key={state.videoSrc}
-          src={state.videoSrc}
+          src={attachMedia ? undefined : srcToPlay}
           controls
           preload="metadata"
           onLoadedMetadata={(e) =>
@@ -1599,6 +1628,8 @@ export function InterlaceEditor({
       <PreviewModal
         isOpen={previewOpen}
         videoSrc={state.videoSrc}
+        playbackSrc={playbackSrc}
+        attachMedia={attachMedia}
         document={previewDocument}
         contentTypeRegistry={contentTypeRegistry}
         onClose={handleClosePreview}

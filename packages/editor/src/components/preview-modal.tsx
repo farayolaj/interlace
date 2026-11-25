@@ -9,6 +9,7 @@ import { InteractiveVideoPlayer } from "@interlacejs/player";
 import { NativeVideoAdapter } from "@interlacejs/native-adapter";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
+import { type MediaAttacher, useAttachMedia } from "./use-attach-media";
 
 /**
  * Localized strings consumed by `PreviewModal`. Extends the core
@@ -38,6 +39,15 @@ export interface PreviewModalProps {
   /** Whether the modal is open. The internal `<video>` only mounts when open, so audio stops on close. */
   isOpen: boolean;
   videoSrc: string;
+  /** URL to play instead of `videoSrc` (playback only). */
+  playbackSrc?: string;
+  /**
+   * Host media loader. When provided, the `<video>`'s `src` attribute is
+   * not set; `attachMedia(video, playbackSrc ?? videoSrc)` runs when the
+   * modal opens (before the adapter is created) and its cleanup runs on
+   * close or source change. See `InterlaceEditorProps.attachMedia`.
+   */
+  attachMedia?: MediaAttacher;
   document: SerializedInteractiveMediaDocument;
   contentTypeRegistry: ContentTypeRegistry;
   onClose: () => void;
@@ -66,6 +76,8 @@ export interface PreviewModalProps {
 export function PreviewModal({
   isOpen,
   videoSrc,
+  playbackSrc,
+  attachMedia,
   document,
   contentTypeRegistry,
   onClose,
@@ -95,6 +107,11 @@ export function PreviewModal({
    * aspect).
    */
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+  const srcToPlay = playbackSrc ?? videoSrc;
+
+  // Declared before the adapter effect so the source is attached first
+  // in the same commit; detaches when the <video> unmounts on close.
+  useAttachMedia(videoRef, srcToPlay, attachMedia, onError);
 
   // Construct the adapter after the <video> mounts; destroy on close.
   useEffect(() => {
@@ -128,7 +145,7 @@ export function PreviewModal({
       }
       setAdapter(null);
     };
-  }, [isOpen, videoSrc]);
+  }, [isOpen, srcToPlay]);
 
   // Focus management: move focus to the close button on open, restore
   // the previously-focused element on close. The player's own
@@ -270,7 +287,7 @@ export function PreviewModal({
           >
             <video
               ref={videoRef}
-              src={videoSrc}
+              src={attachMedia ? undefined : srcToPlay}
               controls
               preload="metadata"
               onLoadedMetadata={handleLoadedMetadata}

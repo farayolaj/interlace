@@ -8,6 +8,7 @@ export type {
   EditorTheme,
   InterlaceEditorProps,
 } from "./components/interlace-editor";
+export type { MediaAttacher } from "./components/use-attach-media";
 
 // Authoring-time video source step
 export {
