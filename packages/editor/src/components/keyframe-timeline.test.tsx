@@ -528,6 +528,18 @@ describe("KeyframeTimeline", () => {
     expect(kf.style.left).toBe("64px");
   });
 
+  it("puts the final tick's label inside the strip", () => {
+    const { container } = renderTimeline();
+    const ticks = [
+      ...container.querySelectorAll<HTMLElement>(
+        '[data-testid^="keyframe-timeline-tick-"]',
+      ),
+    ];
+    const last = ticks[ticks.length - 1]!;
+    expect(last.style.transform).toBe("translateX(-100%)");
+    expect(ticks[0]!.style.transform).toBe("");
+  });
+
   it("horizontal wheel pans instead of zooming", () => {
     const { container, scroll } = renderTimeline();
     const kf = keyframeEl(container, "b1");
