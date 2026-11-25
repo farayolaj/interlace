@@ -1,5 +1,11 @@
 # @interlace/editor
 
+## 1.4.0
+
+### Minor Changes
+
+- 7eb5d23: New `createVideoAdapter` prop: a host adapter (e.g. `HlsVideoAdapter`) loads the authoring and preview videos, and adapters with quality levels get the player's quality control over the authoring video.
+
 ## 1.3.1
 
 ### Patch Changes
