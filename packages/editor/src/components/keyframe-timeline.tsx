@@ -122,7 +122,9 @@ const LANE_HEIGHT = 32; // px per lane row (marker hit area + label)
 const TRACK_PADDING = 6; // 3px top + 3px bottom padding around the lanes
 const MAX_VISIBLE_LANES = 4; // beyond this the track scrolls vertically
 const MAX_TRACK_HEIGHT = MAX_VISIBLE_LANES * LANE_HEIGHT + TRACK_PADDING;
-const RULER_HEIGHT = 24; // px height of the ruler strip
+const RULER_HEIGHT = 24;
+/** Width a tick label needs to the right of its line (px). */
+const TICK_LABEL_ROOM = 40; // px height of the ruler strip
 const KEYFRAME_SIZE_PX = 14; // visual diamond size
 const KEYFRAME_HIT_PX = 32; // interactive hit area around the diamond
 const LABEL_MAX_WIDTH_PX = 140; // keyframe labels truncate past this
@@ -767,26 +769,39 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
               touchAction: "none",
             }}
           >
-            {ticks.map((t) => (
-              <div
-                key={t}
-                data-testid={`keyframe-timeline-tick-${t}`}
-                style={{
-                  position: "absolute",
-                  left: t * zoom,
-                  top: 0,
-                  bottom: 0,
-                  borderLeft: `1px solid ${COLORS.borderStrong}`,
-                  paddingLeft: SPACE[1],
-                  fontSize: TYPE.xs,
-                  color: COLORS.textMuted,
-                  lineHeight: `${RULER_HEIGHT}px`,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {formatTick(t)}
-              </div>
-            ))}
+            {ticks.map((t) => {
+              // A label at the very end would overflow the strip (and make
+              // it scroll sideways), so it sits to the left of its line.
+              const atEnd = t > 0 && t * zoom + TICK_LABEL_ROOM > stripWidth;
+              return (
+                <div
+                  key={t}
+                  data-testid={`keyframe-timeline-tick-${t}`}
+                  style={{
+                    position: "absolute",
+                    left: t * zoom,
+                    top: 0,
+                    bottom: 0,
+                    ...(atEnd
+                      ? {
+                          transform: "translateX(-100%)",
+                          borderRight: `1px solid ${COLORS.borderStrong}`,
+                          paddingRight: SPACE[1],
+                        }
+                      : {
+                          borderLeft: `1px solid ${COLORS.borderStrong}`,
+                          paddingLeft: SPACE[1],
+                        }),
+                    fontSize: TYPE.xs,
+                    color: COLORS.textMuted,
+                    lineHeight: `${RULER_HEIGHT}px`,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {formatTick(t)}
+                </div>
+              );
+            })}
           </div>
 
           {/* Track */}
