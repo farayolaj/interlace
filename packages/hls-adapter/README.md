@@ -53,13 +53,14 @@ Don't set `src` on the `<video>` yourself; the adapter picks the source.
 
 ## Options
 
-| Option               | Description                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `src`                | Video URL (required): an HLS manifest (`.m3u8`) or a plain video file such as an MP4.                           |
-| `type`               | `"auto"` (default: HLS when the URL path ends in `.m3u8`), `"hls"` or `"progressive"`.                          |
-| `fallbackSrc`        | Progressive source (e.g. MP4) for browsers without HLS support and for unrecoverable errors.                    |
-| `hlsConfig`          | `Partial<HlsConfig>` passed to `new Hls()`.                                                                     |
-| `rememberQualityKey` | localStorage key for the viewer's quality choice (stored as a height or `"auto"`). Not remembered when omitted. |
+| Option               | Description                                                                                                          |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `src`                | Video URL (required): an HLS manifest (`.m3u8`) or a plain video file such as an MP4.                                |
+| `type`               | `"auto"` (default: HLS when the URL path ends in `.m3u8`), `"hls"` or `"progressive"`.                               |
+| `fallbackSrc`        | Progressive source (e.g. MP4) for browsers without HLS support and for unrecoverable errors.                         |
+| `hlsConfig`          | `Partial<HlsConfig>` passed to `new Hls()`.                                                                          |
+| `refreshSource`      | `() => Promise<{ src, fallbackSrc? }>`: fetches fresh URLs when the current ones are rejected as expired. See below. |
+| `rememberQualityKey` | localStorage key for the viewer's quality choice (stored as a height or `"auto"`). Not remembered when omitted.      |
 
 ## Playback paths
 
@@ -87,6 +88,21 @@ setQualityLevel(id: number): void; // -1 = Auto; persisted under rememberQuality
 - Fatal media error: `hls.recoverMediaError()` is tried once.
 - Anything else, or a repeated failure: hls.js is destroyed and the adapter switches to `fallbackSrc` (if given), keeping the current time and paused state. The position is restored with the adapter's own `seek()`, so the player receives `programmaticSeek`, not a user `seek`. Levels become `[]` and `qualitychange` fires.
 - On the native HLS path, a `<video>` `error` event switches to `fallbackSrc` in the same way.
+
+### Expiring links
+
+Signed URLs expire. Pass `refreshSource` and the adapter asks for fresh URLs, then reloads from where playback is (same position and play state); through hls.js this is a brief stall, not a restart. It refreshes when a stream request is rejected with 401/403, when hls.js gives up on a network error (object storage often rejects expired segment URLs without CORS headers, which the browser reports as a failed request rather than a 403), and when a plain or fallback video fails to load. It refreshes at most once every 30 seconds (`REFRESH_COOLDOWN_MS`), so links that still fail when fresh go through the usual handling above, as does a refresh that rejects.
+
+```ts
+new HlsVideoAdapter(video, {
+  src: hlsUrl,
+  fallbackSrc: mp4Url,
+  refreshSource: async () => {
+    const lesson = await api.getLesson(id); // re-signed URLs
+    return { src: lesson.hlsUrl, fallbackSrc: lesson.mp4Url };
+  },
+});
+```
 
 ## License
 

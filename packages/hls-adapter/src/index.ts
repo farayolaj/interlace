@@ -1,2 +1,6 @@
-export { HlsVideoAdapter, isHlsSource } from "./hls-video-adapter";
+export {
+  HlsVideoAdapter,
+  isHlsSource,
+  REFRESH_COOLDOWN_MS,
+} from "./hls-video-adapter";
 export type { HlsVideoAdapterOptions } from "./hls-video-adapter";
