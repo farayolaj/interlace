@@ -1,4 +1,8 @@
-import { DEFAULT_STRINGS, type Strings } from "@interlacejs/core";
+import {
+  DEFAULT_STRINGS,
+  ensureInterlaceStyles,
+  type Strings,
+} from "@interlacejs/core";
 import React, {
   useCallback,
   useEffect,
@@ -39,12 +43,22 @@ export interface KeyframeTimelineStrings extends Strings {
   blockingKeyframeLabel: string;
   /** Accessible label prefix for a non-blocking range bar. */
   nonBlockingRangeLabel: string;
+  /** Tooltip for the "add blocking hook" button (where/how it is added). */
+  addBlockingHint?: string;
+  /** Tooltip for the "add non-blocking hook" button (where/how it is added). */
+  addNonBlockingHint?: string;
+  /** Shown (and announced) in place of an empty hook title. */
+  untitledLabel?: string;
+  /** Appended to a hook's accessible label when it needs attention. */
+  needsAttentionLabel?: string;
 }
 
 export const DEFAULT_KEYFRAME_TIMELINE_STRINGS: KeyframeTimelineStrings = {
   ...DEFAULT_STRINGS,
-  addBlockingLabel: "+ Blocking at playhead",
-  addNonBlockingLabel: "+ Non-blocking at playhead",
+  addBlockingLabel: "Blocking hook",
+  addNonBlockingLabel: "Non-blocking hook",
+  addBlockingHint: "Add a hook that pauses the video at the playhead",
+  addNonBlockingHint: "Add a hook that floats over the video from the playhead",
   zoomInLabel: "Zoom in",
   zoomOutLabel: "Zoom out",
   playLabel: "Play",
@@ -55,6 +69,8 @@ export const DEFAULT_KEYFRAME_TIMELINE_STRINGS: KeyframeTimelineStrings = {
   trackLabel: "Hook track",
   blockingKeyframeLabel: "blocking at",
   nonBlockingRangeLabel: "non-blocking from",
+  untitledLabel: "Untitled hook",
+  needsAttentionLabel: "needs attention",
 };
 
 export interface KeyframeTimelineEntry {
@@ -64,6 +80,10 @@ export interface KeyframeTimelineEntry {
   timestamp?: number;
   start?: number;
   end?: number;
+  /** Marks the hook with a warning indicator (e.g. missing or invalid content). */
+  needsAttention?: boolean;
+  /** Announced with the hook when `needsAttention` is set; defaults to `strings.needsAttentionLabel`. */
+  attentionLabel?: string;
 }
 
 export interface KeyframeTimelineProps {
@@ -74,9 +94,13 @@ export interface KeyframeTimelineProps {
   /** Current playhead position in seconds. */
   currentTime: number;
   /** Whether the authoring video is currently playing (drives the play/pause button). */
-  isPlaying: boolean;
+  isPlaying?: boolean;
   onSeek: (time: number) => void;
-  onTogglePlay: () => void;
+  /**
+   * Toggles playback. Omit when the host video already has its own
+   * controls; the timeline then renders no play button.
+   */
+  onTogglePlay?: () => void;
   onSelectEntry: (id: string) => void;
   onUpdateEntry: (
     id: string,
@@ -94,13 +118,18 @@ const MAX_ZOOM = 100;
 const DEFAULT_ZOOM = 8;
 const MIN_RANGE = 1; // seconds
 
-const LANE_HEIGHT = 28; // px per lane row
-const MIN_LANE_HEIGHT = 14; // px minimum per lane when lanes stack
+const LANE_HEIGHT = 32; // px per lane row (marker hit area + label)
 const TRACK_PADDING = 6; // 3px top + 3px bottom padding around the lanes
-const TRACK_HEIGHT_BUDGET = 96; // fixed track height so the chrome stays short
+const MAX_VISIBLE_LANES = 4; // beyond this the track scrolls vertically
+const MAX_TRACK_HEIGHT = MAX_VISIBLE_LANES * LANE_HEIGHT + TRACK_PADDING;
 const RULER_HEIGHT = 24; // px height of the ruler strip
-const KEYFRAME_WIDTH_PX = 14; // rendered diamond width
-const RANGE_MIN_WIDTH_PX = 12; // rendered minimum range width
+const KEYFRAME_SIZE_PX = 14; // visual diamond size
+const KEYFRAME_HIT_PX = 32; // interactive hit area around the diamond
+const LABEL_MAX_WIDTH_PX = 140; // keyframe labels truncate past this
+const LABEL_CHAR_PX = 7; // estimated average glyph width at 12px
+const LABEL_GAP_PX = 8; // clearance after a label before the next hook
+const RANGE_EDGE_PX = 12; // resize grab area on each end of a range
+const RANGE_MIN_WIDTH_PX = RANGE_EDGE_PX * 2; // rendered minimum range width
 
 interface DragState {
   cleanup: () => void;
@@ -130,24 +159,64 @@ function formatTick(seconds: number): string {
   return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
-function anchorOf(entry: KeyframeTimelineEntry): number {
-  return entry.hookType === "blocking"
-    ? (entry.timestamp ?? 0)
-    : (entry.start ?? 0);
+/** Rendered label width estimate (px), capped at the truncation width. */
+function estimateLabelWidth(label: string): number {
+  return Math.min(LABEL_MAX_WIDTH_PX, Math.ceil(label.length * LABEL_CHAR_PX));
 }
 
 /**
- * The time extent an entry occupies on the strip: ranges span their
- * start→end; blocking keyframes occupy their rendered diamond width
- * (expressed in seconds at the current zoom), so two keyframes stack
- * exactly when their rendered shapes would overlap.
+ * The time interval `[start, end]` an entry occupies on the strip:
+ * ranges span their start→end (at least their rendered minimum width);
+ * blocking keyframes occupy their hit area plus the label to its right
+ * (expressed in seconds at the current zoom), so two hooks stack exactly
+ * when their rendered marker or label would overlap.
  */
-function extentOf(entry: KeyframeTimelineEntry, zoom: number): number {
+function extentOf(
+  entry: KeyframeTimelineEntry,
+  zoom: number,
+  label: string,
+): [number, number] {
   if (entry.hookType === "blocking") {
-    return KEYFRAME_WIDTH_PX / zoom;
+    const t = entry.timestamp ?? 0;
+    const half = KEYFRAME_HIT_PX / 2;
+    return [
+      t - half / zoom,
+      t + (half + estimateLabelWidth(label) + LABEL_GAP_PX) / zoom,
+    ];
   }
-  const span = (entry.end ?? 0) - (entry.start ?? 0);
-  return Math.max(RANGE_MIN_WIDTH_PX / zoom, span);
+  const start = entry.start ?? 0;
+  const span = (entry.end ?? 0) - start;
+  return [start, start + Math.max(RANGE_MIN_WIDTH_PX / zoom, span)];
+}
+
+/** Small "!" badge marking a hook that needs attention. */
+function AttentionDot({ style }: { style?: React.CSSProperties }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="timeline-attention"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+        width: 14,
+        height: 14,
+        flexShrink: 0,
+        borderRadius: RADIUS.pill,
+        backgroundColor: COLORS.warningBg,
+        border: `1px solid ${COLORS.warningBorder}`,
+        color: COLORS.warningText,
+        fontSize: TYPE.xs,
+        fontWeight: 700,
+        lineHeight: 1,
+        pointerEvents: "none",
+        ...style,
+      }}
+    >
+      !
+    </span>
+  );
 }
 
 /**
@@ -187,7 +256,17 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   strings: stringsOverride,
 }) => {
   const strings = { ...DEFAULT_KEYFRAME_TIMELINE_STRINGS, ...stringsOverride };
+  const untitledLabel =
+    strings.untitledLabel ?? DEFAULT_KEYFRAME_TIMELINE_STRINGS.untitledLabel!;
+  const titleOf = useCallback(
+    (entry: KeyframeTimelineEntry) => entry.title.trim() || untitledLabel,
+    [untitledLabel],
+  );
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+
+  useEffect(() => {
+    ensureInterlaceStyles();
+  }, []);
   const dragRef = useRef<DragState | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -481,19 +560,21 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   );
 
   /**
-   * Greedy interval packing: entries sorted by anchor time, each
-   * placed in the first lane whose last occupant ends at or before
-   * its start. Overlapping entries stack into successive lanes; the
-   * track height grows to fit them. The playhead still spans the
-   * full track.
+   * Greedy interval packing: entries sorted by the start of their
+   * rendered extent (marker + label), each placed in the first lane
+   * whose last occupant ends at or before its start. Overlapping
+   * entries stack into successive lanes; the track height grows to fit
+   * them (scrolling past MAX_VISIBLE_LANES). The playhead still spans
+   * the full track.
    */
   const layout = useMemo(() => {
-    const sorted = [...entries].sort((a, b) => anchorOf(a) - anchorOf(b));
+    const extents = entries.map(
+      (entry) => [entry, extentOf(entry, zoom, titleOf(entry))] as const,
+    );
+    extents.sort((a, b) => a[1][0] - b[1][0]);
     const laneEnds: number[] = [];
     const lanes = new Map<string, number>();
-    for (const entry of sorted) {
-      const start = anchorOf(entry);
-      const end = start + extentOf(entry, zoom);
+    for (const [entry, [start, end]] of extents) {
       let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
       if (lane === -1) {
         lane = laneEnds.length;
@@ -504,7 +585,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
       lanes.set(entry.id, lane);
     }
     return { lanes, laneCount: Math.max(laneEnds.length, 1) };
-  }, [entries, zoom]);
+  }, [entries, zoom, titleOf]);
 
   const interval = tickInterval(zoom);
   const ticks: number[] = [];
@@ -513,20 +594,16 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
   }
   const playheadPx = currentTime * zoom;
 
-  // Adaptive lane height: as lanes stack, the rows compress so the track
-  // never grows past the fixed height budget (no vertical scrolling; the
-  // chrome stays short). Small lane counts keep the base 28px row.
-  const laneHeight = clampValue(
-    Math.floor(
-      (TRACK_HEIGHT_BUDGET - TRACK_PADDING) / Math.max(1, layout.laneCount),
-    ),
-    MIN_LANE_HEIGHT,
-    LANE_HEIGHT,
-  );
+  // Lanes keep a fixed, unclipped height; the track grows with the lane
+  // count and the strip scrolls vertically past MAX_VISIBLE_LANES.
   const trackHeight = Math.max(
     48,
-    layout.laneCount * laneHeight + TRACK_PADDING,
+    layout.laneCount * LANE_HEIGHT + TRACK_PADDING,
   );
+  const ariaLabelOf = (entry: KeyframeTimelineEntry, base: string) =>
+    entry.needsAttention
+      ? `${base}, ${entry.attentionLabel ?? strings.needsAttentionLabel ?? DEFAULT_KEYFRAME_TIMELINE_STRINGS.needsAttentionLabel}`
+      : base;
 
   return (
     <div
@@ -552,111 +629,72 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           flexWrap: "wrap",
         }}
       >
+        {onTogglePlay && (
+          <button
+            type="button"
+            className="interlace-btn interlace-btn--ghost interlace-btn--icon"
+            onClick={onTogglePlay}
+            data-testid="keyframe-timeline-play"
+            aria-label={isPlaying ? strings.pauseLabel : strings.playLabel}
+            title={isPlaying ? strings.pauseLabel : strings.playLabel}
+          >
+            <span aria-hidden="true">{isPlaying ? "❚❚" : "▶"}</span>
+          </button>
+        )}
         <button
           type="button"
-          onClick={onTogglePlay}
-          data-testid="keyframe-timeline-play"
-          aria-label={isPlaying ? strings.pauseLabel : strings.playLabel}
-          style={{
-            padding: `${SPACE[1]}px ${SPACE[3]}px`,
-            backgroundColor: COLORS.accent,
-            color: COLORS.white,
-            border: "none",
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            fontWeight: 600,
-            transition: "background-color 150ms ease",
-          }}
-        >
-          {isPlaying ? strings.pauseLabel : strings.playLabel}
-        </button>
-        <button
-          type="button"
+          className="interlace-btn interlace-btn--secondary"
           onClick={() => onAddEntry("blocking")}
           data-testid="keyframe-timeline-add-blocking"
-          style={{
-            padding: `${SPACE[1]}px ${SPACE[3]}px`,
-            backgroundColor: COLORS.accent,
-            color: COLORS.white,
-            border: "none",
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            fontWeight: 600,
-            transition: "background-color 150ms ease",
-          }}
+          title={strings.addBlockingHint}
         >
+          <span aria-hidden="true">+</span>
           {strings.addBlockingLabel}
         </button>
         <button
           type="button"
+          className="interlace-btn interlace-btn--secondary"
           onClick={() => onAddEntry("non-blocking")}
           data-testid="keyframe-timeline-add-non-blocking"
-          style={{
-            padding: `${SPACE[1]}px ${SPACE[3]}px`,
-            backgroundColor: COLORS.accent,
-            color: COLORS.white,
-            border: "none",
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            fontWeight: 600,
-            transition: "background-color 150ms ease",
-          }}
+          title={strings.addNonBlockingHint}
         >
+          <span aria-hidden="true">+</span>
           {strings.addNonBlockingLabel}
         </button>
         <div style={{ flex: 1 }} />
         <button
           type="button"
+          className="interlace-btn interlace-btn--secondary interlace-btn--icon"
           onClick={() => handleZoom(-1)}
           data-testid="keyframe-timeline-zoom-out"
           aria-label={strings.zoomOutLabel}
-          style={{
-            padding: `${SPACE[1]}px 10px`,
-            backgroundColor: COLORS.surface,
-            border: `1px solid ${COLORS.borderStrong}`,
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            color: COLORS.text,
-            transition: "background-color 150ms ease",
-          }}
+          title={strings.zoomOutLabel}
         >
-          −
+          <span aria-hidden="true">−</span>
         </button>
         <button
           type="button"
+          className="interlace-btn interlace-btn--secondary interlace-btn--icon"
           onClick={() => handleZoom(1)}
           data-testid="keyframe-timeline-zoom-in"
           aria-label={strings.zoomInLabel}
-          style={{
-            padding: `${SPACE[1]}px 10px`,
-            backgroundColor: COLORS.surface,
-            border: `1px solid ${COLORS.borderStrong}`,
-            borderRadius: RADIUS.sm,
-            cursor: "pointer",
-            fontSize: TYPE.sm,
-            color: COLORS.text,
-            transition: "background-color 150ms ease",
-          }}
+          title={strings.zoomInLabel}
         >
-          +
+          <span aria-hidden="true">+</span>
         </button>
       </div>
 
       {/* Scrollable strip: ruler + track + playhead. Horizontal overflow
-          is allowed for zoomed-in scoping; vertical overflow is
-          eliminated (the lanes compress instead of scrolling). */}
+          is allowed for zoomed-in scoping; past MAX_VISIBLE_LANES the
+          track scrolls vertically under a sticky ruler. */}
       <div
         ref={scrollRef}
         data-testid="keyframe-timeline-scroll"
         style={{
           overflowX: "auto",
-          overflowY: "hidden",
+          overflowY: "auto",
           position: "relative",
-          maxHeight: RULER_HEIGHT + TRACK_HEIGHT_BUDGET,
+          maxHeight: RULER_HEIGHT + MAX_TRACK_HEIGHT,
         }}
       >
         <div
@@ -667,6 +705,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           {/* Ruler */}
           <div
             role="slider"
+            className="interlace-focusable"
             aria-label={strings.rulerLabel}
             aria-valuemin={0}
             aria-valuemax={Math.round(videoDuration)}
@@ -679,8 +718,10 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
             }}
             onKeyDown={handlePlayheadKeyDown}
             style={{
-              position: "relative",
-              height: 24,
+              position: "sticky",
+              top: 0,
+              zIndex: 2,
+              height: RULER_HEIGHT,
               backgroundColor: COLORS.surfaceRaised,
               borderBottom: `1px solid ${COLORS.border}`,
               cursor: "pointer",
@@ -701,7 +742,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                   paddingLeft: SPACE[1],
                   fontSize: TYPE.xs,
                   color: COLORS.textMuted,
-                  lineHeight: "24px",
+                  lineHeight: `${RULER_HEIGHT}px`,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -742,62 +783,121 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
               entries.map((entry) => {
                 const selected = entry.id === selectedId;
                 const accent = COLORS.accent;
+                const title = titleOf(entry);
                 // Lane assignment from the greedy interval packing:
                 // overlapping entries stack into successive rows.
                 const lane = layout.lanes.get(entry.id) ?? 0;
-                const laneTop = 3 + lane * laneHeight;
+                const laneTop = TRACK_PADDING / 2 + lane * LANE_HEIGHT;
                 if (entry.hookType === "blocking") {
                   const px = (entry.timestamp ?? 0) * zoom;
+                  const half = KEYFRAME_HIT_PX / 2;
                   return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      data-testid="timeline-keyframe"
-                      data-content-id={entry.id}
-                      aria-label={`${entry.title} — ${strings.blockingKeyframeLabel} ${formatTick(Math.round(entry.timestamp ?? 0))}`}
-                      onClick={() => onSelectEntry(entry.id)}
-                      onKeyDown={handleKeyframeKeyDown(entry)}
-                      style={{
-                        position: "absolute",
-                        left: px - 7,
-                        top: laneTop + 5,
-                        width: 14,
-                        height: 14,
-                        transform: "rotate(45deg)",
-                        backgroundColor: selected ? accent : COLORS.surface,
-                        border: `2px solid ${accent}`,
-                        borderRadius: 2,
-                        cursor: "grab",
-                        padding: 0,
-                        touchAction: "none",
-                        boxShadow: selected ? SHADOWS.sm : "none",
-                      }}
-                      onPointerDown={beginKeyframeDrag(
-                        entry.id,
-                        entry.timestamp ?? 0,
-                      )}
-                    >
-                      <span
+                    <React.Fragment key={entry.id}>
+                      {/* The button is the (transparent) hit area; the
+                          diamond is a purely visual child. */}
+                      <button
+                        type="button"
+                        className="interlace-focusable"
+                        data-testid="timeline-keyframe"
+                        data-content-id={entry.id}
+                        aria-label={ariaLabelOf(
+                          entry,
+                          `${title} — ${strings.blockingKeyframeLabel} ${formatTick(Math.round(entry.timestamp ?? 0))}`,
+                        )}
+                        onClick={() => onSelectEntry(entry.id)}
+                        onKeyDown={handleKeyframeKeyDown(entry)}
+                        onPointerDown={beginKeyframeDrag(
+                          entry.id,
+                          entry.timestamp ?? 0,
+                        )}
                         style={{
                           position: "absolute",
-                          left: 16,
-                          top: -2,
-                          transform: "rotate(-45deg)",
-                          fontSize: TYPE.xs,
-                          color: selected ? COLORS.accent : COLORS.text,
-                          whiteSpace: "nowrap",
-                          fontWeight: selected ? 700 : 400,
+                          left: px - half,
+                          top: laneTop,
+                          width: KEYFRAME_HIT_PX,
+                          height: KEYFRAME_HIT_PX,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 0,
+                          border: "none",
+                          borderRadius: RADIUS.sm,
+                          backgroundColor: "transparent",
+                          cursor: "grab",
+                          touchAction: "none",
                         }}
                       >
-                        {entry.title}
+                        <span
+                          aria-hidden="true"
+                          data-testid="timeline-keyframe-diamond"
+                          style={{
+                            boxSizing: "border-box",
+                            width: KEYFRAME_SIZE_PX,
+                            height: KEYFRAME_SIZE_PX,
+                            transform: "rotate(45deg)",
+                            backgroundColor: selected ? accent : COLORS.surface,
+                            border: `2px solid ${accent}`,
+                            borderRadius: 2,
+                            boxShadow: selected ? SHADOWS.sm : "none",
+                            pointerEvents: "none",
+                          }}
+                        />
+                        {entry.needsAttention && (
+                          <AttentionDot
+                            style={{ position: "absolute", top: 0, right: 0 }}
+                          />
+                        )}
+                      </button>
+                      <span
+                        aria-hidden="true"
+                        data-testid="timeline-keyframe-label"
+                        data-content-id={entry.id}
+                        title={title}
+                        onClick={() => onSelectEntry(entry.id)}
+                        style={{
+                          position: "absolute",
+                          left: px + half,
+                          top: laneTop,
+                          maxWidth: LABEL_MAX_WIDTH_PX,
+                          height: KEYFRAME_HIT_PX,
+                          lineHeight: `${KEYFRAME_HIT_PX}px`,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontSize: TYPE.xs,
+                          color: selected ? COLORS.accent : COLORS.text,
+                          fontWeight: selected ? 700 : 400,
+                          fontStyle: entry.title.trim() ? "normal" : "italic",
+                          cursor: "pointer",
+                          userSelect: "none",
+                        }}
+                      >
+                        {title}
                       </span>
-                    </button>
+                    </React.Fragment>
                   );
                 }
                 const startPx = (entry.start ?? 0) * zoom;
                 const widthPx = Math.max(
                   ((entry.end ?? 0) - (entry.start ?? 0)) * zoom,
-                  12,
+                  RANGE_MIN_WIDTH_PX,
+                );
+                const edgeStyle = (
+                  side: "start" | "end",
+                ): React.CSSProperties => ({
+                  width: RANGE_EDGE_PX,
+                  flexShrink: 0,
+                  alignSelf: "stretch",
+                  display: "flex",
+                  justifyContent: side === "start" ? "flex-start" : "flex-end",
+                  cursor: "ew-resize",
+                  touchAction: "none",
+                });
+                const edgeGrip = (
+                  <span
+                    aria-hidden="true"
+                    style={{ width: 4, backgroundColor: COLORS.accent }}
+                  />
                 );
                 return (
                   <div
@@ -808,8 +908,8 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                       position: "absolute",
                       left: startPx,
                       width: widthPx,
-                      top: laneTop,
-                      height: laneHeight - 4,
+                      top: laneTop + 4,
+                      height: LANE_HEIGHT - 8,
                       backgroundColor: selected
                         ? COLORS.accentLight
                         : COLORS.accentLighter,
@@ -825,7 +925,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                     {/* start edge */}
                     <div
                       role="separator"
-                      aria-label={`${entry.title} — resize start`}
+                      aria-label={`${title} — resize start`}
                       data-testid="timeline-range-start"
                       onPointerDown={beginRangeDrag(
                         entry.id,
@@ -833,65 +933,73 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                         entry.start ?? 0,
                         entry.end ?? 0,
                       )}
+                      style={edgeStyle("start")}
+                    >
+                      {edgeGrip}
+                    </div>
+                    <button
+                      type="button"
+                      className="interlace-focusable"
+                      data-testid="timeline-keyframe"
+                      data-content-id={entry.id}
+                      aria-label={ariaLabelOf(
+                        entry,
+                        `${title} — ${strings.nonBlockingRangeLabel} ${formatTick(Math.round(entry.start ?? 0))} to ${formatTick(Math.round(entry.end ?? 0))}`,
+                      )}
+                      title={title}
+                      onClick={() => onSelectEntry(entry.id)}
+                      onKeyDown={handleKeyframeKeyDown(entry)}
+                      onPointerDown={beginRangeDrag(
+                        entry.id,
+                        "body",
+                        entry.start ?? 0,
+                        entry.end ?? 0,
+                      )}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        alignSelf: "stretch",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: SPACE[1],
+                        backgroundColor: "transparent",
+                        border: "none",
+                        cursor: "grab",
+                        fontSize: TYPE.xs,
+                        color: COLORS.text,
+                        padding: `0 ${SPACE[1]}px`,
+                        textAlign: "left",
+                        fontWeight: selected ? 700 : 400,
+                        fontStyle: entry.title.trim() ? "normal" : "italic",
+                        touchAction: "none",
+                      }}
+                    >
+                      {entry.needsAttention && <AttentionDot />}
+                      <span
                         style={{
-                          width: 8,
-                          alignSelf: "stretch",
-                          cursor: "ew-resize",
-                          backgroundColor: COLORS.accent,
-                          touchAction: "none",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        data-testid="timeline-keyframe"
-                        data-content-id={entry.id}
-                        aria-label={`${entry.title} — ${strings.nonBlockingRangeLabel} ${formatTick(Math.round(entry.start ?? 0))} to ${formatTick(Math.round(entry.end ?? 0))}`}
-                        onClick={() => onSelectEntry(entry.id)}
-                        onKeyDown={handleKeyframeKeyDown(entry)}
-                        onPointerDown={beginRangeDrag(
-                          entry.id,
-                          "body",
-                          entry.start ?? 0,
-                          entry.end ?? 0,
-                        )}
-                        style={{
-                          flex: 1,
-                          alignSelf: "stretch",
-                          backgroundColor: "transparent",
-                          border: "none",
-                          cursor: "grab",
-                          fontSize: TYPE.xs,
-                          color: COLORS.text,
-                          padding: `0 ${SPACE[1]}px`,
-                          textAlign: "left",
-                          whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
-                          fontWeight: selected ? 700 : 400,
-                          touchAction: "none",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        {entry.title}
-                      </button>
-                      {/* end edge */}
-                      <div
-                        role="separator"
-                        aria-label={`${entry.title} — resize end`}
-                        data-testid="timeline-range-end"
-                        onPointerDown={beginRangeDrag(
-                          entry.id,
-                          "end",
-                          entry.start ?? 0,
-                          entry.end ?? 0,
-                        )}
-                        style={{
-                          width: 8,
-                          alignSelf: "stretch",
-                          cursor: "ew-resize",
-                          backgroundColor: COLORS.accent,
-                          touchAction: "none",
-                        }}
-                    />
+                        {title}
+                      </span>
+                    </button>
+                    {/* end edge */}
+                    <div
+                      role="separator"
+                      aria-label={`${title} — resize end`}
+                      data-testid="timeline-range-end"
+                      onPointerDown={beginRangeDrag(
+                        entry.id,
+                        "end",
+                        entry.start ?? 0,
+                        entry.end ?? 0,
+                      )}
+                      style={edgeStyle("end")}
+                    >
+                      {edgeGrip}
+                    </div>
                   </div>
                 );
               })
@@ -907,12 +1015,14 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
               top: 0,
               bottom: 0,
               width: 0,
+              zIndex: 3,
               borderLeft: `2px solid ${COLORS.accent}`,
               pointerEvents: "none",
             }}
           >
             <div
               role="slider"
+              className="interlace-focusable"
               aria-label={strings.playheadLabel}
               aria-valuemin={0}
               aria-valuemax={Math.round(videoDuration)}

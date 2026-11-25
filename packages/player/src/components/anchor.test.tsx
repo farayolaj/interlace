@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Anchor } from "./anchor";
+import { COLORS } from "../tokens";
 
 afterEach(() => {
   cleanup();
@@ -54,7 +55,7 @@ describe("Anchor", () => {
     );
 
     let button = screen.getByRole("button");
-    expect(button).toHaveStyle("backgroundColor: #fff");
+    expect(button.style.backgroundColor).toBe(COLORS.surface);
 
     rerender(
       <Anchor
@@ -66,7 +67,7 @@ describe("Anchor", () => {
     );
 
     button = screen.getByRole("button");
-    expect(button).toHaveStyle("backgroundColor: #0066cc");
+    expect(button.style.backgroundColor).toBe(COLORS.accent);
   });
 
   it("ensures minimum 44px touch target", () => {

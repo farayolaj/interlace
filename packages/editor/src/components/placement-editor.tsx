@@ -1,6 +1,7 @@
 import { Placement } from "@interlacejs/core";
 import React, { useCallback, useEffect, useRef } from "react";
-import { COLORS, RADIUS, SHADOWS, SPACE, TYPE } from "../tokens";
+import { COLORS, RADIUS, SHADOWS, SPACE } from "../tokens";
+import { useInterlaceStyles } from "./ui";
 
 /**
  * PlacementEditor - an overlay for positioning a hook's placement
@@ -371,7 +372,7 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
           height: `${placement.height}%`,
           backgroundColor: COLORS.accentLight,
           border: `2px solid ${COLORS.accent}`,
-          borderRadius: `${RADIUS.sm}px`,
+          borderRadius: `${RADIUS.sm}`,
           boxSizing: "border-box",
           cursor: "move",
           pointerEvents: "auto",
@@ -394,7 +395,7 @@ export const PlacementEditor: React.FC<PlacementEditorProps> = ({
               height: HANDLE_SIZE,
               backgroundColor: COLORS.surface,
               border: `2px solid ${COLORS.accent}`,
-              borderRadius: `${RADIUS.sm}px`,
+              borderRadius: `${RADIUS.sm}`,
               boxSizing: "border-box",
               cursor: handle.cursor,
               pointerEvents: "auto",
@@ -413,15 +414,6 @@ export interface PlacementInputsProps {
   onPlacementChange: (placement: Placement) => void;
 }
 
-const PLACEMENT_INPUT_STYLE: React.CSSProperties = {
-  width: "60px",
-  padding: `${SPACE[1]}px`,
-  border: `1px solid ${COLORS.borderStrong}`,
-  borderRadius: RADIUS.sm,
-  fontSize: TYPE.sm,
-  color: COLORS.text,
-};
-
 /**
  * PlacementInputs - numerical X/Y/W/H editor for a placement. Lives
  * separately from `PlacementEditor` so the overlay frame does not have
@@ -438,6 +430,7 @@ export const PlacementInputs: React.FC<PlacementInputsProps> = ({
   placement,
   onPlacementChange,
 }) => {
+  useInterlaceStyles();
   // Latest props, read from the native event handlers (which would
   // otherwise close over stale values).
   const placementRef = useRef(placement);
@@ -454,67 +447,70 @@ export const PlacementInputs: React.FC<PlacementInputsProps> = ({
     [],
   );
 
+  const fields: {
+    key: keyof Placement;
+    label: string;
+    testId: string;
+    intent: DragIntent;
+  }[] = [
+    {
+      key: "x",
+      label: "X",
+      testId: "placement-editor-input-x",
+      intent: "move",
+    },
+    {
+      key: "y",
+      label: "Y",
+      testId: "placement-editor-input-y",
+      intent: "move",
+    },
+    {
+      key: "width",
+      label: "Width",
+      testId: "placement-editor-input-w",
+      intent: "resize",
+    },
+    {
+      key: "height",
+      label: "Height",
+      testId: "placement-editor-input-h",
+      intent: "resize",
+    },
+  ];
+
   return (
     <div
       data-testid="placement-editor-inputs"
       style={{
-        display: "flex",
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
         gap: SPACE[2],
-        padding: `${SPACE[2]}px 0`,
-        fontSize: TYPE.xs,
-        alignItems: "center",
-        flexWrap: "wrap",
-        color: COLORS.textMuted,
       }}
     >
-      <label>
-        X:{" "}
-        <input
-          type="number"
-          data-testid="placement-editor-input-x"
-          value={placement.x.toFixed(1)}
-          onChange={(e) =>
-            commit({ x: parseFloat(e.target.value) || 0 }, "move")
-          }
-          style={PLACEMENT_INPUT_STYLE}
-        />
-      </label>
-      <label>
-        Y:{" "}
-        <input
-          type="number"
-          data-testid="placement-editor-input-y"
-          value={placement.y.toFixed(1)}
-          onChange={(e) =>
-            commit({ y: parseFloat(e.target.value) || 0 }, "move")
-          }
-          style={PLACEMENT_INPUT_STYLE}
-        />
-      </label>
-      <label>
-        W:{" "}
-        <input
-          type="number"
-          data-testid="placement-editor-input-w"
-          value={placement.width.toFixed(1)}
-          onChange={(e) =>
-            commit({ width: parseFloat(e.target.value) || 0 }, "resize")
-          }
-          style={PLACEMENT_INPUT_STYLE}
-        />
-      </label>
-      <label>
-        H:{" "}
-        <input
-          type="number"
-          data-testid="placement-editor-input-h"
-          value={placement.height.toFixed(1)}
-          onChange={(e) =>
-            commit({ height: parseFloat(e.target.value) || 0 }, "resize")
-          }
-          style={PLACEMENT_INPUT_STYLE}
-        />
-      </label>
+      {fields.map((field) => (
+        <label key={field.key} className="interlace-field">
+          <span className="interlace-label" style={{ fontWeight: 500 }}>
+            {field.label}
+          </span>
+          <input
+            type="number"
+            className="interlace-input"
+            inputMode="decimal"
+            min={field.intent === "resize" ? 1 : 0}
+            max={100}
+            step={0.5}
+            data-testid={field.testId}
+            value={placement[field.key].toFixed(1)}
+            onChange={(e) =>
+              commit(
+                { [field.key]: parseFloat(e.target.value) || 0 },
+                field.intent,
+              )
+            }
+          />
+        </label>
+      ))}
     </div>
   );
 };

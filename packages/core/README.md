@@ -26,7 +26,10 @@ import { InteractiveMediaController } from "@interlacejs/core";
 const registry = new ContentTypeRegistry();
 const result = deserialize(document, registry);
 
-const controller = new InteractiveMediaController(result.items, result.videoDuration);
+const controller = new InteractiveMediaController(
+  result.items,
+  result.videoDuration,
+);
 controller.on("requestPause", () => adapter.pause());
 
 // drive it from your render loop
@@ -38,6 +41,12 @@ const renderState = controller.getRenderState(video.currentTime);
 ## React wrappers and a full demo
 
 The React runtime (`@interlacejs/player`), the authoring UI (`@interlacejs/editor`), and the canonical quiz type (`@interlacejs/quiz`) build on this package. See the [root README](https://github.com/farayolaj/interlace) for the full walkthrough and the `apps/demo` source for a working wiring.
+
+## Content types and theming
+
+Content types may implement optional `getDisplayName()`, `getDescription()` (shown when authors pick a type) and `validate(data)` (author-facing messages; the editor blocks saving until it returns none).
+
+Core also ships the shared design tokens (`COLORS`, `FONTS`, `RADIUS`, …) as `--interlace-*` CSS variables, plus `themeToCssVariables(theme)` and `ensureInterlaceStyles()` for content types that render their own DOM.
 
 ## License
 

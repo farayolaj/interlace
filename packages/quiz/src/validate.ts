@@ -41,3 +41,32 @@ export function validateQuizData(data: QuizData): string[] {
 
   return errors;
 }
+/**
+ * Author-facing readiness check for quiz data, used by the content type's
+ * `validate`. Returns friendly messages (e.g. "Question 1 needs text"); an
+ * empty array means the quiz is ready to save.
+ */
+export function getQuizAuthoringIssues(data: QuizData): string[] {
+  if (data.questions.length === 0) return ["Add at least one question"];
+
+  const issues: string[] = [];
+  data.questions.forEach((question, index) => {
+    const label = `Question ${index + 1}`;
+    if (question.text.trim().length === 0) {
+      issues.push(`${label} needs text`);
+    }
+    if (question.options.length < 2) {
+      issues.push(`${label} needs at least 2 answers`);
+    }
+    question.options.forEach((option, optionIndex) => {
+      if (option.text.trim().length === 0) {
+        issues.push(`${label}, answer ${optionIndex + 1} needs text`);
+      }
+    });
+    const hasCorrect = question.options.some(
+      (option) => option.id === question.correctOptionId,
+    );
+    if (!hasCorrect) issues.push(`${label} needs a correct answer`);
+  });
+  return issues;
+}

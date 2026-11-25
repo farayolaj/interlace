@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import {
@@ -62,12 +68,20 @@ function makeTrackedQuizType() {
   };
 
   const renderEditor = vi.fn(
-    (container: HTMLElement, data: unknown, onChange: (next: unknown) => void) => {
+    (
+      container: HTMLElement,
+      data: unknown,
+      onChange: (next: unknown) => void,
+    ) => {
       renderForm(container, data, onChange);
     },
   );
   const updateEditor = vi.fn(
-    (container: HTMLElement, data: unknown, onChange: (next: unknown) => void) => {
+    (
+      container: HTMLElement,
+      data: unknown,
+      onChange: (next: unknown) => void,
+    ) => {
       container.innerHTML = "";
       renderForm(container, data, onChange);
     },
@@ -129,14 +143,14 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    expect(
-      screen.getByTestId("video-source-input-empty"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("video-source-input-empty")).toBeInTheDocument();
     // No authoring surface until a video is selected.
     expect(
       screen.queryByTestId("interlace-editor-video"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByTestId("interlace-editor-save")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("interlace-editor-save"),
+    ).not.toBeInTheDocument();
   });
 
   it("awaits the upload promise and transitions to the authoring surface", async () => {
@@ -161,26 +175,22 @@ describe("InterlaceEditor", () => {
       "video-source-input-file",
     ) as HTMLInputElement;
     Object.defineProperty(fileInput, "files", {
-      value: [new File([new Blob(["x"])], "lecture.mp4", { type: "video/mp4" })],
+      value: [
+        new File([new Blob(["x"])], "lecture.mp4", { type: "video/mp4" }),
+      ],
       configurable: true,
     });
     fireEvent.change(fileInput);
 
     // Authoring surface is not visible until the upload resolves.
-    expect(
-      container.querySelector(".interlace-editor-video"),
-    ).toBeNull();
+    expect(container.querySelector(".interlace-editor-video")).toBeNull();
 
     resolveUpload?.("https://cdn.example.com/lecture.mp4");
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-video"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-video")).toBeInTheDocument();
     });
-    expect(
-      screen.getByTestId("interlace-editor-save"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("interlace-editor-save")).toBeInTheDocument();
   });
 
   it("transitions to the authoring surface when a URL is applied", async () => {
@@ -201,9 +211,7 @@ describe("InterlaceEditor", () => {
     fireEvent.click(screen.getByTestId("video-source-input-apply"));
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-video"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-video")).toBeInTheDocument();
     });
   });
 
@@ -220,9 +228,7 @@ describe("InterlaceEditor", () => {
     expect(
       screen.queryByTestId("video-source-input-empty"),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByTestId("interlace-editor-video"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("interlace-editor-video")).toBeInTheDocument();
   });
 
   it("composes the placement editor (selected): overlay inside the video frame, inputs below the toolbar", async () => {
@@ -303,9 +309,7 @@ describe("InterlaceEditor", () => {
     fireEvent.click(screen.getByTestId("video-source-input-apply"));
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-save"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-save")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
@@ -338,9 +342,7 @@ describe("InterlaceEditor", () => {
     fireEvent.click(screen.getByTestId("video-source-input-apply"));
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-save"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-save")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
@@ -427,9 +429,9 @@ describe("InterlaceEditor", () => {
 
     // Opening the preview modal pauses the authoring video; jsdom's
     // pause is "not implemented" and would log noise, so stub it.
-    const authoringVideo = await screen.findByTestId(
+    const authoringVideo = (await screen.findByTestId(
       "interlace-editor-preview-video",
-    ) as HTMLVideoElement;
+    )) as HTMLVideoElement;
     authoringVideo.pause = vi.fn();
 
     // The modal is not open yet.
@@ -512,9 +514,9 @@ describe("InterlaceEditor", () => {
 
     // Opening the preview modal pauses the authoring video; jsdom's
     // pause is "not implemented" and would log noise, so stub it.
-    const authoringVideo = await screen.findByTestId(
+    const authoringVideo = (await screen.findByTestId(
       "interlace-editor-preview-video",
-    ) as HTMLVideoElement;
+    )) as HTMLVideoElement;
     authoringVideo.pause = vi.fn();
 
     fireEvent.click(screen.getByTestId("interlace-editor-open-preview"));
@@ -560,10 +562,8 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    // The header previewTitle is rendered inside an <h2>; scope to it.
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(
-      "Authoring surface",
-    );
+    // previewTitle is deprecated (the header shows the save status).
+    expect(screen.queryByText("Authoring surface")).toBeNull();
     expect(screen.getByTestId("interlace-editor-save")).toHaveTextContent(
       "Publish",
     );
@@ -576,7 +576,8 @@ describe("InterlaceEditor", () => {
     // An invalid document: items must be an array.
     const invalidDoc = {
       video: { src: VIDEO_SRC, duration: VIDEO_DURATION },
-      items: "not-an-array" as unknown as SerializedInteractiveMediaDocument["items"],
+      items:
+        "not-an-array" as unknown as SerializedInteractiveMediaDocument["items"],
     };
 
     render(
@@ -647,7 +648,9 @@ describe("InterlaceEditor", () => {
 
     const warningCalls = onError.mock.calls.filter((call) => {
       const arg = call[0] as Error;
-      return arg instanceof Error && /unrecognized content type/.test(arg.message);
+      return (
+        arg instanceof Error && /unrecognized content type/.test(arg.message)
+      );
     });
     expect(warningCalls.length).toBeGreaterThan(0);
   });
@@ -668,15 +671,14 @@ describe("InterlaceEditor", () => {
     // details with the picker, and the content editor is hidden.
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
     expect(screen.getByTestId("interlace-editor-hook")).toBeInTheDocument();
     expect(screen.queryByTestId("content-type-editor")).toBeNull();
 
     // Pick the content type in Hook details — this materializes the
     // pending hook into the store.
-    fireEvent.click(screen.getByText(/Select content type/i));
-    fireEvent.click(await screen.findByText("quiz-editor"));
+    fireEvent.click(await screen.findByRole("radio", { name: "quiz-editor" }));
 
     // The inline content editor appears once the hook has a type.
     await waitFor(() => {
@@ -702,10 +704,12 @@ describe("InterlaceEditor", () => {
       | undefined;
     expect(last?.items?.[0]?.title).toBe("Renamed");
     expect(last?.video?.src).toBe(VIDEO_SRC);
-    expect((last?.items?.[0]?.hook as { timestamp?: number }).timestamp).toBe(0);
+    expect((last?.items?.[0]?.hook as { timestamp?: number }).timestamp).toBe(
+      0,
+    );
   });
 
-  it("save does not serialize a pending hook (no content type chosen)", async () => {
+  it("blocks save while a pending hook has no content type", async () => {
     const onSave = vi.fn();
     render(
       <InterlaceEditor
@@ -718,17 +722,27 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
 
     // Save without picking a content type: the pending hook is
-    // editor-local only and must not reach the host's document.
+    // editor-local only, so Save is blocked and lists what to fix
+    // instead of silently dropping it.
+    fireEvent.click(screen.getByTestId("interlace-editor-save"));
+    expect(onSave).not.toHaveBeenCalled();
+    const issues = screen.getByTestId("interlace-editor-save-issues");
+    expect(issues).toHaveTextContent("Choose a content type");
+    expect(issues).toHaveTextContent("Add a title");
+
+    // Deleting the draft unblocks Save; the document has no items.
+    fireEvent.click(screen.getByTestId("inspector-panel-delete"));
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     expect(onSave).toHaveBeenCalled();
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
       | SerializedInteractiveMediaDocument
       | undefined;
     expect(last?.items).toHaveLength(0);
+    expect(screen.queryByTestId("interlace-editor-save-issues")).toBeNull();
   });
 
   it("keeps a pending hook across parent re-renders with an unstable onError", async () => {
@@ -762,18 +776,18 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
 
     // Unrelated parent re-renders (new onError identity per render):
     // the pending draft must survive.
     fireEvent.click(screen.getByTestId("force"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
     fireEvent.click(screen.getByTestId("force"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
   });
 
@@ -790,13 +804,13 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
 
     // Delete the pending hook via Hook details.
     fireEvent.click(screen.getByTestId("inspector-panel-delete"));
     await waitFor(() => {
-      expect(screen.queryAllByText("New hook")).toHaveLength(0);
+      expect(screen.queryAllByText("Untitled hook")).toHaveLength(0);
     });
 
     // The store is untouched.
@@ -820,7 +834,7 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
 
     // Move the pending hook's placement via the manual inputs before
@@ -830,9 +844,11 @@ describe("InterlaceEditor", () => {
     ) as HTMLInputElement;
     fireEvent.change(x, { target: { value: "12" } });
 
-    // Materialize.
-    fireEvent.click(screen.getByText(/Select content type/i));
-    fireEvent.click(await screen.findByText("quiz-editor"));
+    // Materialize (and name it, so Save is not blocked).
+    fireEvent.click(await screen.findByRole("radio", { name: "quiz-editor" }));
+    fireEvent.change(screen.getByTestId("inspector-panel-title"), {
+      target: { value: "Hook" },
+    });
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
@@ -967,14 +983,14 @@ describe("InterlaceEditor", () => {
     });
     fireEvent.timeUpdate(video);
 
-    fireEvent.click(
-      screen.getByTestId("keyframe-timeline-add-non-blocking"),
-    );
+    fireEvent.click(screen.getByTestId("keyframe-timeline-add-non-blocking"));
 
     // Pending hooks are not serialized — pick the content type to
-    // materialize before saving.
-    fireEvent.click(screen.getByText(/Select content type/i));
-    fireEvent.click(await screen.findByText("quiz-editor"));
+    // materialize (and name it) before saving.
+    fireEvent.click(await screen.findByRole("radio", { name: "quiz-editor" }));
+    fireEvent.change(screen.getByTestId("inspector-panel-title"), {
+      target: { value: "Hook" },
+    });
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
@@ -1040,9 +1056,9 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(await screen.findByTestId("timeline-keyframe"));
 
-    // The picker shows the current type; choose "poll" to re-type.
-    fireEvent.click(screen.getByText("quiz-editor"));
-    fireEvent.click(screen.getByText("poll"));
+    // "Change type" reveals the choices; choose "poll" to re-type.
+    fireEvent.click(screen.getByTestId("inspector-panel-change-type"));
+    fireEvent.click(screen.getByRole("radio", { name: "poll" }));
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
@@ -1071,11 +1087,9 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(await screen.findByTestId("timeline-keyframe"));
 
-    // Open the picker (the button shows the current type) and
-    // re-select the SAME type from the dropdown.
-    fireEvent.click(screen.getByText("quiz-editor"));
-    const options = screen.getAllByText("quiz-editor");
-    fireEvent.click(options[options.length - 1]!);
+    // Open the choices and re-select the SAME type.
+    fireEvent.click(screen.getByTestId("inspector-panel-change-type"));
+    fireEvent.click(screen.getByRole("radio", { name: "quiz-editor" }));
 
     fireEvent.click(screen.getByTestId("interlace-editor-save"));
     const last = onSave.mock.calls[onSave.mock.calls.length - 1]?.[0] as
@@ -1128,7 +1142,7 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
 
     // Deselect via the track background: the selection clears (the
@@ -1138,11 +1152,11 @@ describe("InterlaceEditor", () => {
       expect(screen.queryByTestId("interlace-editor-hook")).toBeNull();
     });
     expect(
-      (await screen.findAllByText("New hook")).length,
+      (await screen.findAllByText("Untitled hook")).length,
     ).toBeGreaterThan(0);
 
     // Re-select: the Hook section returns.
-    fireEvent.click(screen.getAllByText("New hook")[0]!);
+    fireEvent.click(screen.getAllByText("Untitled hook")[0]!);
     expect(
       await screen.findByTestId("interlace-editor-hook"),
     ).toBeInTheDocument();
@@ -1167,9 +1181,7 @@ describe("InterlaceEditor", () => {
     // Cancel returns to the authoring surface.
     fireEvent.click(screen.getByTestId("interlace-editor-cancel-replace"));
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-video"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-video")).toBeInTheDocument();
     });
   });
 
@@ -1191,9 +1203,7 @@ describe("InterlaceEditor", () => {
     // Cancel returns to the authoring surface.
     fireEvent.click(screen.getByTestId("interlace-editor-cancel-replace"));
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-video"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-video")).toBeInTheDocument();
     });
     // The existing item is still there.
     expect(screen.getAllByText("Quiz 1").length).toBeGreaterThan(0);
@@ -1212,13 +1222,13 @@ describe("InterlaceEditor", () => {
 
     fireEvent.click(screen.getByTestId("interlace-editor-replace-video"));
     const urlInput = await screen.findByTestId("video-source-input-url");
-    fireEvent.change(urlInput, { target: { value: "https://new.example.com/v.mp4" } });
+    fireEvent.change(urlInput, {
+      target: { value: "https://new.example.com/v.mp4" },
+    });
     fireEvent.click(screen.getByTestId("video-source-input-apply"));
 
     await waitFor(() => {
-      expect(
-        screen.getByTestId("interlace-editor-video"),
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("interlace-editor-video")).toBeInTheDocument();
     });
 
     // Existing item survives the replace.
@@ -1282,9 +1292,9 @@ describe("InterlaceEditor", () => {
       />,
     );
 
-    expect(
-      screen.getByTestId("video-source-input-empty"),
-    ).toHaveTextContent("Pick a video to begin.");
+    expect(screen.getByTestId("video-source-input-empty")).toHaveTextContent(
+      "Pick a video to begin.",
+    );
   });
 
   it("applies the preview label override on the video toolbar", () => {
@@ -1302,9 +1312,9 @@ describe("InterlaceEditor", () => {
 
     // The placement overlay only renders when an item is selected; the
     // toolbar (duration + replace + preview) is always visible.
-    expect(screen.getByTestId("interlace-editor-open-preview")).toHaveTextContent(
-      "Open preview",
-    );
+    expect(
+      screen.getByTestId("interlace-editor-open-preview"),
+    ).toHaveTextContent("Open preview");
   });
 
   it("clicking a timeline entry seeks the video to the hook's anchor time", async () => {
@@ -1423,7 +1433,9 @@ describe("InterlaceEditor", () => {
     expect(
       await screen.findByTestId("interlace-editor-hook"),
     ).toBeInTheDocument();
-    expect(await screen.findByTestId("content-type-editor")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("content-type-editor"),
+    ).toBeInTheDocument();
   });
 
   it("clicking a different timeline entry re-seeks and updates the Hook section", async () => {
@@ -1700,7 +1712,10 @@ describe("InterlaceEditor onDirtyChange", () => {
     // The editor corrects the stored duration from the video's metadata;
     // that is not an author edit.
     const video = container.querySelector("video") as HTMLVideoElement;
-    Object.defineProperty(video, "duration", { configurable: true, value: 61.5 });
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      value: 61.5,
+    });
     fireEvent.loadedMetadata(video);
 
     expect(onDirtyChange).toHaveBeenCalledWith(false);
@@ -1766,5 +1781,175 @@ describe("InterlaceEditor onDirtyChange", () => {
 
     rerender(<InterlaceEditor {...props} document={makePopulatedDocument()} />);
     await waitFor(() => expect(lastDirty(onDirtyChange)).toBe(false));
+  });
+
+  describe("design refresh", () => {
+    it("keeps several draft hooks instead of replacing the previous one", async () => {
+      render(
+        <InterlaceEditor
+          contentTypeRegistry={makeRegistry()}
+          document={makeDocument()}
+          onUpload={vi.fn(async () => "x")}
+          onSave={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+      fireEvent.click(screen.getByTestId("keyframe-timeline-add-non-blocking"));
+
+      await waitFor(() => {
+        const ids = new Set(
+          [...document.querySelectorAll("[data-content-id]")].map((el) =>
+            el.getAttribute("data-content-id"),
+          ),
+        );
+        expect(ids.size).toBe(2);
+        expect(screen.getAllByTestId("timeline-range")).toHaveLength(1);
+      });
+      expect(screen.getByTestId("interlace-editor-status")).toHaveTextContent(
+        "2 need attention",
+      );
+    });
+
+    it("blocks save on content type validation and links to the hook", () => {
+      const registry = new ContentTypeRegistry();
+      registry.register({
+        ...makeQuizContentType(),
+        validate: (data: { question: string }) =>
+          data.question.trim() ? [] : ["Question 1 needs text"],
+      });
+      const onSave = vi.fn();
+      const doc = makePopulatedDocument();
+      doc.items[0]!.content.data = {
+        question: "",
+        options: [],
+        correctIndex: 0,
+      };
+      render(
+        <InterlaceEditor
+          contentTypeRegistry={registry}
+          document={doc}
+          onUpload={vi.fn(async () => "x")}
+          onSave={onSave}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("interlace-editor-save"));
+
+      expect(onSave).not.toHaveBeenCalled();
+      const issues = screen.getByTestId("interlace-editor-save-issues");
+      expect(issues).toHaveTextContent("Quiz 1 (0:10): Question 1 needs text");
+      fireEvent.click(screen.getByRole("button", { name: "Go to hook" }));
+      expect(screen.getByTestId("inspector-panel-title")).toHaveValue("Quiz 1");
+    });
+
+    it("shows readable content type names from the registry", () => {
+      const registry = new ContentTypeRegistry();
+      registry.register({
+        ...makeQuizContentType(),
+        getDisplayName: () => "Quiz",
+        getDescription: () => "Check understanding",
+      });
+      render(
+        <InterlaceEditor
+          contentTypeRegistry={registry}
+          document={makeDocument()}
+          onUpload={vi.fn(async () => "x")}
+          onSave={vi.fn()}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("keyframe-timeline-add-blocking"));
+
+      expect(screen.getByRole("radio", { name: /Quiz/ })).toBeInTheDocument();
+      expect(screen.getByText("Check understanding")).toBeInTheDocument();
+    });
+
+    it("switches a hook between blocking and non-blocking", async () => {
+      const onSave = vi.fn();
+      render(
+        <InterlaceEditor
+          contentTypeRegistry={makeRegistry()}
+          document={makePopulatedDocument()}
+          onUpload={vi.fn(async () => "x")}
+          onSave={onSave}
+        />,
+      );
+
+      fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+      fireEvent.click(screen.getByRole("radio", { name: /Non-blocking/ }));
+      fireEvent.click(screen.getByTestId("interlace-editor-save"));
+
+      const hook = onSave.mock.calls.at(-1)?.[0]?.items?.[0]?.hook;
+      expect(hook).toMatchObject({
+        type: "non-blocking",
+        start: 10,
+        placement: { x: 30, y: 40, width: 20, height: 20 },
+      });
+    });
+
+    it("applies the theme as CSS variables on the root", () => {
+      const { container } = render(
+        <InterlaceEditor
+          contentTypeRegistry={makeRegistry()}
+          document={makeDocument()}
+          onUpload={vi.fn(async () => "x")}
+          onSave={vi.fn()}
+          theme={{ accentColor: "#6f42c1", radius: 0 }}
+          className="host-editor"
+        />,
+      );
+
+      const root = container.querySelector(".interlace-editor") as HTMLElement;
+      expect(root).toHaveClass("host-editor");
+      expect(root.style.getPropertyValue("--interlace-accent")).toBe("#6f42c1");
+      expect(root.style.getPropertyValue("--interlace-radius")).toBe("0px");
+    });
+
+    it("keeps a renamed title when the content is edited afterwards", async () => {
+      const tracked = makeTrackedQuizType();
+      const registry = new ContentTypeRegistry();
+      registry.register(tracked.contentType);
+      const onSave = vi.fn();
+      render(
+        <InterlaceEditor
+          contentTypeRegistry={registry}
+          document={makePopulatedDocument()}
+          onUpload={vi.fn(async () => "x")}
+          onSave={onSave}
+        />,
+      );
+
+      fireEvent.click(await screen.findByTestId("timeline-keyframe"));
+      fireEvent.change(screen.getByTestId("inspector-panel-title"), {
+        target: { value: "Renamed" },
+      });
+      // The content editor was not re-rendered by the rename, so it still
+      // holds the callback it was first given.
+      const question = document.querySelector(
+        ".quiz-question",
+      ) as HTMLInputElement;
+      question.value = "Edited";
+      fireEvent.input(question);
+
+      fireEvent.click(screen.getByTestId("interlace-editor-save"));
+      const item = onSave.mock.calls.at(-1)?.[0]?.items?.[0];
+      expect(item?.title).toBe("Renamed");
+      expect(item?.content?.data).toMatchObject({ question: "Edited" });
+    });
+
+    it("formats the duration as minutes and seconds", () => {
+      render(
+        <InterlaceEditor
+          contentTypeRegistry={makeRegistry()}
+          document={makeDocument()}
+          onUpload={vi.fn(async () => "x")}
+          onSave={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByTestId("interlace-editor-video-duration"),
+      ).toHaveTextContent("Duration 1:00");
+    });
   });
 });

@@ -21,6 +21,22 @@ export interface ContentType<TData = unknown> {
   getVersion(): number;
 
   /**
+   * Human-readable name shown to authors (e.g. "Quiz"). Editors fall back
+   * to the id when omitted.
+   */
+  getDisplayName?(): string;
+
+  /** One-line description shown next to the name when authors pick a type. */
+  getDescription?(): string;
+
+  /**
+   * Checks authored data before it is saved. Returns author-facing
+   * messages (e.g. "Question 1 needs text"); an empty array means the
+   * content is ready. Editors block saving while any message remains.
+   */
+  validate?(data: TData): string[];
+
+  /**
    * Determines the maximum score achievable.
    * If the content type is scorable and has a defined maximum score, it returns that value.
    * Otherwise, it returns undefined.

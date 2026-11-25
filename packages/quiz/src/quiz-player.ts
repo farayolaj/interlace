@@ -34,7 +34,7 @@ function createMediaImage(
   img.src = src;
   img.style.maxWidth = "100%";
   img.style.height = "auto";
-  img.style.borderRadius = `${RADIUS.sm}px`;
+  img.style.borderRadius = `${RADIUS.sm}`;
   img.style.marginBottom = `${SPACE[2]}px`;
   if (alt) img.alt = alt;
   return img;
@@ -158,7 +158,7 @@ export function renderQuizPlayback(
   prevButton.style.padding = `${SPACE[2]}px ${SPACE[4]}px`;
   prevButton.style.backgroundColor = COLORS.surface;
   prevButton.style.border = `1px solid ${COLORS.borderStrong}`;
-  prevButton.style.borderRadius = `${RADIUS.md}px`;
+  prevButton.style.borderRadius = `${RADIUS.md}`;
   prevButton.style.color = COLORS.text;
   prevButton.style.cursor = "pointer";
   prevButton.style.fontSize = `${TYPE.base}px`;
@@ -179,8 +179,8 @@ export function renderQuizPlayback(
   nextButton.style.padding = `${SPACE[2]}px ${SPACE[4]}px`;
   nextButton.style.backgroundColor = COLORS.accent;
   nextButton.style.border = "none";
-  nextButton.style.borderRadius = `${RADIUS.md}px`;
-  nextButton.style.color = COLORS.white;
+  nextButton.style.borderRadius = `${RADIUS.md}`;
+  nextButton.style.color = COLORS.accentContrast;
   nextButton.style.cursor = "pointer";
   nextButton.style.fontSize = `${TYPE.base}px`;
   nextButton.style.fontWeight = "600";
@@ -235,7 +235,7 @@ export function renderQuizPlayback(
     button.style.padding = `${SPACE[3]}px ${SPACE[4]}px`;
     button.style.backgroundColor = COLORS.surface;
     button.style.border = `1px solid ${COLORS.borderStrong}`;
-    button.style.borderRadius = `${RADIUS.md}px`;
+    button.style.borderRadius = `${RADIUS.md}`;
     button.style.cursor = "pointer";
     button.style.fontSize = `${TYPE.base}px`;
     button.style.color = COLORS.text;

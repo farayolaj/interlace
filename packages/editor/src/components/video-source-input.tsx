@@ -1,6 +1,7 @@
 import { DEFAULT_STRINGS, type Strings } from "@interlacejs/core";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { COLORS, RADIUS, SPACE, TYPE } from "../tokens";
+import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
+import { Button, Field, SectionHeading } from "./ui";
 
 /**
  * The current video source value held by `VideoSourceInput`. `duration` is
@@ -192,22 +193,20 @@ export function VideoSourceInput({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: `${SPACE[4]}px`,
-        padding: `${SPACE[4]}px`,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: `${RADIUS.md}px`,
-        backgroundColor: COLORS.surfaceRaised,
+        gap: SPACE[4],
+        fontFamily: FONTS.body,
+        color: COLORS.text,
       }}
     >
       {value?.src ? (
         <div
           style={{
-            padding: `${SPACE[3]}px ${SPACE[4]}px`,
-            backgroundColor: COLORS.surface,
+            padding: `${SPACE[2]}px ${SPACE[3]}px`,
+            backgroundColor: COLORS.surfaceRaised,
             border: `1px solid ${COLORS.border}`,
-            borderRadius: `${RADIUS.sm}px`,
+            borderRadius: RADIUS.sm,
             fontSize: TYPE.sm,
-            color: COLORS.text,
+            overflowWrap: "anywhere",
           }}
         >
           <span style={{ color: COLORS.textMuted }}>
@@ -216,25 +215,25 @@ export function VideoSourceInput({
           <code data-testid="video-source-input-current-src">{value.src}</code>
         </div>
       ) : (
-        <p
-          data-testid="video-source-input-empty"
-          style={{ margin: 0, color: COLORS.textMuted }}
-        >
+        <p data-testid="video-source-input-empty" className="interlace-hint">
           {strings.noVideoSelectedLabel}
         </p>
       )}
 
-      <div>
-        <h4
-          style={{
-            margin: `0 0 ${SPACE[2]}px 0`,
-            fontSize: TYPE.md,
-            fontWeight: 600,
-            color: COLORS.text,
-          }}
-        >
-          {strings.uploadLabel}
-        </h4>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: SPACE[2],
+          padding: `${SPACE[5]}px ${SPACE[4]}px`,
+          border: `2px dashed ${COLORS.borderStrong}`,
+          borderRadius: RADIUS.md,
+          backgroundColor: COLORS.surfaceRaised,
+          textAlign: "center",
+        }}
+      >
+        <SectionHeading>{strings.uploadLabel}</SectionHeading>
         <input
           ref={fileInputRef}
           type="file"
@@ -244,31 +243,20 @@ export function VideoSourceInput({
           data-testid="video-source-input-file"
           style={{ display: "none" }}
         />
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={() => fileInputRef.current?.click()}
           disabled={isDisabled}
           data-testid="video-source-input-file-button"
-          style={{
-            padding: `${SPACE[2]}px ${SPACE[4]}px`,
-            backgroundColor: isDisabled ? COLORS.borderStrong : COLORS.accent,
-            color: COLORS.white,
-            border: "none",
-            borderRadius: `${RADIUS.sm}px`,
-            cursor: isDisabled ? "not-allowed" : "pointer",
-            fontSize: TYPE.md,
-            fontWeight: 600,
-            transition: "background-color 150ms ease",
-          }}
         >
           {isUploading
             ? `${strings.uploadingLabel} (${uploadState.fileName})`
             : strings.uploadButtonLabel}
-        </button>
+        </Button>
         {isUploading ? (
           <span
             data-testid="video-source-input-uploading"
-            style={{ marginLeft: `${SPACE[2]}px`, color: COLORS.textMuted, fontSize: TYPE.sm }}
+            className="interlace-hint"
             aria-live="polite"
           >
             {strings.uploadingLabel}
@@ -279,95 +267,64 @@ export function VideoSourceInput({
             data-testid="video-source-input-error"
             role="alert"
             style={{
-              marginTop: `${SPACE[2]}px`,
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: SPACE[2],
               color: COLORS.errorText,
               backgroundColor: COLORS.errorBg,
-              padding: `${SPACE[2]}px`,
-              borderRadius: `${RADIUS.sm}px`,
+              padding: `${SPACE[2]}px ${SPACE[3]}px`,
+              borderRadius: RADIUS.sm,
               border: `1px solid ${COLORS.errorBorder}`,
               fontSize: TYPE.sm,
             }}
           >
-            <strong>{strings.uploadFailedLabel}</strong>{" "}
-            <span>{uploadState.message}</span>
-            <button
-              type="button"
+            <span>
+              <strong>{strings.uploadFailedLabel}</strong>{" "}
+              <span>{uploadState.message}</span>
+            </span>
+            <Button
+              variant="danger"
               onClick={handleRetryUpload}
               data-testid="video-source-input-retry"
-              style={{
-                marginLeft: `${SPACE[2]}px`,
-                padding: `${SPACE[1]}px ${SPACE[2]}px`,
-                backgroundColor: COLORS.surface,
-                border: `1px solid ${COLORS.errorBorder}`,
-                color: COLORS.errorText,
-                borderRadius: `${RADIUS.sm}px`,
-                cursor: "pointer",
-                fontSize: TYPE.xs,
-                fontWeight: 600,
-              }}
             >
               {strings.retryLabel}
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
 
-      <div>
-        <label
-          style={{
-            display: "block",
-            fontSize: TYPE.md,
-            fontWeight: 600,
-            marginBottom: `${SPACE[1]}px`,
-            color: COLORS.text,
-          }}
-        >
-          {strings.urlLabel}
-        </label>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <input
-            type="url"
-            value={urlDraft}
-            onChange={(e) => setUrlDraft(e.target.value)}
-            placeholder={strings.urlPlaceholder}
-            disabled={isDisabled}
-            data-testid="video-source-input-url"
-            style={{
-              flex: 1,
-              padding: `${SPACE[2]}px ${SPACE[3]}px`,
-              border: `1px solid ${COLORS.borderStrong}`,
-              borderRadius: `${RADIUS.sm}px`,
-              fontSize: TYPE.md,
-              color: COLORS.text,
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !applyDisabled) {
-                e.preventDefault();
-                handleApplyUrl();
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleApplyUrl}
-            disabled={applyDisabled}
-            data-testid="video-source-input-apply"
-            style={{
-              padding: `${SPACE[2]}px ${SPACE[4]}px`,
-              backgroundColor: applyDisabled ? COLORS.borderStrong : COLORS.accent,
-              color: COLORS.white,
-              border: "none",
-              borderRadius: `${RADIUS.sm}px`,
-              cursor: applyDisabled ? "not-allowed" : "pointer",
-              fontSize: TYPE.md,
-              fontWeight: 600,
-              transition: "background-color 150ms ease",
-            }}
-          >
-            {strings.applyUrlLabel}
-          </button>
-        </div>
-      </div>
+      <Field label={strings.urlLabel}>
+        {({ id }) => (
+          <div style={{ display: "flex", gap: SPACE[2], flexWrap: "wrap" }}>
+            <input
+              id={id}
+              type="url"
+              className="interlace-input"
+              value={urlDraft}
+              onChange={(e) => setUrlDraft(e.target.value)}
+              placeholder={strings.urlPlaceholder}
+              disabled={isDisabled}
+              data-testid="video-source-input-url"
+              style={{ flex: "1 1 240px", width: "auto" }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !applyDisabled) {
+                  e.preventDefault();
+                  handleApplyUrl();
+                }
+              }}
+            />
+            <Button
+              variant="secondary"
+              onClick={handleApplyUrl}
+              disabled={applyDisabled}
+              data-testid="video-source-input-apply"
+            >
+              {strings.applyUrlLabel}
+            </Button>
+          </div>
+        )}
+      </Field>
     </div>
   );
 }
