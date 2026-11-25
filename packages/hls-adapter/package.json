@@ -1,6 +1,6 @@
 {
   "name": "@interlacejs/hls-adapter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "HLS VideoAdapter for Interlace: hls.js playback with selectable quality levels, native HLS and MP4 fallback.",
   "type": "module",
   "main": "./dist/index.js",
