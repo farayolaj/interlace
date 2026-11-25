@@ -10,6 +10,7 @@ import { NativeVideoAdapter } from "@interlacejs/native-adapter";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 import { type MediaAttacher, useAttachMedia } from "./use-attach-media";
+import type { VideoAdapterFactory } from "./use-video-adapter";
 
 /**
  * Localized strings consumed by `PreviewModal`. Extends the core
@@ -48,6 +49,12 @@ export interface PreviewModalProps {
    * close or source change. See `InterlaceEditorProps.attachMedia`.
    */
   attachMedia?: MediaAttacher;
+  /**
+   * Host adapter factory, used instead of `NativeVideoAdapter` (and of
+   * `attachMedia`); the adapter loads `playbackSrc ?? videoSrc` itself.
+   * See `InterlaceEditorProps.createVideoAdapter`.
+   */
+  createVideoAdapter?: VideoAdapterFactory;
   document: SerializedInteractiveMediaDocument;
   contentTypeRegistry: ContentTypeRegistry;
   onClose: () => void;
@@ -78,6 +85,7 @@ export function PreviewModal({
   videoSrc,
   playbackSrc,
   attachMedia,
+  createVideoAdapter,
   document,
   contentTypeRegistry,
   onClose,
@@ -111,7 +119,16 @@ export function PreviewModal({
 
   // Declared before the adapter effect so the source is attached first
   // in the same commit; detaches when the <video> unmounts on close.
-  useAttachMedia(videoRef, srcToPlay, attachMedia, onError);
+  useAttachMedia(
+    videoRef,
+    srcToPlay,
+    createVideoAdapter ? undefined : attachMedia,
+    onError,
+  );
+  // Read from a ref: a host-inlined factory must not re-create the adapter
+  // (and the player's controller) on every render.
+  const createAdapterRef = useRef(createVideoAdapter);
+  createAdapterRef.current = createVideoAdapter;
 
   // Construct the adapter after the <video> mounts; destroy on close.
   useEffect(() => {
@@ -126,9 +143,12 @@ export function PreviewModal({
       // TypeScript's non-null requirement on the ref.
       return;
     }
-    let native: NativeVideoAdapter | null = null;
+    let native: (VideoAdapter & { destroy(): void }) | null = null;
     try {
-      native = new NativeVideoAdapter(video);
+      const create = createAdapterRef.current;
+      native = create
+        ? create(video, srcToPlay)
+        : new NativeVideoAdapter(video);
       setAdapter(native);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -287,7 +307,7 @@ export function PreviewModal({
           >
             <video
               ref={videoRef}
-              src={attachMedia ? undefined : srcToPlay}
+              src={attachMedia || createVideoAdapter ? undefined : srcToPlay}
               controls
               preload="metadata"
               onLoadedMetadata={handleLoadedMetadata}

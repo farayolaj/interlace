@@ -9,6 +9,10 @@ export type {
   InterlaceEditorProps,
 } from "./components/interlace-editor";
 export type { MediaAttacher } from "./components/use-attach-media";
+export type {
+  DestroyableVideoAdapter,
+  VideoAdapterFactory,
+} from "./components/use-video-adapter";
 
 // Authoring-time video source step
 export {

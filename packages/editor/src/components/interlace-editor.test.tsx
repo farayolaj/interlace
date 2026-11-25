@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
@@ -13,6 +14,7 @@ import {
   type SerializedInteractiveMediaDocument,
   type Strings as CoreStrings,
 } from "@interlacejs/core";
+import { NativeVideoAdapter } from "@interlacejs/native-adapter";
 import { InterlaceEditor, DEFAULT_EDITOR_STRINGS } from "./interlace-editor";
 
 afterEach(() => {
@@ -1871,6 +1873,131 @@ describe("InterlaceEditor playback source", () => {
 
     fireEvent.click(screen.getByTestId("preview-modal-close"));
     await waitFor(() => expect(previewCleanup).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("InterlaceEditor createVideoAdapter", () => {
+  const HLS_SRC = "https://example.com/stream/master.m3u8";
+
+  /** A real native adapter (it wraps the <video>) with quality levels. */
+  function makeFactory(levels = [720, 480, 240]) {
+    const created: Array<NativeVideoAdapter & { src: string }> = [];
+    const factory = vi.fn((video: HTMLVideoElement, src: string) => {
+      const adapter = Object.assign(new NativeVideoAdapter(video), {
+        src,
+        getQualityLevels: () =>
+          levels.map((height, id) => ({ id, height, label: `${height}p` })),
+        getQualityLevel: () => -1,
+        getActiveQualityLevel: () => null,
+        setQualityLevel: vi.fn(),
+      });
+      vi.spyOn(adapter, "destroy");
+      created.push(adapter);
+      return adapter;
+    });
+    return { factory, created };
+  }
+
+  const baseProps = () => ({
+    contentTypeRegistry: makeRegistry(),
+    onUpload: vi.fn(async () => "x"),
+    onSave: vi.fn(),
+  });
+
+  it("creates an adapter for the authoring video instead of setting src or calling attachMedia", () => {
+    const { factory } = makeFactory();
+    const attachMedia = vi.fn();
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        playbackSrc={HLS_SRC}
+        attachMedia={attachMedia}
+        createVideoAdapter={factory}
+      />,
+    );
+    const video = screen.getByTestId("interlace-editor-preview-video");
+    expect(video.hasAttribute("src")).toBe(false);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(factory).toHaveBeenCalledWith(video, HLS_SRC);
+    expect(attachMedia).not.toHaveBeenCalled();
+  });
+
+  it("shows the quality control over the authoring video when the adapter has levels", () => {
+    const { factory } = makeFactory();
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        createVideoAdapter={factory}
+      />,
+    );
+    const frame = screen.getByTestId("interlace-editor-video");
+    expect(
+      within(frame).getByRole("button", { name: /^Quality:/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the quality control while a hook is selected for placement", () => {
+    const { factory } = makeFactory();
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makePopulatedDocument()}
+        createVideoAdapter={factory}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /^Quality:/ }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Quiz 1 — / }));
+    expect(screen.getByTestId("placement-editor")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Quality:/ })).toBeNull();
+  });
+
+  it("shows no quality control for a single level", () => {
+    const { factory } = makeFactory([360]);
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        createVideoAdapter={factory}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^Quality:/ })).toBeNull();
+  });
+
+  it("re-creates the adapter on a source change and destroys it on unmount", () => {
+    const { factory, created } = makeFactory();
+    const props = { ...baseProps(), createVideoAdapter: factory };
+    const { rerender, unmount } = render(
+      <InterlaceEditor {...props} document={makeDocument()} />,
+    );
+    // A new playback source: same element, new adapter.
+    rerender(
+      <InterlaceEditor
+        {...props}
+        document={makeDocument()}
+        playbackSrc={HLS_SRC}
+      />,
+    );
+    expect(created).toHaveLength(2);
+    expect(created[0]!.destroy).toHaveBeenCalledTimes(1);
+    expect(created[1]!.src).toBe(HLS_SRC);
+
+    // A new document video remounts the (wrapped) element without errors.
+    const OTHER = "https://example.com/other.mp4";
+    rerender(
+      <InterlaceEditor
+        {...props}
+        document={makeDocument({ video: { src: OTHER, duration: 30 } })}
+      />,
+    );
+    expect(created.at(-1)!.src).toBe(OTHER);
+    expect(created[1]!.destroy).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(created.at(-1)!.destroy).toHaveBeenCalledTimes(1);
   });
 });
 
