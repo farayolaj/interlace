@@ -1,5 +1,16 @@
 # @interlace/storybook
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [f0a2ccf]
+- Updated dependencies [8aabf79]
+- Updated dependencies [1b30893]
+  - @interlacejs/core@0.2.0
+  - @interlacejs/player@0.2.0
+  - @interlacejs/editor@1.2.0
+
 ## 0.0.5
 
 ### Patch Changes
