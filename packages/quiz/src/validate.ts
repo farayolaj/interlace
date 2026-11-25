@@ -56,11 +56,11 @@ export function getQuizAuthoringIssues(data: QuizData): string[] {
       issues.push(`${label} needs text`);
     }
     if (question.options.length < 2) {
-      issues.push(`${label} needs at least 2 answers`);
+      issues.push(`${label} needs at least 2 options`);
     }
     question.options.forEach((option, optionIndex) => {
       if (option.text.trim().length === 0) {
-        issues.push(`${label}, answer ${optionIndex + 1} needs text`);
+        issues.push(`${label}, option ${optionIndex + 1} needs text`);
       }
     });
     const hasCorrect = question.options.some(

@@ -174,7 +174,7 @@ describe("QuizEditor", () => {
     expect(data.questions[0]?.correctOptionId).toBe("opt-1");
   });
 
-  it("adds a new answer via the Add answer button with a generated id", () => {
+  it("adds a new option via the Add option button with a generated id", () => {
     const { container, onChange } = mountQuizEditor({
       data: {
         questions: [
@@ -193,8 +193,8 @@ describe("QuizEditor", () => {
     const editor = container.querySelector(".quiz-editor");
     if (!editor) throw new Error("expected quiz editor root");
     const add = editor.querySelector<HTMLButtonElement>(".quiz-add-option");
-    if (!add) throw new Error("expected Add answer button");
-    expect(add.textContent).toContain("Add answer");
+    if (!add) throw new Error("expected Add option button");
+    expect(add.textContent).toContain("Add option");
     fireEvent.click(add);
     expect(onChange).toHaveBeenCalled();
     const data = lastEmitted(onChange);
