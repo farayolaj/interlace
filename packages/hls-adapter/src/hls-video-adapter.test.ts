@@ -382,6 +382,165 @@ describe("HlsVideoAdapter", () => {
     });
   });
 
+  describe("refreshSource (expired links)", () => {
+    const expired = (code = 403) => ({
+      fatal: true,
+      type: MockHls.ErrorTypes.NETWORK_ERROR,
+      details: "fragLoadError",
+      response: { code, text: "Forbidden" },
+    });
+    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("reloads the stream from fresh URLs at the same position and play state", async () => {
+      const refreshSource = vi.fn(async () => ({
+        src: "https://cdn.test/fresh/master.m3u8",
+        fallbackSrc: "https://cdn.test/fresh.mp4",
+      }));
+      const a = create({
+        fallbackSrc: "https://cdn.test/video.mp4",
+        refreshSource,
+      });
+      const first = lastHls();
+      first.parseManifest(LEVELS);
+      const onProgrammaticSeek = vi.fn();
+      a.on("programmaticSeek", onProgrammaticSeek);
+      paused = false;
+      video.currentTime = 1234;
+
+      first.trigger(MockHls.Events.ERROR, expired());
+      expect(refreshSource).toHaveBeenCalledTimes(1);
+      await flush();
+
+      expect(first.destroy).toHaveBeenCalled();
+      const second = lastHls();
+      expect(second).not.toBe(first);
+      expect(second.source).toBe("https://cdn.test/fresh/master.m3u8");
+      expect(second.media).toBe(video);
+      expect(a.getHls()).toBe(second);
+
+      video.currentTime = 0;
+      video.dispatchEvent(new Event("loadedmetadata"));
+      await flush();
+      expect(video.currentTime).toBe(1234);
+      expect(onProgrammaticSeek).toHaveBeenCalled();
+      expect(video.play).toHaveBeenCalled();
+    });
+
+    it("uses the refreshed fallback if the stream fails later", async () => {
+      create({
+        fallbackSrc: "https://cdn.test/video.mp4",
+        refreshSource: async () => ({
+          src: "https://cdn.test/fresh/master.m3u8",
+          fallbackSrc: "https://cdn.test/fresh.mp4",
+        }),
+      });
+      lastHls().trigger(MockHls.Events.ERROR, expired(401));
+      await flush();
+      lastHls().trigger(MockHls.Events.ERROR, {
+        fatal: true,
+        type: MockHls.ErrorTypes.OTHER_ERROR,
+      });
+      expect(video.src).toBe("https://cdn.test/fresh.mp4");
+    });
+
+    it("refreshes a plain video's expired link, resuming where it is when the links arrive", async () => {
+      const refreshSource = vi.fn(async () => ({
+        src: "https://cdn.test/lecture.mp4?sig=2",
+      }));
+      create({ src: "https://cdn.test/lecture.mp4?sig=1", refreshSource });
+      video.currentTime = 48;
+      video.dispatchEvent(new Event("error"));
+      expect(refreshSource).toHaveBeenCalledTimes(1);
+      video.currentTime = 50; // buffered video kept playing meanwhile
+      await flush();
+      expect(video.src).toBe("https://cdn.test/lecture.mp4?sig=2");
+      video.dispatchEvent(new Event("loadedmetadata"));
+      expect(video.currentTime).toBe(50);
+    });
+
+    it("refreshes at most once per cooldown, then handles errors as usual", async () => {
+      const refreshSource = vi.fn(async () => ({
+        src: "https://cdn.test/fresh/master.m3u8",
+        fallbackSrc: "https://cdn.test/fresh.mp4",
+      }));
+      create({ fallbackSrc: "https://cdn.test/video.mp4", refreshSource });
+      lastHls().trigger(MockHls.Events.ERROR, expired());
+      await flush();
+      // Still 403 with fresh links: not an expiry problem.
+      lastHls().trigger(MockHls.Events.ERROR, expired());
+      expect(refreshSource).toHaveBeenCalledTimes(1);
+      expect(video.src).toBe("https://cdn.test/fresh.mp4");
+    });
+
+    it("falls back when the refresh fails", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      create({
+        fallbackSrc: "https://cdn.test/video.mp4",
+        refreshSource: async () => {
+          throw new Error("offline");
+        },
+      });
+      lastHls().trigger(MockHls.Events.ERROR, expired());
+      await flush();
+      expect(video.src).toBe("https://cdn.test/video.mp4");
+      expect(error).toHaveBeenCalled();
+    });
+
+    it("refreshes on a 403 before hls.js gives up", async () => {
+      const refreshSource = vi.fn(async () => ({
+        src: "https://cdn.test/fresh/master.m3u8",
+      }));
+      create({ refreshSource });
+      lastHls().parseManifest(LEVELS);
+      lastHls().trigger(MockHls.Events.ERROR, {
+        ...expired(),
+        fatal: false,
+        details: "levelLoadError",
+      });
+      expect(refreshSource).toHaveBeenCalledTimes(1);
+      await flush();
+      expect(lastHls().source).toBe("https://cdn.test/fresh/master.m3u8");
+    });
+
+    it("refreshes when hls.js gives up on a status-0 failure (storage 403 without CORS)", () => {
+      const refreshSource = vi.fn(async () => ({
+        src: "https://cdn.test/fresh/master.m3u8",
+      }));
+      create({ refreshSource });
+      const hls = lastHls();
+      hls.parseManifest(LEVELS);
+      hls.trigger(MockHls.Events.ERROR, { ...expired(0), fatal: false });
+      expect(refreshSource).not.toHaveBeenCalled();
+      hls.trigger(MockHls.Events.ERROR, expired(0));
+      expect(refreshSource).toHaveBeenCalledTimes(1);
+      expect(hls.startLoad).not.toHaveBeenCalled();
+    });
+
+    it("leaves non-fatal errors other than 401/403 to hls.js", () => {
+      const refreshSource = vi.fn();
+      create({ refreshSource });
+      lastHls().trigger(MockHls.Events.ERROR, {
+        ...expired(500),
+        fatal: false,
+      });
+      expect(refreshSource).not.toHaveBeenCalled();
+    });
+
+    it("ignores a refresh that finishes after destroy", async () => {
+      let resolve!: (v: { src: string }) => void;
+      const a = create({
+        refreshSource: () => new Promise((r) => (resolve = r)),
+      });
+      lastHls().trigger(MockHls.Events.ERROR, expired());
+      a.destroy();
+      adapter = null;
+      const count = MockHls.instances.length;
+      resolve({ src: "https://cdn.test/fresh/master.m3u8" });
+      await flush();
+      expect(MockHls.instances).toHaveLength(count);
+    });
+  });
+
   describe("non-HLS sources", () => {
     it("plays an MP4 directly even where hls.js is supported", () => {
       const a = create({ src: "https://cdn.test/lecture.mp4" });

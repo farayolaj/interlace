@@ -32,7 +32,20 @@ export interface HlsVideoAdapterOptions {
    * (as a height, or "auto"). Not remembered when omitted.
    */
   rememberQualityKey?: string;
+  /**
+   * Fetches fresh URLs when the current ones look expired: a stream request
+   * rejected with 401/403, hls.js giving up on a network error (storage
+   * often rejects expired segment URLs without CORS headers, so they fail
+   * as status 0), or a plain or fallback video failing to load. The adapter calls it at most once per
+   * {@link REFRESH_COOLDOWN_MS}, then reloads from the same position and
+   * play state. If it fails or the new URLs fail too, the usual error
+   * handling applies (fallback, then giving up).
+   */
+  refreshSource?: () => Promise<{ src: string; fallbackSrc?: string }>;
 }
+
+/** Minimum time between two {@link HlsVideoAdapterOptions.refreshSource} calls. */
+export const REFRESH_COOLDOWN_MS = 30_000;
 
 type Listener = (event: VideoAdapterEvent) => void;
 
@@ -59,7 +72,10 @@ export class HlsVideoAdapter
   extends NativeVideoAdapter
   implements QualityCapableAdapter
 {
-  private readonly options: HlsVideoAdapterOptions;
+  private options: HlsVideoAdapterOptions;
+  private refreshing = false;
+  private destroyed = false;
+  private lastRefreshAt = -Infinity;
   private hls: Hls | null = null;
   private levels: QualityLevel[] = [];
   private selectedLevel = AUTO;
@@ -70,8 +86,10 @@ export class HlsVideoAdapter
   private usingFallback = false;
   private qualityListeners = new Set<Listener>();
   private readonly onVideoError = () => {
-    // Only the native path reports failures here; hls.js reports its own.
-    if (!this.hls) this.switchToFallback();
+    // Only non-hls.js playback reports failures here; hls.js reports its own.
+    if (this.hls) return;
+    if (this.tryRefresh()) return;
+    this.switchToFallback();
   };
 
   constructor(video: HTMLVideoElement, options: HlsVideoAdapterOptions) {
@@ -128,6 +146,7 @@ export class HlsVideoAdapter
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.getVideoElement().removeEventListener("error", this.onVideoError);
     this.hls?.destroy();
     this.hls = null;
@@ -158,7 +177,19 @@ export class HlsVideoAdapter
   }
 
   private handleHlsError(data: ErrorData): void {
-    if (!data.fatal || !this.hls) return;
+    if (!this.hls) return;
+    const network = data.type === Hls.ErrorTypes.NETWORK_ERROR;
+    const status = data.response?.code;
+    // Expired links: the playlist server answers 401/403, so refresh right
+    // away instead of letting hls.js cycle through every level first.
+    if (network && (status === 401 || status === 403) && this.tryRefresh()) {
+      return;
+    }
+    if (!data.fatal) return;
+    // Storage often rejects expired segment URLs without CORS headers, so
+    // the browser reports a failed request (status 0) rather than a 403:
+    // once hls.js gives up on a network error, try fresh links first.
+    if (network && this.tryRefresh()) return;
     if (
       data.type === Hls.ErrorTypes.NETWORK_ERROR &&
       this.manifestLoaded &&
@@ -197,6 +228,68 @@ export class HlsVideoAdapter
 
     if (!fallbackSrc || this.usingFallback) return;
     this.usingFallback = true;
+    this.restoreOnLoad(time, wasPaused);
+    video.src = fallbackSrc;
+  }
+
+  /**
+   * Asks the host for fresh URLs (expired links), unless a refresh is
+   * running or happened recently. Returns whether one was started.
+   */
+  private tryRefresh(): boolean {
+    const { refreshSource } = this.options;
+    const now = Date.now();
+    if (
+      !refreshSource ||
+      this.refreshing ||
+      now - this.lastRefreshAt < REFRESH_COOLDOWN_MS
+    ) {
+      return false;
+    }
+    this.refreshing = true;
+    this.lastRefreshAt = now;
+
+    refreshSource()
+      .then((fresh) => {
+        if (this.destroyed) return;
+        this.options = { ...this.options, ...fresh };
+        this.reloadSource();
+      })
+      .catch((err: unknown) => {
+        console.error("Failed to refresh the video source:", err);
+        if (!this.destroyed) this.switchToFallback();
+      })
+      .finally(() => {
+        this.refreshing = false;
+      });
+    return true;
+  }
+
+  /**
+   * Reloads the current playback path from the (refreshed) options,
+   * resuming where playback is now (buffered video may have kept playing
+   * while the fresh links were fetched).
+   */
+  private reloadSource(): void {
+    const video = this.getVideoElement();
+    this.restoreOnLoad(video.currentTime, video.paused);
+    if (this.usingFallback) {
+      if (this.options.fallbackSrc) video.src = this.options.fallbackSrc;
+    } else if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+      this.manifestLoaded = false;
+      this.networkRetried = false;
+      this.mediaRecovered = false;
+      this.attachHls();
+    } else {
+      video.src = this.options.src;
+    }
+  }
+
+  /** Once the next source loads, returns to `time` and the play state. */
+  private restoreOnLoad(time: number, wasPaused: boolean): void {
+    const video = this.getVideoElement();
     video.addEventListener(
       "loadedmetadata",
       () => {
@@ -205,13 +298,12 @@ export class HlsVideoAdapter
           Promise.resolve()
             .then(() => video.play())
             .catch((err: unknown) => {
-              console.error("Failed to resume fallback video:", err);
+              console.error("Failed to resume the video:", err);
             });
         }
       },
       { once: true },
     );
-    video.src = fallbackSrc;
   }
 
   private applyRememberedPreference(): void {
