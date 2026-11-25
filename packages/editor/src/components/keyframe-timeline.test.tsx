@@ -528,6 +528,47 @@ describe("KeyframeTimeline", () => {
     expect(kf.style.left).toBe("64px");
   });
 
+  it("horizontal wheel pans instead of zooming", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    scroll.scrollLeft = 0;
+    fireEvent.wheel(scroll, { deltaX: 40, deltaY: 2 });
+    expect(scroll.scrollLeft).toBe(40);
+    expect(kf.style.left).toBe("64px"); // zoom unchanged
+  });
+
+  it("shift+wheel pans with a mouse wheel", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    scroll.scrollLeft = 0;
+    fireEvent.wheel(scroll, { deltaY: 30, shiftKey: true });
+    expect(scroll.scrollLeft).toBe(30);
+    expect(kf.style.left).toBe("64px");
+  });
+
+  it("small trackpad deltas zoom proportionally", () => {
+    const { container, scroll } = renderTimeline();
+    const kf = keyframeEl(container, "b1");
+    fireEvent.wheel(scroll, { deltaY: -50 });
+    // zoom 8 * 1.2^0.5 ≈ 8.764: left = 10*8.764 - 16 ≈ 71.6.
+    expect(parseFloat(kf.style.left)).toBeCloseTo(71.64, 1);
+  });
+
+  it("wheel zoom keeps the time under the pointer in place", () => {
+    const { container, scroll } = renderTimeline();
+    const strip = container.querySelector(
+      '[data-testid="keyframe-timeline-strip"]',
+    ) as HTMLElement;
+    scroll.scrollLeft = 0;
+    // The strip starts 50px from the viewport's left, shifted by scroll.
+    strip.getBoundingClientRect = () =>
+      ({ left: 50 - scroll.scrollLeft }) as DOMRect;
+    // Pointer over t=10s at zoom 8 (x = 50 + 80).
+    fireEvent.wheel(scroll, { deltaY: -100, clientX: 130 });
+    // Zoom 9.6: t=10s is at 96px, so scroll by 16px to keep it at x=130.
+    expect(scroll.scrollLeft).toBeCloseTo(16, 5);
+  });
+
   it("lanes never compress: the track grows and scrolls vertically past the max", () => {
     const { scroll } = renderTimeline();
     expect(scroll.style.overflowX).toBe("auto");

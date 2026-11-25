@@ -233,8 +233,9 @@ function AttentionDot({ style }: { style?: React.CSSProperties }) {
  * - Drag survives the pointer leaving the strip (pointer capture +
  *   window-level fallbacks — the PlacementEditor pattern).
  * - Drag snapping is to integer seconds; hold Shift to bypass.
- * - Zoom via the +/- buttons or ctrl+wheel (native non-passive listener,
- *   since React's synthetic onWheel cannot preventDefault).
+ * - Zoom via the +/- buttons or the vertical mouse wheel (anchored at the
+ *   pointer); horizontal wheel / Shift+wheel pans. Native non-passive
+ *   listener, since React's synthetic onWheel cannot preventDefault.
  * - Keyboard: the playhead is a slider (arrow keys ±1s, ±5s with Shift);
  *   a selected keyframe nudges with the same keys through `onUpdateEntry`.
  *
@@ -440,24 +441,61 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
     [beginDrag, onUpdateEntry],
   );
 
-  // Wheel zoom on the timeline body: wheel up = zoom in, wheel down = zoom
-  // out. React's synthetic onWheel is passive at the root since React 17,
-  // so preventDefault requires a native non-passive listener. ctrl/meta+wheel
-  // is accepted as the same gesture (backwards compatible with the prior
-  // ctrl+wheel behavior).
+  // Wheel on the timeline body:
+  // - vertical wheel zooms around the pointer (wheel up = in). A mouse
+  //   notch (deltaY 100) is one 1.2x step; trackpads' small deltas zoom
+  //   proportionally, so the gesture stays smooth;
+  // - horizontal wheel (trackpad swipe, or Shift+wheel on a mouse) pans.
+  // React's synthetic onWheel is passive at the root since React 17, so
+  // preventDefault (which also stops the page scrolling and the browser's
+  // back/forward swipe) needs a native non-passive listener.
+  // The time under the pointer when a wheel zoom happened; restored once the
+  // new zoom has rendered so that point stays under the pointer.
+  const zoomAnchorRef = useRef<{ time: number; clientX: number } | null>(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    const toPixels = (delta: number, mode: number) =>
+      mode === 1 ? delta * 16 : mode === 2 ? delta * el.clientWidth : delta;
     const onWheel = (e: WheelEvent) => {
+      const dx = toPixels(e.deltaX, e.deltaMode);
+      const dy = toPixels(e.deltaY, e.deltaMode);
+      const horizontal = e.shiftKey || Math.abs(dx) > Math.abs(dy);
+      if (horizontal) {
+        const pan = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        if (pan === 0) return;
+        e.preventDefault();
+        el.scrollLeft += pan;
+        return;
+      }
+      if (dy === 0) return;
       e.preventDefault();
       userZoomedRef.current = true;
-      setZoom((z) =>
-        clampValue(e.deltaY < 0 ? z * 1.2 : z / 1.2, MIN_ZOOM, MAX_ZOOM),
-      );
+      const strip = stripRef.current;
+      const { zoom: currentZoom } = propsRef.current;
+      if (strip && currentZoom > 0) {
+        const left = strip.getBoundingClientRect().left;
+        zoomAnchorRef.current = {
+          time: (e.clientX - left) / currentZoom,
+          clientX: e.clientX,
+        };
+      }
+      const steps = clampValue(-dy / 100, -3, 3);
+      setZoom((z) => clampValue(z * Math.pow(1.2, steps), MIN_ZOOM, MAX_ZOOM));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
+
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current;
+    const el = scrollRef.current;
+    const strip = stripRef.current;
+    zoomAnchorRef.current = null;
+    if (!anchor || !el || !strip) return;
+    const left = strip.getBoundingClientRect().left;
+    el.scrollLeft += left + anchor.time * zoom - anchor.clientX;
+  }, [zoom]);
 
   const handleZoom = useCallback((direction: 1 | -1) => {
     userZoomedRef.current = true;
