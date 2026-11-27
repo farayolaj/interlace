@@ -39,7 +39,7 @@ registry.register(QuizContentType);
 
 `onSave` receives the serialized document (JSON) ready for the player (`@interlacejs/player`). The editor never persists on its own — bring your own storage.
 
-`onUpload(file, { signal })` resolves to the file's URL. `signal` aborts when the user presses **Cancel upload**; honour it to stop the transfer. After a failed upload, **Retry** calls `onUpload` again with the same file, so an upload you can resume continues where it stopped.
+Files can be chosen with the button or dragged onto the upload area (non-video files are refused with a message). `onUpload(file, { signal })` resolves to the file's URL. `signal` aborts when the user presses **Cancel upload**; honour it to stop the transfer. After a failed upload, **Retry** calls `onUpload` again with the same file, so an upload you can resume continues where it stopped.
 
 `onDirtyChange` fires when the editor gains or loses unsaved changes, relative to the loaded `document` (or an empty one) and the last `onSave`. Use it to warn before navigating away. Duration corrections the editor makes from the video's metadata do not count as changes.
 

@@ -267,6 +267,69 @@ describe("VideoSourceInput", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  describe("drag and drop", () => {
+    const dragData = (files: File[]) => ({
+      dataTransfer: { files, types: ["Files"], dropEffect: "none" },
+    });
+
+    it("uploads a video dropped on the upload area", async () => {
+      const onUpload = vi.fn(async () => "https://cdn.example.com/dropped.mp4");
+      const onChange = vi.fn();
+      render(<VideoSourceInput onChange={onChange} onUpload={onUpload} />);
+      const zone = screen.getByTestId("video-source-input-dropzone");
+      const file = makeFile("dropped.mp4");
+
+      fireEvent.dragEnter(zone, dragData([file]));
+      expect(zone).toHaveAttribute("data-dragging", "true");
+      expect(
+        screen.getByTestId("video-source-input-drop-hint").textContent,
+      ).toBe("Drop the video to upload it");
+
+      fireEvent.drop(zone, dragData([file]));
+
+      expect(zone).not.toHaveAttribute("data-dragging");
+      await waitFor(() => {
+        expect(onChange).toHaveBeenCalledWith({
+          src: "https://cdn.example.com/dropped.mp4",
+        });
+      });
+      expect(onUpload.mock.calls[0]?.[0]).toBe(file);
+    });
+
+    it("rejects a dropped file that isn't a video", () => {
+      const onUpload = vi.fn();
+      render(<VideoSourceInput onChange={vi.fn()} onUpload={onUpload} />);
+      const zone = screen.getByTestId("video-source-input-dropzone");
+      const pdf = new File(["x"], "notes.pdf", { type: "application/pdf" });
+
+      fireEvent.drop(zone, dragData([pdf]));
+
+      expect(onUpload).not.toHaveBeenCalled();
+      expect(
+        screen.getByTestId("video-source-input-error").textContent,
+      ).toContain("That file isn't a video");
+    });
+
+    it("ignores drops while an upload is running", async () => {
+      const onUpload = vi.fn(() => new Promise<string>(() => {}));
+      const { container } = render(
+        <VideoSourceInput onChange={vi.fn()} onUpload={onUpload} />,
+      );
+      const fileInput = container.querySelector(
+        '[data-testid="video-source-input-file"]',
+      ) as HTMLInputElement;
+      dispatchFileChange(fileInput, makeFile("first.mp4"));
+      await screen.findByTestId("video-source-input-cancel");
+
+      fireEvent.drop(
+        screen.getByTestId("video-source-input-dropzone"),
+        dragData([makeFile("second.mp4")]),
+      );
+
+      expect(onUpload).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("disables both controls while uploading and re-enables after success", async () => {
     let resolveUpload: ((url: string) => void) | undefined;
     const onUpload = vi.fn(

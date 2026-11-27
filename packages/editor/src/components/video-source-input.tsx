@@ -33,6 +33,12 @@ export interface VideoSourceInputStrings extends Strings {
   retryLabel: string;
   /** Label for the button that stops an upload in progress. */
   cancelUploadLabel: string;
+  /** Hint under the upload button: files can also be dropped there. */
+  dropHint: string;
+  /** Shown in the drop area while a file is dragged over it. */
+  dropActiveLabel: string;
+  /** Error shown when the dropped file is not a video. */
+  notAVideoLabel: string;
   /** Label for the "direct URL" text input. */
   urlLabel: string;
   /** Placeholder for the URL text input. */
@@ -58,6 +64,9 @@ export const DEFAULT_VIDEO_SOURCE_INPUT_STRINGS: VideoSourceInputStrings = {
   uploadFailedLabel: "Upload failed.",
   retryLabel: "Retry",
   cancelUploadLabel: "Cancel upload",
+  dropHint: "or drag and drop a video file here",
+  dropActiveLabel: "Drop the video to upload it",
+  notAVideoLabel: "That file isn't a video. Choose a video file.",
   urlLabel: "…or paste a video URL",
   urlPlaceholder: "https://example.com/video.mp4",
   applyUrlLabel: "Use URL",
@@ -212,6 +221,54 @@ export function VideoSourceInput({
     }
   }, [startUpload]);
 
+  /** Drag depth, so moving over child elements doesn't end the highlight. */
+  const dragDepthRef = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const canDrop = !disabled && uploadState.kind !== "uploading";
+
+  const handleDragEnter = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!canDrop && hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setIsDragging(true);
+    },
+    [canDrop],
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!canDrop && hasFiles(event)) return;
+      // Required for the drop event to fire.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    },
+    [canDrop],
+  );
+
+  const handleDragLeave = useCallback(() => {
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      dragDepthRef.current = 0;
+      setIsDragging(false);
+      if (!canDrop && hasFiles(event)) return;
+      event.preventDefault();
+      const file = event.dataTransfer.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("video/")) {
+        setUploadState({ kind: "error", message: strings.notAVideoLabel });
+        return;
+      }
+      void startUpload(file);
+    },
+    [canDrop, startUpload, strings.notAVideoLabel],
+  );
+
   const handleCancelUpload = useCallback(() => {
     uploadTokenRef.current += 1;
     uploadAbortRef.current?.abort();
@@ -258,16 +315,25 @@ export function VideoSourceInput({
       )}
 
       <div
+        data-testid="video-source-input-dropzone"
+        data-dragging={isDragging || undefined}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: SPACE[2],
           padding: `${SPACE[5]}px ${SPACE[4]}px`,
-          border: `2px dashed ${COLORS.borderStrong}`,
+          border: `2px dashed ${isDragging ? COLORS.accent : COLORS.borderStrong}`,
           borderRadius: RADIUS.md,
-          backgroundColor: COLORS.surfaceRaised,
+          backgroundColor: isDragging
+            ? COLORS.accentLighter
+            : COLORS.surfaceRaised,
           textAlign: "center",
+          transition: "background-color 120ms, border-color 120ms",
         }}
       >
         <SectionHeading>{strings.uploadLabel}</SectionHeading>
@@ -290,6 +356,15 @@ export function VideoSourceInput({
             ? `${strings.uploadingLabel} (${uploadState.fileName})`
             : strings.uploadButtonLabel}
         </Button>
+        {!isUploading ? (
+          <span
+            className="interlace-hint"
+            data-testid="video-source-input-drop-hint"
+            aria-live="polite"
+          >
+            {isDragging ? strings.dropActiveLabel : strings.dropHint}
+          </span>
+        ) : null}
         {isUploading ? (
           <span
             data-testid="video-source-input-uploading"
@@ -373,4 +448,9 @@ export function VideoSourceInput({
       </Field>
     </div>
   );
+}
+
+/** Whether a drag carries files (not text or a link). */
+function hasFiles(event: React.DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes("Files");
 }
