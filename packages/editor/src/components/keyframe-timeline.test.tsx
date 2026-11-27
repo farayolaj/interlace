@@ -545,7 +545,24 @@ describe("KeyframeTimeline", () => {
     ];
     const last = ticks[ticks.length - 1]!;
     expect(last.style.transform).toBe("translateX(-100%)");
+    expect(last.textContent).not.toBe("");
     expect(ticks[0]!.style.transform).toBe("");
+  });
+
+  it("drops the final tick's label when it would overlap the previous one", () => {
+    // 2m 16s zoomed in to 10s ticks: the 2m 10s tick sits 6s before the
+    // end, so its left-flipped label would run into "2m".
+    const { container, scroll } = renderTimeline({ videoDuration: 136 });
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    const tick = (t: number) =>
+      container.querySelector<HTMLElement>(
+        `[data-testid="keyframe-timeline-tick-${t}"]`,
+      )!;
+    expect(tick(130).style.transform).toBe("translateX(-100%)");
+    expect(tick(130).textContent).toBe(""); // line kept, label dropped
+    expect(tick(120).textContent).toBe("2m");
   });
 
   it("horizontal wheel pans instead of zooming", () => {

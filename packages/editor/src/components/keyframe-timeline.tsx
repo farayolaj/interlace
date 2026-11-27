@@ -172,6 +172,22 @@ function formatTick(seconds: number): string {
 }
 
 /** Rendered label width estimate (px), capped at the truncation width. */
+/**
+ * Whether the last tick's label, drawn to the left of its line, would
+ * overlap the previous tick's label (drawn to the right of its own).
+ */
+function endLabelCollides(
+  previous: number,
+  last: number,
+  zoom: number,
+): boolean {
+  const previousLabelEnd =
+    previous * zoom + SPACE[1] + estimateLabelWidth(formatTick(previous));
+  const lastLabelStart =
+    last * zoom - SPACE[1] - estimateLabelWidth(formatTick(last));
+  return lastLabelStart < previousLabelEnd + SPACE[1];
+}
+
 function estimateLabelWidth(label: string): number {
   return Math.min(LABEL_MAX_WIDTH_PX, Math.ceil(label.length * LABEL_CHAR_PX));
 }
@@ -795,10 +811,14 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
               touchAction: "none",
             }}
           >
-            {ticks.map((t) => {
+            {ticks.map((t, i) => {
               // A label at the very end would overflow the strip (and make
               // it scroll sideways), so it sits to the left of its line.
               const atEnd = t > 0 && t * zoom + TICK_LABEL_ROOM > stripWidth;
+              // Flipped left, it can run into the previous label (a tick
+              // just before the end): then only the line is shown.
+              const hideLabel =
+                atEnd && i > 0 && endLabelCollides(ticks[i - 1]!, t, zoom);
               return (
                 <div
                   key={t}
@@ -824,7 +844,7 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {formatTick(t)}
+                  {hideLabel ? null : formatTick(t)}
                 </div>
               );
             })}
