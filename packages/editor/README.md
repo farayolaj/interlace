@@ -39,6 +39,8 @@ registry.register(QuizContentType);
 
 `onSave` receives the serialized document (JSON) ready for the player (`@interlacejs/player`). The editor never persists on its own — bring your own storage.
 
+`onUpload(file, { signal })` resolves to the file's URL. `signal` aborts when the user presses **Cancel upload**; honour it to stop the transfer. After a failed upload, **Retry** calls `onUpload` again with the same file, so an upload you can resume continues where it stopped.
+
 `onDirtyChange` fires when the editor gains or loses unsaved changes, relative to the loaded `document` (or an empty one) and the last `onSave`. Use it to warn before navigating away. Duration corrections the editor makes from the video's metadata do not count as changes.
 
 ## Strings
@@ -118,6 +120,25 @@ import { HlsVideoAdapter } from "@interlacejs/hls-adapter";
 ```
 
 As with `attachMedia`, a new function on each render does not re-create the adapter.
+
+## Layout options and actions from your own UI
+
+| Prop                     | Default | Effect                                                                                                                        |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `stickyHeader`           | `false` | Pins the header (status, Preview, Save) to the top of the nearest scrolling container, so Save stays reachable on long pages. |
+| `showReplaceVideoButton` | `true`  | Shows "Replace video" under the video. Hide it to offer the action elsewhere (below).                                         |
+| `hideEmptyInspector`     | `false` | In the wide layout, hides the side panel while no hook is selected, so the video and timeline use the full width.             |
+
+Pass a `ref` to trigger editor actions from your own controls (a menu, a footer):
+
+```tsx
+const editor = useRef<InterlaceEditorHandle>(null);
+
+<InterlaceEditor ref={editor} showReplaceVideoButton={false} {...props} />
+<button onClick={() => editor.current?.replaceVideo()}>Replace video</button>
+```
+
+`save()`, `openPreview()` and `replaceVideo()` behave like the built-in buttons. They return `false` and do nothing while the video source step is shown.
 
 ## Saving
 

@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -7,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useState } from "react";
+import { createRef, useState } from "react";
 import {
   ContentTypeRegistry,
   type ContentType,
@@ -15,7 +16,11 @@ import {
   type Strings as CoreStrings,
 } from "@interlacejs/core";
 import { NativeVideoAdapter } from "@interlacejs/native-adapter";
-import { InterlaceEditor, DEFAULT_EDITOR_STRINGS } from "./interlace-editor";
+import {
+  DEFAULT_EDITOR_STRINGS,
+  InterlaceEditor,
+  type InterlaceEditorHandle,
+} from "./interlace-editor";
 
 afterEach(() => {
   cleanup();
@@ -551,7 +556,7 @@ describe("InterlaceEditor", () => {
     render(
       <InterlaceEditor
         contentTypeRegistry={makeRegistry()}
-        document={makeDocument()}
+        document={makePopulatedDocument()}
         onUpload={vi.fn(async () => "x")}
         onSave={vi.fn()}
         strings={{
@@ -1998,6 +2003,71 @@ describe("InterlaceEditor createVideoAdapter", () => {
 
     unmount();
     expect(created.at(-1)!.destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("InterlaceEditor layout options and handle", () => {
+  const baseProps = () => ({
+    contentTypeRegistry: makeRegistry(),
+    onUpload: vi.fn(async () => "x"),
+    onSave: vi.fn(),
+  });
+
+  it("does not repeat the select-a-hook hint while there are no hooks", () => {
+    render(<InterlaceEditor {...baseProps()} document={makeDocument()} />);
+    expect(screen.queryByTestId("interlace-editor-selection-hint")).toBeNull();
+    expect(screen.getByText(/No hooks yet/)).toBeInTheDocument();
+  });
+
+  it("hides the Replace video button when asked, and replaceVideo() still works", () => {
+    const ref = createRef<InterlaceEditorHandle>();
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        ref={ref}
+        document={makeDocument()}
+        showReplaceVideoButton={false}
+      />,
+    );
+    expect(screen.queryByTestId("interlace-editor-replace-video")).toBeNull();
+
+    let result = false;
+    act(() => {
+      result = ref.current!.replaceVideo();
+    });
+    expect(result).toBe(true);
+    expect(screen.getByTestId("video-source-input-file")).toBeInTheDocument();
+    // Nothing to save, preview or replace on the source step.
+    expect(ref.current!.save()).toBe(false);
+    expect(ref.current!.openPreview()).toBe(false);
+  });
+
+  it("save() and openPreview() act like the header buttons", () => {
+    const ref = createRef<InterlaceEditorHandle>();
+    const props = baseProps();
+    render(<InterlaceEditor {...props} ref={ref} document={makeDocument()} />);
+
+    act(() => {
+      expect(ref.current!.save()).toBe(true);
+    });
+    expect(props.onSave).toHaveBeenCalledTimes(1);
+    act(() => {
+      expect(ref.current!.openPreview()).toBe(true);
+    });
+    expect(screen.getByTestId("preview-modal")).toBeInTheDocument();
+  });
+
+  it("can pin the header", () => {
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        stickyHeader
+      />,
+    );
+    expect(screen.getByTestId("interlace-editor-header").style.position).toBe(
+      "sticky",
+    );
   });
 });
 

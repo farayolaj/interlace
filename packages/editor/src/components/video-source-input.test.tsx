@@ -194,9 +194,9 @@ describe("VideoSourceInput", () => {
     expect(screen.getByTestId("video-source-input-apply")).toBeInTheDocument();
   });
 
-  it("retry re-opens the file picker after a failure", async () => {
+  it("retry uploads the same file again after a failure", async () => {
     let attempt = 0;
-    const onUpload = vi.fn(async () => {
+    const onUpload = vi.fn(async (_file: File) => {
       attempt += 1;
       if (attempt === 1) {
         throw new Error("first attempt failed");
@@ -212,7 +212,8 @@ describe("VideoSourceInput", () => {
     const fileInput = container.querySelector(
       '[data-testid="video-source-input-file"]',
     ) as HTMLInputElement;
-    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+    const file = makeFile("lecture.mp4");
+    dispatchFileChange(fileInput, file);
 
     await waitFor(() => {
       expect(
@@ -220,18 +221,50 @@ describe("VideoSourceInput", () => {
       ).toBeInTheDocument();
     });
 
-    // Clicking retry clears the error and re-fires the file picker.
+    // Retry continues with the same file, without the picker, so a host
+    // that resumes uploads picks up where it stopped.
     const clickSpy = vi.spyOn(fileInput, "click");
     fireEvent.click(screen.getByTestId("video-source-input-retry"));
-    expect(clickSpy).toHaveBeenCalled();
-
-    // Simulate the user picking a file again.
-    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+    expect(clickSpy).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith({
         src: "https://cdn.example.com/ok.mp4",
       });
     });
+    expect(onUpload).toHaveBeenCalledTimes(2);
+    expect(onUpload.mock.calls[1]?.[0]).toBe(file);
+  });
+
+  it("cancels an upload in progress, aborting its signal and ignoring its result", async () => {
+    let resolveUpload: ((url: string) => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const onUpload = vi.fn(
+      (_file: File, options: { signal: AbortSignal }) =>
+        new Promise<string>((resolve) => {
+          signal = options.signal;
+          resolveUpload = resolve;
+        }),
+    );
+    const onChange = vi.fn();
+
+    const { container } = render(
+      <VideoSourceInput onChange={onChange} onUpload={onUpload} />,
+    );
+    const fileInput = container.querySelector(
+      '[data-testid="video-source-input-file"]',
+    ) as HTMLInputElement;
+    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+
+    fireEvent.click(await screen.findByTestId("video-source-input-cancel"));
+
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByTestId("video-source-input-cancel")).toBeNull();
+    expect(screen.queryByTestId("video-source-input-error")).toBeNull();
+    expect(fileInput.disabled).toBe(false);
+
+    resolveUpload?.("https://cdn.example.com/late.mp4");
+    await Promise.resolve();
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("disables both controls while uploading and re-enables after success", async () => {

@@ -368,12 +368,20 @@ describe("KeyframeTimeline", () => {
 
   it("zoom buttons are labelled icon buttons", () => {
     const { getByRole } = renderTimeline();
-    expect(getByRole("button", { name: "Zoom out" }).className).toContain(
-      "interlace-btn--icon",
+    expect(
+      getByRole("button", { name: "Zoom timeline out" }).className,
+    ).toContain("interlace-btn--icon");
+    expect(
+      getByRole("button", { name: "Zoom timeline in" }).className,
+    ).toContain("interlace-btn--icon");
+  });
+
+  it("says where new hooks go and captions the zoom buttons", () => {
+    const { getByTestId, getByText } = renderTimeline({ currentTime: 75 });
+    expect(getByTestId("keyframe-timeline-add-at").textContent).toBe(
+      "Adds at the playhead (1m 15s)",
     );
-    expect(getByRole("button", { name: "Zoom in" }).className).toContain(
-      "interlace-btn--icon",
-    );
+    expect(getByText("Zoom")).toBeInTheDocument();
   });
 
   it("the play button reports to onTogglePlay and reflects isPlaying", () => {

@@ -29,8 +29,10 @@ export interface VideoSourceInputStrings extends Strings {
   uploadingLabel: string;
   /** Inline error text shown when the upload promise rejects. */
   uploadFailedLabel: string;
-  /** Label for the button that re-opens the file picker after a failure. */
+  /** Label for the button that retries a failed upload with the same file. */
   retryLabel: string;
+  /** Label for the button that stops an upload in progress. */
+  cancelUploadLabel: string;
   /** Label for the "direct URL" text input. */
   urlLabel: string;
   /** Placeholder for the URL text input. */
@@ -55,6 +57,7 @@ export const DEFAULT_VIDEO_SOURCE_INPUT_STRINGS: VideoSourceInputStrings = {
   uploadingLabel: "Uploading…",
   uploadFailedLabel: "Upload failed.",
   retryLabel: "Retry",
+  cancelUploadLabel: "Cancel upload",
   urlLabel: "…or paste a video URL",
   urlPlaceholder: "https://example.com/video.mp4",
   applyUrlLabel: "Use URL",
@@ -80,9 +83,11 @@ export interface VideoSourceInputProps {
    * Host-supplied upload callback. The component awaits this promise; the
    * resolved string is written into the document. A rejection is surfaced
    * via the inline error state and (optionally) `onError` — it does not
-   * crash the authoring flow.
+   * crash the authoring flow. `signal` aborts when the user cancels the
+   * upload (or the component unmounts); hosts that honour it stop the
+   * transfer, others simply have their result ignored.
    */
-  onUpload: (file: File) => Promise<string>;
+  onUpload: UploadHandler;
   /** Optional callback for upload promise rejections. */
   onError?: (error: Error) => void;
   /** Optional string overrides. */
@@ -90,6 +95,12 @@ export interface VideoSourceInputProps {
   /** Disables both the URL and file controls. */
   disabled?: boolean;
 }
+
+/** Uploads a file and resolves to its URL. See `VideoSourceInputProps.onUpload`. */
+export type UploadHandler = (
+  file: File,
+  options: { signal: AbortSignal },
+) => Promise<string>;
 
 type UploadState =
   | { kind: "idle" }
@@ -122,6 +133,9 @@ export function VideoSourceInput({
   const [uploadState, setUploadState] = useState<UploadState>({ kind: "idle" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTokenRef = useRef(0);
+  /** The last file chosen, so Retry continues with it (hosts can resume). */
+  const lastFileRef = useRef<File | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   // Keep the URL draft in sync when the upstream value changes (e.g. a
   // document load). The draft is *not* marked dirty — a late upload
@@ -139,6 +153,7 @@ export function VideoSourceInput({
   useEffect(() => {
     return () => {
       uploadTokenRef.current += 1;
+      uploadAbortRef.current?.abort();
     };
   }, []);
 
@@ -148,19 +163,19 @@ export function VideoSourceInput({
     onChange({ src: trimmed });
   }, [urlDraft, onChange]);
 
-  const handleFileSelected = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      // Always reset the input so re-selecting the same file re-fires onChange.
-      event.target.value = "";
-      if (!file) return;
-
+  const startUpload = useCallback(
+    async (file: File) => {
+      lastFileRef.current = file;
+      uploadAbortRef.current?.abort();
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
       const token = ++uploadTokenRef.current;
       setUploadState({ kind: "uploading", fileName: file.name });
       let url: string;
       try {
-        url = await onUpload(file);
+        url = await onUpload(file, { signal: controller.signal });
       } catch (err) {
+        // A newer selection or a cancel already moved on.
         if (token !== uploadTokenRef.current) return;
         const error = err instanceof Error ? err : new Error(String(err));
         setUploadState({ kind: "error", message: error.message });
@@ -177,9 +192,31 @@ export function VideoSourceInput({
     [onUpload, onChange, onError],
   );
 
+  const handleFileSelected = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Always reset the input so re-selecting the same file re-fires onChange.
+      event.target.value = "";
+      if (file) void startUpload(file);
+    },
+    [startUpload],
+  );
+
   const handleRetryUpload = useCallback(() => {
+    const file = lastFileRef.current;
+    if (file) {
+      void startUpload(file);
+    } else {
+      setUploadState({ kind: "idle" });
+      fileInputRef.current?.click();
+    }
+  }, [startUpload]);
+
+  const handleCancelUpload = useCallback(() => {
+    uploadTokenRef.current += 1;
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
     setUploadState({ kind: "idle" });
-    fileInputRef.current?.click();
   }, []);
 
   const isUploading = uploadState.kind === "uploading";
@@ -261,6 +298,15 @@ export function VideoSourceInput({
           >
             {strings.uploadingLabel}
           </span>
+        ) : null}
+        {isUploading ? (
+          <Button
+            variant="secondary"
+            onClick={handleCancelUpload}
+            data-testid="video-source-input-cancel"
+          >
+            {strings.cancelUploadLabel}
+          </Button>
         ) : null}
         {hasError ? (
           <div

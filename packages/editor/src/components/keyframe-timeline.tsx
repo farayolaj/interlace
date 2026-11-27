@@ -27,6 +27,13 @@ export interface KeyframeTimelineStrings extends Strings {
   zoomInLabel: string;
   /** Label for the zoom-out button. */
   zoomOutLabel: string;
+  /** Visible caption next to the zoom buttons. */
+  zoomCaption?: string;
+  /**
+   * Shown next to the add buttons: where a new hook goes. `{time}` is
+   * replaced with the playhead position.
+   */
+  addAtPlayheadLabel?: string;
   /** Label for the play button. */
   playLabel: string;
   /** Label for the pause button. */
@@ -59,12 +66,15 @@ export const DEFAULT_KEYFRAME_TIMELINE_STRINGS: KeyframeTimelineStrings = {
   addNonBlockingLabel: "Non-blocking hook",
   addBlockingHint: "Add a hook that pauses the video at the playhead",
   addNonBlockingHint: "Add a hook that floats over the video from the playhead",
-  zoomInLabel: "Zoom in",
-  zoomOutLabel: "Zoom out",
+  zoomInLabel: "Zoom timeline in",
+  zoomOutLabel: "Zoom timeline out",
+  zoomCaption: "Zoom",
+  addAtPlayheadLabel: "Adds at the playhead ({time})",
   playLabel: "Play",
   pauseLabel: "Pause",
   playheadLabel: "Playhead",
-  emptyLabel: "No hooks yet. Add one at the playhead to get started.",
+  emptyLabel:
+    "No hooks yet. Move the playhead to where a hook should appear, then choose Blocking hook or Non-blocking hook.",
   rulerLabel: "Timeline ruler",
   trackLabel: "Hook track",
   blockingKeyframeLabel: "blocking at",
@@ -701,7 +711,23 @@ export const KeyframeTimeline: React.FC<KeyframeTimelineProps> = ({
           <span aria-hidden="true">+</span>
           {strings.addNonBlockingLabel}
         </button>
+        {strings.addAtPlayheadLabel ? (
+          <span
+            className="interlace-hint"
+            data-testid="keyframe-timeline-add-at"
+          >
+            {strings.addAtPlayheadLabel.replace(
+              "{time}",
+              formatTick(Math.round(currentTime)),
+            )}
+          </span>
+        ) : null}
         <div style={{ flex: 1 }} />
+        {strings.zoomCaption ? (
+          <span className="interlace-hint" aria-hidden="true">
+            {strings.zoomCaption}
+          </span>
+        ) : null}
         <button
           type="button"
           className="interlace-btn interlace-btn--secondary interlace-btn--icon"

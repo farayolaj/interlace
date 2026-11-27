@@ -14,7 +14,15 @@ import {
   themeToCssVariables,
 } from "@interlacejs/core";
 import { QualityControl } from "@interlacejs/player";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { COLORS, FONTS, RADIUS, SPACE, TYPE } from "../tokens";
 import type { InteractiveMediaItem } from "../hooks/use-authoring-store";
 import { useAuthoringStore } from "../hooks/use-authoring-store";
@@ -24,7 +32,10 @@ import { KeyframeTimeline } from "./keyframe-timeline";
 import { PlacementEditor } from "./placement-editor";
 import type { PreviewModalStrings } from "./preview-modal";
 import { PreviewModal } from "./preview-modal";
-import type { VideoSourceInputStrings } from "./video-source-input";
+import type {
+  UploadHandler,
+  VideoSourceInputStrings,
+} from "./video-source-input";
 import { VideoSourceInput } from "./video-source-input";
 import { Button, IssueList, SectionHeading, useInterlaceStyles } from "./ui";
 import { type MediaAttacher, useAttachMedia } from "./use-attach-media";
@@ -138,8 +149,8 @@ export const DEFAULT_EDITOR_STRINGS: EditorStrings = {
   replaceVideoLabel: "Replace video",
   replaceCancelLabel: "Cancel replace",
   saveLabel: "Save",
-  noItemSelectedLabel:
-    "Select a hook on the timeline to edit it, or add one at the playhead.",
+  // Adding hooks is explained by the timeline; this only covers selecting.
+  noItemSelectedLabel: "Select a hook on the timeline to edit it.",
   placementLabel: "Placement",
   timelineHeading: "Hooks",
   addContentHeading: "Add content",
@@ -181,9 +192,11 @@ export interface InterlaceEditorProps {
   /**
    * Host-supplied upload callback. Called by the video source step when
    * the user selects a file. The resolved URL is written into the
-   * document; the host owns persistence.
+   * document; the host owns persistence. `options.signal` aborts when the
+   * user cancels the upload; Retry calls it again with the same file, so
+   * hosts that resume uploads continue where they stopped.
    */
-  onUpload: (file: File) => Promise<string>;
+  onUpload: UploadHandler;
   /**
    * Receives `authoringStore.serialize()`'s output on save. The host
    * owns persistence — the editor never persists on its own.
@@ -239,6 +252,39 @@ export interface InterlaceEditorProps {
    * in the authoring video's top-right corner (and in the preview).
    */
   createVideoAdapter?: VideoAdapterFactory;
+  /**
+   * Keeps the header (status, Preview and Save) pinned to the top of the
+   * nearest scrolling container, so Save stays reachable on long pages.
+   * Off by default.
+   */
+  stickyHeader?: boolean;
+  /**
+   * Shows the "Replace video" button under the video. Defaults to true.
+   * Hosts that hide it can offer the action elsewhere through the ref
+   * handle's `replaceVideo()`.
+   */
+  showReplaceVideoButton?: boolean;
+  /**
+   * In the wide layout, hides the side panel while no hook is selected so
+   * the video and timeline use the full width. Off by default (the panel
+   * explains how to select a hook).
+   */
+  hideEmptyInspector?: boolean;
+}
+
+/**
+ * Imperative handle (via `ref`) for hosts that trigger editor actions from
+ * their own UI. Each method does nothing and returns false while the
+ * video source step is shown (there is nothing to save, preview or
+ * replace yet).
+ */
+export interface InterlaceEditorHandle {
+  /** Same as the Save button: validates, then calls `onSave`. */
+  save(): boolean;
+  /** Same as the Preview button. */
+  openPreview(): boolean;
+  /** Same as the "Replace video" button: reopens the source step. */
+  replaceVideo(): boolean;
 }
 
 const DEFAULT_PLACEMENT: Placement = { x: 50, y: 50, width: 20, height: 20 };
@@ -406,7 +452,8 @@ function EditorVideoToolbar({
 }: {
   duration: number | undefined;
   strings: EditorStrings;
-  onReplaceVideo: () => void;
+  /** Omit to hide the "Replace video" button. */
+  onReplaceVideo?: () => void;
   /** Shown next to the duration when no item is selected. */
   hint?: string;
 }) {
@@ -442,13 +489,15 @@ function EditorVideoToolbar({
           <span data-testid="interlace-editor-selection-hint">{hint}</span>
         ) : null}
       </span>
-      <Button
-        variant="ghost"
-        onClick={onReplaceVideo}
-        data-testid="interlace-editor-replace-video"
-      >
-        {strings.replaceVideoLabel}
-      </Button>
+      {onReplaceVideo ? (
+        <Button
+          variant="ghost"
+          onClick={onReplaceVideo}
+          data-testid="interlace-editor-replace-video"
+        >
+          {strings.replaceVideoLabel}
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -483,20 +532,29 @@ function EditorVideoToolbar({
  * - `adapterType` is a host-level prop (default `"native"`); it is not
  *   written into the serialized document.
  */
-export function InterlaceEditor({
-  contentTypeRegistry,
-  document,
-  onUpload,
-  onSave,
-  onDirtyChange,
-  strings: stringsOverride,
-  theme,
-  className,
-  onError,
-  playbackSrc,
-  attachMedia,
-  createVideoAdapter,
-}: InterlaceEditorProps) {
+export const InterlaceEditor = forwardRef<
+  InterlaceEditorHandle,
+  InterlaceEditorProps
+>(function InterlaceEditor(
+  {
+    contentTypeRegistry,
+    document,
+    onUpload,
+    onSave,
+    onDirtyChange,
+    strings: stringsOverride,
+    theme,
+    className,
+    onError,
+    playbackSrc,
+    attachMedia,
+    createVideoAdapter,
+    stickyHeader = false,
+    showReplaceVideoButton = true,
+    hideEmptyInspector = false,
+  }: InterlaceEditorProps,
+  ref,
+) {
   const strings = { ...DEFAULT_EDITOR_STRINGS, ...stringsOverride };
   const {
     state,
@@ -1297,6 +1355,8 @@ export function InterlaceEditor({
   // Two columns (video + timeline | Hook details) when the editor is wide.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
+  /** The wide layout's side panel while no hook is selected. */
+  const showEmptyInspector = isWide && !hideEmptyInspector;
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -1331,6 +1391,19 @@ export function InterlaceEditor({
     backgroundColor: COLORS.surfaceRaised,
     minWidth: 0,
   };
+
+  useImperativeHandle(ref, () => {
+    const whenAuthoring = (action: () => void) => () => {
+      if (showSourceStep) return false;
+      action();
+      return true;
+    };
+    return {
+      save: whenAuthoring(handleSave),
+      openPreview: whenAuthoring(handleOpenPreview),
+      replaceVideo: whenAuthoring(handleReplaceVideo),
+    };
+  }, [showSourceStep, handleSave, handleOpenPreview, handleReplaceVideo]);
 
   if (showSourceStep) {
     return (
@@ -1454,9 +1527,14 @@ export function InterlaceEditor({
       <EditorVideoToolbar
         duration={state.videoDuration || undefined}
         strings={strings}
-        onReplaceVideo={handleReplaceVideo}
-        // In the wide layout the empty Hook details column says this.
-        hint={selectedHook || isWide ? undefined : strings.noItemSelectedLabel}
+        onReplaceVideo={showReplaceVideoButton ? handleReplaceVideo : undefined}
+        // Only once there are hooks to select (the empty timeline explains
+        // adding one), and not when the side panel already says it.
+        hint={
+          selectedHook || state.items.length === 0 || showEmptyInspector
+            ? undefined
+            : strings.noItemSelectedLabel
+        }
       />
     </section>
   );
@@ -1545,7 +1623,7 @@ export function InterlaceEditor({
           </div>
         ) : null}
       </section>
-    ) : isWide ? (
+    ) : showEmptyInspector ? (
       <section
         className="interlace-editor-hook"
         data-testid="interlace-editor-no-hook"
@@ -1571,6 +1649,7 @@ export function InterlaceEditor({
   return (
     <div ref={rootRef} className={rootClassName} style={rootStyle}>
       <header
+        data-testid="interlace-editor-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -1578,6 +1657,14 @@ export function InterlaceEditor({
           gap: SPACE[3],
           flexWrap: "wrap",
           marginBottom: SPACE[4],
+          ...(stickyHeader && {
+            position: "sticky",
+            top: 0,
+            zIndex: 3,
+            padding: `${SPACE[2]}px 0`,
+            backgroundColor: COLORS.surface,
+            borderBottom: `1px solid ${COLORS.border}`,
+          }),
         }}
       >
         <div
@@ -1681,7 +1768,9 @@ export function InterlaceEditor({
           data-testid="interlace-editor-layout-wide"
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 3fr) minmax(320px, 2fr)",
+            gridTemplateColumns: hookSection
+              ? "minmax(0, 3fr) minmax(320px, 2fr)"
+              : "minmax(0, 1fr)",
             gap: SPACE[4],
             alignItems: "start",
           }}
@@ -1711,4 +1800,4 @@ export function InterlaceEditor({
       )}
     </div>
   );
-}
+});
