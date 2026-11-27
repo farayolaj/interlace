@@ -273,7 +273,9 @@ describe("VideoSourceInput", () => {
     });
 
     it("uploads a video dropped on the upload area", async () => {
-      const onUpload = vi.fn(async () => "https://cdn.example.com/dropped.mp4");
+      const onUpload = vi.fn(
+        async (_file: File) => "https://cdn.example.com/dropped.mp4",
+      );
       const onChange = vi.fn();
       render(<VideoSourceInput onChange={onChange} onUpload={onUpload} />);
       const zone = screen.getByTestId("video-source-input-dropzone");
@@ -305,9 +307,12 @@ describe("VideoSourceInput", () => {
       fireEvent.drop(zone, dragData([pdf]));
 
       expect(onUpload).not.toHaveBeenCalled();
-      expect(
-        screen.getByTestId("video-source-input-error").textContent,
-      ).toContain("That file isn't a video");
+      // A wrong file, not a failed upload: no "Upload failed." and no Retry.
+      expect(screen.getByTestId("video-source-input-invalid").textContent).toBe(
+        "That file isn't a video. Drop or choose a video file.",
+      );
+      expect(screen.queryByTestId("video-source-input-error")).toBeNull();
+      expect(screen.queryByTestId("video-source-input-retry")).toBeNull();
     });
 
     it("ignores drops while an upload is running", async () => {

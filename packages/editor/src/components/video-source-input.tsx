@@ -66,7 +66,7 @@ export const DEFAULT_VIDEO_SOURCE_INPUT_STRINGS: VideoSourceInputStrings = {
   cancelUploadLabel: "Cancel upload",
   dropHint: "or drag and drop a video file here",
   dropActiveLabel: "Drop the video to upload it",
-  notAVideoLabel: "That file isn't a video. Choose a video file.",
+  notAVideoLabel: "That file isn't a video. Drop or choose a video file.",
   urlLabel: "…or paste a video URL",
   urlPlaceholder: "https://example.com/video.mp4",
   applyUrlLabel: "Use URL",
@@ -114,7 +114,9 @@ export type UploadHandler = (
 type UploadState =
   | { kind: "idle" }
   | { kind: "uploading"; fileName: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  /** The chosen file can't be used (not a video): nothing was uploaded. */
+  | { kind: "invalid"; message: string };
 
 /**
  * VideoSourceInput - the first step of a new document's authoring flow.
@@ -261,7 +263,7 @@ export function VideoSourceInput({
       const file = event.dataTransfer.files?.[0];
       if (!file) return;
       if (!file.type.startsWith("video/")) {
-        setUploadState({ kind: "error", message: strings.notAVideoLabel });
+        setUploadState({ kind: "invalid", message: strings.notAVideoLabel });
         return;
       }
       void startUpload(file);
@@ -278,6 +280,7 @@ export function VideoSourceInput({
 
   const isUploading = uploadState.kind === "uploading";
   const hasError = uploadState.kind === "error";
+  const isInvalid = uploadState.kind === "invalid";
   const isDisabled = disabled || isUploading;
   const applyDisabled = isDisabled || urlDraft.trim().length === 0;
 
@@ -411,6 +414,22 @@ export function VideoSourceInput({
             >
               {strings.retryLabel}
             </Button>
+          </div>
+        ) : null}
+        {isInvalid ? (
+          <div
+            data-testid="video-source-input-invalid"
+            role="alert"
+            style={{
+              color: COLORS.errorText,
+              backgroundColor: COLORS.errorBg,
+              padding: `${SPACE[2]}px ${SPACE[3]}px`,
+              borderRadius: RADIUS.sm,
+              border: `1px solid ${COLORS.errorBorder}`,
+              fontSize: TYPE.sm,
+            }}
+          >
+            {uploadState.message}
           </div>
         ) : null}
       </div>
