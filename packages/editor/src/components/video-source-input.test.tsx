@@ -194,9 +194,9 @@ describe("VideoSourceInput", () => {
     expect(screen.getByTestId("video-source-input-apply")).toBeInTheDocument();
   });
 
-  it("retry re-opens the file picker after a failure", async () => {
+  it("retry uploads the same file again after a failure", async () => {
     let attempt = 0;
-    const onUpload = vi.fn(async () => {
+    const onUpload = vi.fn(async (_file: File) => {
       attempt += 1;
       if (attempt === 1) {
         throw new Error("first attempt failed");
@@ -212,7 +212,8 @@ describe("VideoSourceInput", () => {
     const fileInput = container.querySelector(
       '[data-testid="video-source-input-file"]',
     ) as HTMLInputElement;
-    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+    const file = makeFile("lecture.mp4");
+    dispatchFileChange(fileInput, file);
 
     await waitFor(() => {
       expect(
@@ -220,17 +221,117 @@ describe("VideoSourceInput", () => {
       ).toBeInTheDocument();
     });
 
-    // Clicking retry clears the error and re-fires the file picker.
+    // Retry continues with the same file, without the picker, so a host
+    // that resumes uploads picks up where it stopped.
     const clickSpy = vi.spyOn(fileInput, "click");
     fireEvent.click(screen.getByTestId("video-source-input-retry"));
-    expect(clickSpy).toHaveBeenCalled();
-
-    // Simulate the user picking a file again.
-    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+    expect(clickSpy).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(onChange).toHaveBeenCalledWith({
         src: "https://cdn.example.com/ok.mp4",
       });
+    });
+    expect(onUpload).toHaveBeenCalledTimes(2);
+    expect(onUpload.mock.calls[1]?.[0]).toBe(file);
+  });
+
+  it("cancels an upload in progress, aborting its signal and ignoring its result", async () => {
+    let resolveUpload: ((url: string) => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const onUpload = vi.fn(
+      (_file: File, options: { signal: AbortSignal }) =>
+        new Promise<string>((resolve) => {
+          signal = options.signal;
+          resolveUpload = resolve;
+        }),
+    );
+    const onChange = vi.fn();
+
+    const { container } = render(
+      <VideoSourceInput onChange={onChange} onUpload={onUpload} />,
+    );
+    const fileInput = container.querySelector(
+      '[data-testid="video-source-input-file"]',
+    ) as HTMLInputElement;
+    dispatchFileChange(fileInput, makeFile("lecture.mp4"));
+
+    fireEvent.click(await screen.findByTestId("video-source-input-cancel"));
+
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByTestId("video-source-input-cancel")).toBeNull();
+    expect(screen.queryByTestId("video-source-input-error")).toBeNull();
+    expect(fileInput.disabled).toBe(false);
+
+    resolveUpload?.("https://cdn.example.com/late.mp4");
+    await Promise.resolve();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  describe("drag and drop", () => {
+    const dragData = (files: File[]) => ({
+      dataTransfer: { files, types: ["Files"], dropEffect: "none" },
+    });
+
+    it("uploads a video dropped on the upload area", async () => {
+      const onUpload = vi.fn(
+        async (_file: File) => "https://cdn.example.com/dropped.mp4",
+      );
+      const onChange = vi.fn();
+      render(<VideoSourceInput onChange={onChange} onUpload={onUpload} />);
+      const zone = screen.getByTestId("video-source-input-dropzone");
+      const file = makeFile("dropped.mp4");
+
+      fireEvent.dragEnter(zone, dragData([file]));
+      expect(zone).toHaveAttribute("data-dragging", "true");
+      expect(
+        screen.getByTestId("video-source-input-drop-hint").textContent,
+      ).toBe("Drop the video to upload it");
+
+      fireEvent.drop(zone, dragData([file]));
+
+      expect(zone).not.toHaveAttribute("data-dragging");
+      await waitFor(() => {
+        expect(onChange).toHaveBeenCalledWith({
+          src: "https://cdn.example.com/dropped.mp4",
+        });
+      });
+      expect(onUpload.mock.calls[0]?.[0]).toBe(file);
+    });
+
+    it("rejects a dropped file that isn't a video", () => {
+      const onUpload = vi.fn();
+      render(<VideoSourceInput onChange={vi.fn()} onUpload={onUpload} />);
+      const zone = screen.getByTestId("video-source-input-dropzone");
+      const pdf = new File(["x"], "notes.pdf", { type: "application/pdf" });
+
+      fireEvent.drop(zone, dragData([pdf]));
+
+      expect(onUpload).not.toHaveBeenCalled();
+      // A wrong file, not a failed upload: no "Upload failed." and no Retry.
+      expect(screen.getByTestId("video-source-input-invalid").textContent).toBe(
+        "That file isn't a video. Drop or choose a video file.",
+      );
+      expect(screen.queryByTestId("video-source-input-error")).toBeNull();
+      expect(screen.queryByTestId("video-source-input-retry")).toBeNull();
+    });
+
+    it("ignores drops while an upload is running", async () => {
+      const onUpload = vi.fn(() => new Promise<string>(() => {}));
+      const { container } = render(
+        <VideoSourceInput onChange={vi.fn()} onUpload={onUpload} />,
+      );
+      const fileInput = container.querySelector(
+        '[data-testid="video-source-input-file"]',
+      ) as HTMLInputElement;
+      dispatchFileChange(fileInput, makeFile("first.mp4"));
+      await screen.findByTestId("video-source-input-cancel");
+
+      fireEvent.drop(
+        screen.getByTestId("video-source-input-dropzone"),
+        dragData([makeFile("second.mp4")]),
+      );
+
+      expect(onUpload).toHaveBeenCalledTimes(1);
     });
   });
 

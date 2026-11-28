@@ -18,9 +18,9 @@ pnpm add @interlacejs/editor @interlacejs/core @interlacejs/player @interlacejs/
 ## Minimal example
 
 ```tsx
-import { InterlaceEditor } from "@interlace/editor";
-import { QuizContentType } from "@interlace/quiz";
-import { ContentTypeRegistry } from "@interlace/core";
+import { InterlaceEditor } from "@interlacejs/editor";
+import { QuizContentType } from "@interlacejs/quiz";
+import { ContentTypeRegistry } from "@interlacejs/core";
 
 const registry = new ContentTypeRegistry();
 registry.register(QuizContentType);
@@ -39,11 +39,26 @@ registry.register(QuizContentType);
 
 `onSave` receives the serialized document (JSON) ready for the player (`@interlacejs/player`). The editor never persists on its own — bring your own storage.
 
+Files can be chosen with the button or dragged onto the upload area (non-video files are refused with a message). `onUpload(file, { signal })` resolves to the file's URL. `signal` aborts when the user presses **Cancel upload**; honour it to stop the transfer. After a failed upload, **Retry** calls `onUpload` again with the same file, so an upload you can resume continues where it stopped.
+
 `onDirtyChange` fires when the editor gains or loses unsaved changes, relative to the loaded `document` (or an empty one) and the last `onSave`. Use it to warn before navigating away. Duration corrections the editor makes from the video's metadata do not count as changes.
 
 ## Strings
 
 `InterlaceEditor` and its sub-components accept `strings` overrides; the defaults derive from `@interlacejs/core`'s `DEFAULT_STRINGS`, so hosts can localize once.
+
+The defaults are exported (`DEFAULT_EDITOR_STRINGS`, `DEFAULT_VIDEO_SOURCE_INPUT_STRINGS`, `DEFAULT_KEYFRAME_TIMELINE_STRINGS`, …) as the full list of keys to translate. Recent additions:
+
+| Key                  | Default                                                                         |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `cancelUploadLabel`  | Cancel upload                                                                   |
+| `dropHint`           | or drag and drop a video file here                                              |
+| `dropActiveLabel`    | Drop the video to upload it                                                     |
+| `notAVideoLabel`     | That file isn't a video. Drop or choose a video file.                           |
+| `addAtPlayheadLabel` | Adds at the playhead ({time}) — `{time}` is replaced with the playhead position |
+| `zoomCaption`        | Zoom                                                                            |
+
+`zoomInLabel` / `zoomOutLabel` now default to "Zoom timeline in" / "Zoom timeline out", and `noItemSelectedLabel` to "Select a hook on the timeline to edit it."
 
 ## Styling and theming
 
@@ -118,6 +133,27 @@ import { HlsVideoAdapter } from "@interlacejs/hls-adapter";
 ```
 
 As with `attachMedia`, a new function on each render does not re-create the adapter.
+
+## Layout options and actions from your own UI
+
+| Prop                     | Default | Effect                                                                                                                        |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `stickyHeader`           | `false` | Pins the header (status, Preview, Save) to the top of the nearest scrolling container, so Save stays reachable on long pages. |
+| `showReplaceVideoButton` | `true`  | Shows "Replace video" under the video. Hide it to offer the action elsewhere (below).                                         |
+| `hideEmptyInspector`     | `false` | In the wide layout, hides the side panel while no hook is selected, so the video and timeline use the full width.             |
+
+Pass a `ref` to trigger editor actions from your own controls (a menu, a footer):
+
+```tsx
+import { InterlaceEditor, type InterlaceEditorHandle } from "@interlacejs/editor";
+
+const editor = useRef<InterlaceEditorHandle>(null);
+
+<InterlaceEditor ref={editor} showReplaceVideoButton={false} {...props} />
+<button onClick={() => editor.current?.replaceVideo()}>Replace video</button>
+```
+
+`save()`, `openPreview()` and `replaceVideo()` behave like the built-in buttons. They return `false` and do nothing while the video source step is shown.
 
 ## Saving
 

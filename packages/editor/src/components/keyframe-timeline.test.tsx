@@ -368,12 +368,20 @@ describe("KeyframeTimeline", () => {
 
   it("zoom buttons are labelled icon buttons", () => {
     const { getByRole } = renderTimeline();
-    expect(getByRole("button", { name: "Zoom out" }).className).toContain(
-      "interlace-btn--icon",
+    expect(
+      getByRole("button", { name: "Zoom timeline out" }).className,
+    ).toContain("interlace-btn--icon");
+    expect(
+      getByRole("button", { name: "Zoom timeline in" }).className,
+    ).toContain("interlace-btn--icon");
+  });
+
+  it("says where new hooks go and captions the zoom buttons", () => {
+    const { getByTestId, getByText } = renderTimeline({ currentTime: 75 });
+    expect(getByTestId("keyframe-timeline-add-at").textContent).toBe(
+      "Adds at the playhead (1m 15s)",
     );
-    expect(getByRole("button", { name: "Zoom in" }).className).toContain(
-      "interlace-btn--icon",
-    );
+    expect(getByText("Zoom")).toBeInTheDocument();
   });
 
   it("the play button reports to onTogglePlay and reflects isPlaying", () => {
@@ -537,7 +545,24 @@ describe("KeyframeTimeline", () => {
     ];
     const last = ticks[ticks.length - 1]!;
     expect(last.style.transform).toBe("translateX(-100%)");
+    expect(last.textContent).not.toBe("");
     expect(ticks[0]!.style.transform).toBe("");
+  });
+
+  it("drops the final tick's label when it would overlap the previous one", () => {
+    // 2m 16s zoomed in to 10s ticks: the 2m 10s tick sits 6s before the
+    // end, so its left-flipped label would run into "2m".
+    const { container, scroll } = renderTimeline({ videoDuration: 136 });
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    fireEvent.wheel(scroll, { deltaY: -100 });
+    const tick = (t: number) =>
+      container.querySelector<HTMLElement>(
+        `[data-testid="keyframe-timeline-tick-${t}"]`,
+      )!;
+    expect(tick(130).style.transform).toBe("translateX(-100%)");
+    expect(tick(130).textContent).toBe(""); // line kept, label dropped
+    expect(tick(120).textContent).toBe("2m");
   });
 
   it("horizontal wheel pans instead of zooming", () => {

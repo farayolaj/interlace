@@ -29,8 +29,16 @@ export interface VideoSourceInputStrings extends Strings {
   uploadingLabel: string;
   /** Inline error text shown when the upload promise rejects. */
   uploadFailedLabel: string;
-  /** Label for the button that re-opens the file picker after a failure. */
+  /** Label for the button that retries a failed upload with the same file. */
   retryLabel: string;
+  /** Label for the button that stops an upload in progress. */
+  cancelUploadLabel: string;
+  /** Hint under the upload button: files can also be dropped there. */
+  dropHint: string;
+  /** Shown in the drop area while a file is dragged over it. */
+  dropActiveLabel: string;
+  /** Error shown when the dropped file is not a video. */
+  notAVideoLabel: string;
   /** Label for the "direct URL" text input. */
   urlLabel: string;
   /** Placeholder for the URL text input. */
@@ -55,6 +63,10 @@ export const DEFAULT_VIDEO_SOURCE_INPUT_STRINGS: VideoSourceInputStrings = {
   uploadingLabel: "Uploading…",
   uploadFailedLabel: "Upload failed.",
   retryLabel: "Retry",
+  cancelUploadLabel: "Cancel upload",
+  dropHint: "or drag and drop a video file here",
+  dropActiveLabel: "Drop the video to upload it",
+  notAVideoLabel: "That file isn't a video. Drop or choose a video file.",
   urlLabel: "…or paste a video URL",
   urlPlaceholder: "https://example.com/video.mp4",
   applyUrlLabel: "Use URL",
@@ -80,9 +92,11 @@ export interface VideoSourceInputProps {
    * Host-supplied upload callback. The component awaits this promise; the
    * resolved string is written into the document. A rejection is surfaced
    * via the inline error state and (optionally) `onError` — it does not
-   * crash the authoring flow.
+   * crash the authoring flow. `signal` aborts when the user cancels the
+   * upload (or the component unmounts); hosts that honour it stop the
+   * transfer, others simply have their result ignored.
    */
-  onUpload: (file: File) => Promise<string>;
+  onUpload: UploadHandler;
   /** Optional callback for upload promise rejections. */
   onError?: (error: Error) => void;
   /** Optional string overrides. */
@@ -91,10 +105,18 @@ export interface VideoSourceInputProps {
   disabled?: boolean;
 }
 
+/** Uploads a file and resolves to its URL. See `VideoSourceInputProps.onUpload`. */
+export type UploadHandler = (
+  file: File,
+  options: { signal: AbortSignal },
+) => Promise<string>;
+
 type UploadState =
   | { kind: "idle" }
   | { kind: "uploading"; fileName: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  /** The chosen file can't be used (not a video): nothing was uploaded. */
+  | { kind: "invalid"; message: string };
 
 /**
  * VideoSourceInput - the first step of a new document's authoring flow.
@@ -122,6 +144,9 @@ export function VideoSourceInput({
   const [uploadState, setUploadState] = useState<UploadState>({ kind: "idle" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTokenRef = useRef(0);
+  /** The last file chosen, so Retry continues with it (hosts can resume). */
+  const lastFileRef = useRef<File | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   // Keep the URL draft in sync when the upstream value changes (e.g. a
   // document load). The draft is *not* marked dirty — a late upload
@@ -139,6 +164,7 @@ export function VideoSourceInput({
   useEffect(() => {
     return () => {
       uploadTokenRef.current += 1;
+      uploadAbortRef.current?.abort();
     };
   }, []);
 
@@ -148,19 +174,19 @@ export function VideoSourceInput({
     onChange({ src: trimmed });
   }, [urlDraft, onChange]);
 
-  const handleFileSelected = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      // Always reset the input so re-selecting the same file re-fires onChange.
-      event.target.value = "";
-      if (!file) return;
-
+  const startUpload = useCallback(
+    async (file: File) => {
+      lastFileRef.current = file;
+      uploadAbortRef.current?.abort();
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
       const token = ++uploadTokenRef.current;
       setUploadState({ kind: "uploading", fileName: file.name });
       let url: string;
       try {
-        url = await onUpload(file);
+        url = await onUpload(file, { signal: controller.signal });
       } catch (err) {
+        // A newer selection or a cancel already moved on.
         if (token !== uploadTokenRef.current) return;
         const error = err instanceof Error ? err : new Error(String(err));
         setUploadState({ kind: "error", message: error.message });
@@ -177,13 +203,84 @@ export function VideoSourceInput({
     [onUpload, onChange, onError],
   );
 
+  const handleFileSelected = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      // Always reset the input so re-selecting the same file re-fires onChange.
+      event.target.value = "";
+      if (file) void startUpload(file);
+    },
+    [startUpload],
+  );
+
   const handleRetryUpload = useCallback(() => {
+    const file = lastFileRef.current;
+    if (file) {
+      void startUpload(file);
+    } else {
+      setUploadState({ kind: "idle" });
+      fileInputRef.current?.click();
+    }
+  }, [startUpload]);
+
+  /** Drag depth, so moving over child elements doesn't end the highlight. */
+  const dragDepthRef = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const canDrop = !disabled && uploadState.kind !== "uploading";
+
+  const handleDragEnter = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!canDrop && hasFiles(event)) return;
+      event.preventDefault();
+      dragDepthRef.current += 1;
+      setIsDragging(true);
+    },
+    [canDrop],
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (!canDrop && hasFiles(event)) return;
+      // Required for the drop event to fire.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    },
+    [canDrop],
+  );
+
+  const handleDragLeave = useCallback(() => {
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      dragDepthRef.current = 0;
+      setIsDragging(false);
+      if (!canDrop && hasFiles(event)) return;
+      event.preventDefault();
+      const file = event.dataTransfer.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("video/")) {
+        setUploadState({ kind: "invalid", message: strings.notAVideoLabel });
+        return;
+      }
+      void startUpload(file);
+    },
+    [canDrop, startUpload, strings.notAVideoLabel],
+  );
+
+  const handleCancelUpload = useCallback(() => {
+    uploadTokenRef.current += 1;
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
     setUploadState({ kind: "idle" });
-    fileInputRef.current?.click();
   }, []);
 
   const isUploading = uploadState.kind === "uploading";
   const hasError = uploadState.kind === "error";
+  const isInvalid = uploadState.kind === "invalid";
   const isDisabled = disabled || isUploading;
   const applyDisabled = isDisabled || urlDraft.trim().length === 0;
 
@@ -221,16 +318,25 @@ export function VideoSourceInput({
       )}
 
       <div
+        data-testid="video-source-input-dropzone"
+        data-dragging={isDragging || undefined}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           gap: SPACE[2],
           padding: `${SPACE[5]}px ${SPACE[4]}px`,
-          border: `2px dashed ${COLORS.borderStrong}`,
+          border: `2px dashed ${isDragging ? COLORS.accent : COLORS.borderStrong}`,
           borderRadius: RADIUS.md,
-          backgroundColor: COLORS.surfaceRaised,
+          backgroundColor: isDragging
+            ? COLORS.accentLighter
+            : COLORS.surfaceRaised,
           textAlign: "center",
+          transition: "background-color 120ms, border-color 120ms",
         }}
       >
         <SectionHeading>{strings.uploadLabel}</SectionHeading>
@@ -253,6 +359,15 @@ export function VideoSourceInput({
             ? `${strings.uploadingLabel} (${uploadState.fileName})`
             : strings.uploadButtonLabel}
         </Button>
+        {!isUploading ? (
+          <span
+            className="interlace-hint"
+            data-testid="video-source-input-drop-hint"
+            aria-live="polite"
+          >
+            {isDragging ? strings.dropActiveLabel : strings.dropHint}
+          </span>
+        ) : null}
         {isUploading ? (
           <span
             data-testid="video-source-input-uploading"
@@ -261,6 +376,15 @@ export function VideoSourceInput({
           >
             {strings.uploadingLabel}
           </span>
+        ) : null}
+        {isUploading ? (
+          <Button
+            variant="secondary"
+            onClick={handleCancelUpload}
+            data-testid="video-source-input-cancel"
+          >
+            {strings.cancelUploadLabel}
+          </Button>
         ) : null}
         {hasError ? (
           <div
@@ -290,6 +414,22 @@ export function VideoSourceInput({
             >
               {strings.retryLabel}
             </Button>
+          </div>
+        ) : null}
+        {isInvalid ? (
+          <div
+            data-testid="video-source-input-invalid"
+            role="alert"
+            style={{
+              color: COLORS.errorText,
+              backgroundColor: COLORS.errorBg,
+              padding: `${SPACE[2]}px ${SPACE[3]}px`,
+              borderRadius: RADIUS.sm,
+              border: `1px solid ${COLORS.errorBorder}`,
+              fontSize: TYPE.sm,
+            }}
+          >
+            {uploadState.message}
           </div>
         ) : null}
       </div>
@@ -327,4 +467,9 @@ export function VideoSourceInput({
       </Field>
     </div>
   );
+}
+
+/** Whether a drag carries files (not text or a link). */
+function hasFiles(event: React.DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes("Files");
 }

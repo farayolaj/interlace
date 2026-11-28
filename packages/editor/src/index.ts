@@ -6,6 +6,7 @@ export {
 export type {
   EditorStrings,
   EditorTheme,
+  InterlaceEditorHandle,
   InterlaceEditorProps,
 } from "./components/interlace-editor";
 export type { MediaAttacher } from "./components/use-attach-media";
@@ -20,6 +21,7 @@ export {
   VideoSourceInput,
 } from "./components/video-source-input";
 export type {
+  UploadHandler,
   VideoSourceInputProps,
   VideoSourceInputStrings,
   VideoSourceValue,
