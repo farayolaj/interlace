@@ -270,6 +270,13 @@ export interface InterlaceEditorProps {
    * explains how to select a hook).
    */
   hideEmptyInspector?: boolean;
+  /**
+   * Host controls shown with the editor's own actions: before Preview and
+   * Save in the header, and in the video step's header. Use the
+   * `interlace-btn` classes to match the built-in buttons, e.g.
+   * `<button className="interlace-btn interlace-btn--secondary">`.
+   */
+  headerActions?: React.ReactNode;
 }
 
 /**
@@ -552,6 +559,7 @@ export const InterlaceEditor = forwardRef<
     stickyHeader = false,
     showReplaceVideoButton = true,
     hideEmptyInspector = false,
+    headerActions,
   }: InterlaceEditorProps,
   ref,
 ) {
@@ -1427,15 +1435,21 @@ export const InterlaceEditor = forwardRef<
           >
             {strings.videoSourceInputTitle}
           </h2>
-          {replaceMode ? (
-            <Button
-              variant="secondary"
-              onClick={handleCancelReplace}
-              data-testid="interlace-editor-cancel-replace"
-            >
-              {strings.replaceCancelLabel}
-            </Button>
-          ) : null}
+          <div
+            data-testid="interlace-editor-header-actions"
+            style={{ display: "flex", gap: SPACE[2], flexWrap: "wrap" }}
+          >
+            {headerActions}
+            {replaceMode ? (
+              <Button
+                variant="secondary"
+                onClick={handleCancelReplace}
+                data-testid="interlace-editor-cancel-replace"
+              >
+                {strings.replaceCancelLabel}
+              </Button>
+            ) : null}
+          </div>
         </div>
         <VideoSourceInput
           value={{
@@ -1690,7 +1704,11 @@ export const InterlaceEditor = forwardRef<
             </span>
           ) : null}
         </div>
-        <div style={{ display: "flex", gap: SPACE[2] }}>
+        <div
+          data-testid="interlace-editor-header-actions"
+          style={{ display: "flex", gap: SPACE[2], flexWrap: "wrap" }}
+        >
+          {headerActions}
           <Button
             variant="secondary"
             onClick={handleOpenPreview}

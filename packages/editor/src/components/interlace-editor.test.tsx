@@ -2057,6 +2057,37 @@ describe("InterlaceEditor layout options and handle", () => {
     expect(screen.getByTestId("preview-modal")).toBeInTheDocument();
   });
 
+  it("shows host header actions before Preview and Save", () => {
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        headerActions={<button type="button">Cancel</button>}
+      />,
+    );
+    const actions = screen.getByTestId("interlace-editor-header-actions");
+    const labels = within(actions)
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels).toEqual(["Cancel", "Preview", "Save"]);
+  });
+
+  it("keeps host header actions on the video step", () => {
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        headerActions={<button type="button">Cancel</button>}
+      />,
+    );
+    expect(screen.getByTestId("video-source-input-file")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("interlace-editor-header-actions")).getByRole(
+        "button",
+        { name: "Cancel" },
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("can pin the header", () => {
     render(
       <InterlaceEditor
