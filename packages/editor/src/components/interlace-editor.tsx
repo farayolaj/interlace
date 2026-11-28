@@ -270,6 +270,19 @@ export interface InterlaceEditorProps {
    * explains how to select a hook).
    */
   hideEmptyInspector?: boolean;
+  /**
+   * Host controls shown with the editor's own actions: before Preview and
+   * Save in the header, and in the video step's header. Use the
+   * `interlace-btn` classes to match the built-in buttons, e.g.
+   * `<button className="interlace-btn interlace-btn--secondary">`.
+   */
+  headerActions?: React.ReactNode;
+  /**
+   * Shows the built-in Save button. Defaults to true. Hosts that hide it
+   * save through the ref handle's `save()` from their own button (the
+   * editor still validates and lists blocking issues).
+   */
+  showSaveButton?: boolean;
 }
 
 /**
@@ -552,6 +565,8 @@ export const InterlaceEditor = forwardRef<
     stickyHeader = false,
     showReplaceVideoButton = true,
     hideEmptyInspector = false,
+    headerActions,
+    showSaveButton = true,
   }: InterlaceEditorProps,
   ref,
 ) {
@@ -1355,6 +1370,21 @@ export const InterlaceEditor = forwardRef<
   // Two columns (video + timeline | Hook details) when the editor is wide.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
+  /** Pinned header's height, so the pinned video column stops below it. */
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!stickyHeader || !header) return;
+    const measure = () => setHeaderHeight(header.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+    // The header mounts once the video step is left.
+  }, [stickyHeader, showSourceStep]);
+
   /** The wide layout's side panel while no hook is selected. */
   const showEmptyInspector = isWide && !hideEmptyInspector;
   useEffect(() => {
@@ -1427,15 +1457,21 @@ export const InterlaceEditor = forwardRef<
           >
             {strings.videoSourceInputTitle}
           </h2>
-          {replaceMode ? (
-            <Button
-              variant="secondary"
-              onClick={handleCancelReplace}
-              data-testid="interlace-editor-cancel-replace"
-            >
-              {strings.replaceCancelLabel}
-            </Button>
-          ) : null}
+          <div
+            data-testid="interlace-editor-header-actions"
+            style={{ display: "flex", gap: SPACE[2], flexWrap: "wrap" }}
+          >
+            {headerActions}
+            {replaceMode ? (
+              <Button
+                variant="secondary"
+                onClick={handleCancelReplace}
+                data-testid="interlace-editor-cancel-replace"
+              >
+                {strings.replaceCancelLabel}
+              </Button>
+            ) : null}
+          </div>
         </div>
         <VideoSourceInput
           value={{
@@ -1649,6 +1685,7 @@ export const InterlaceEditor = forwardRef<
   return (
     <div ref={rootRef} className={rootClassName} style={rootStyle}>
       <header
+        ref={headerRef}
         data-testid="interlace-editor-header"
         style={{
           display: "flex",
@@ -1690,7 +1727,11 @@ export const InterlaceEditor = forwardRef<
             </span>
           ) : null}
         </div>
-        <div style={{ display: "flex", gap: SPACE[2] }}>
+        <div
+          data-testid="interlace-editor-header-actions"
+          style={{ display: "flex", gap: SPACE[2], flexWrap: "wrap" }}
+        >
+          {headerActions}
           <Button
             variant="secondary"
             onClick={handleOpenPreview}
@@ -1698,13 +1739,15 @@ export const InterlaceEditor = forwardRef<
           >
             {strings.previewLabel}
           </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            data-testid="interlace-editor-save"
-          >
-            {strings.saveLabel}
-          </Button>
+          {showSaveButton ? (
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              data-testid="interlace-editor-save"
+            >
+              {strings.saveLabel}
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -1780,7 +1823,8 @@ export const InterlaceEditor = forwardRef<
               display: "grid",
               gap: SPACE[4],
               position: "sticky",
-              top: SPACE[4],
+              // Below a pinned header, not under it.
+              top: stickyHeader ? headerHeight + SPACE[2] : SPACE[4],
               minWidth: 0,
             }}
           >

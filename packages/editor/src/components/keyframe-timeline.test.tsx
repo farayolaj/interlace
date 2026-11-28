@@ -549,6 +549,21 @@ describe("KeyframeTimeline", () => {
     expect(ticks[0]!.style.transform).toBe("");
   });
 
+  it("drops a final label that only nearly touches the previous one", () => {
+    // 2m 16s fitted to a 640px timeline (zoom ≈ 4.7): 15s ticks, and the
+    // "2m 15s" label lands just after "2m" (the case seen in the admin).
+    stubClientWidth(640);
+    const { container } = render(
+      <KeyframeTimeline {...baseProps()} videoDuration={136} />,
+    );
+    const tick = (t: number) =>
+      container.querySelector<HTMLElement>(
+        `[data-testid="keyframe-timeline-tick-${t}"]`,
+      )!;
+    expect(tick(135).textContent).toBe("");
+    expect(tick(120).textContent).toBe("2m");
+  });
+
   it("drops the final tick's label when it would overlap the previous one", () => {
     // 2m 16s zoomed in to 10s ticks: the 2m 10s tick sits 6s before the
     // end, so its left-flipped label would run into "2m".

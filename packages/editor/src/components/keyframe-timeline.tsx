@@ -185,7 +185,8 @@ function endLabelCollides(
     previous * zoom + SPACE[1] + estimateLabelWidth(formatTick(previous));
   const lastLabelStart =
     last * zoom - SPACE[1] - estimateLabelWidth(formatTick(last));
-  return lastLabelStart < previousLabelEnd + SPACE[1];
+  // Widths are estimates (real glyphs can be wider): keep a safe margin.
+  return lastLabelStart < previousLabelEnd + SPACE[3];
 }
 
 function estimateLabelWidth(label: string): number {

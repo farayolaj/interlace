@@ -2057,6 +2057,88 @@ describe("InterlaceEditor layout options and handle", () => {
     expect(screen.getByTestId("preview-modal")).toBeInTheDocument();
   });
 
+  it("shows host header actions before Preview and Save", () => {
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        headerActions={<button type="button">Cancel</button>}
+      />,
+    );
+    const actions = screen.getByTestId("interlace-editor-header-actions");
+    const labels = within(actions)
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels).toEqual(["Cancel", "Preview", "Save"]);
+  });
+
+  it("keeps host header actions on the video step", () => {
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        headerActions={<button type="button">Cancel</button>}
+      />,
+    );
+    expect(screen.getByTestId("video-source-input-file")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("interlace-editor-header-actions")).getByRole(
+        "button",
+        { name: "Cancel" },
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the pinned video column below a pinned header", () => {
+    const offsetHeight = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockReturnValue(52);
+    // Wide layout: report a 1400px-wide editor to the size observers.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly callback: (entries: unknown[]) => void) {}
+        observe(target: Element) {
+          this.callback([{ target, contentRect: { width: 1400 } }]);
+        }
+        disconnect() {}
+      },
+    );
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        stickyHeader
+      />,
+    );
+    const column = screen.getByTestId("interlace-editor-layout-wide")
+      .firstElementChild as HTMLElement;
+    expect(column.style.position).toBe("sticky");
+    expect(column.style.top).toBe("60px"); // 52px header + 8px gap
+    offsetHeight.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("can hide its Save button and still save through the handle", () => {
+    const ref = createRef<InterlaceEditorHandle>();
+    const props = baseProps();
+    render(
+      <InterlaceEditor
+        {...props}
+        ref={ref}
+        document={makeDocument()}
+        showSaveButton={false}
+      />,
+    );
+    expect(screen.queryByTestId("interlace-editor-save")).toBeNull();
+    expect(
+      screen.getByTestId("interlace-editor-open-preview"),
+    ).toBeInTheDocument();
+    act(() => {
+      expect(ref.current!.save()).toBe(true);
+    });
+    expect(props.onSave).toHaveBeenCalledTimes(1);
+  });
+
   it("can pin the header", () => {
     render(
       <InterlaceEditor

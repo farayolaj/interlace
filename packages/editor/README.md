@@ -136,11 +136,13 @@ As with `attachMedia`, a new function on each render does not re-create the adap
 
 ## Layout options and actions from your own UI
 
-| Prop                     | Default | Effect                                                                                                                        |
-| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `stickyHeader`           | `false` | Pins the header (status, Preview, Save) to the top of the nearest scrolling container, so Save stays reachable on long pages. |
-| `showReplaceVideoButton` | `true`  | Shows "Replace video" under the video. Hide it to offer the action elsewhere (below).                                         |
-| `hideEmptyInspector`     | `false` | In the wide layout, hides the side panel while no hook is selected, so the video and timeline use the full width.             |
+| Prop                     | Default | Effect                                                                                                                                                                            |
+| ------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stickyHeader`           | `false` | Pins the header (status, Preview, Save) to the top of the nearest scrolling container, so Save stays reachable on long pages.                                                     |
+| `showReplaceVideoButton` | `true`  | Shows "Replace video" under the video. Hide it to offer the action elsewhere (below).                                                                                             |
+| `hideEmptyInspector`     | `false` | In the wide layout, hides the side panel while no hook is selected, so the video and timeline use the full width.                                                                 |
+| `showSaveButton`         | `true`  | Shows the built-in Save button. Hide it to save from your own button with the ref handle's `save()`.                                                                              |
+| `headerActions`          | —       | Your own controls, shown before Preview and Save (and in the video step's header), e.g. a Cancel button. Give them the `interlace-btn interlace-btn--secondary` classes to match. |
 
 Pass a `ref` to trigger editor actions from your own controls (a menu, a footer):
 
