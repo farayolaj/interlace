@@ -1363,6 +1363,21 @@ export const InterlaceEditor = forwardRef<
   // Two columns (video + timeline | Hook details) when the editor is wide.
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isWide, setIsWide] = useState(false);
+  /** Pinned header's height, so the pinned video column stops below it. */
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!stickyHeader || !header) return;
+    const measure = () => setHeaderHeight(header.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+    // The header mounts once the video step is left.
+  }, [stickyHeader, showSourceStep]);
+
   /** The wide layout's side panel while no hook is selected. */
   const showEmptyInspector = isWide && !hideEmptyInspector;
   useEffect(() => {
@@ -1663,6 +1678,7 @@ export const InterlaceEditor = forwardRef<
   return (
     <div ref={rootRef} className={rootClassName} style={rootStyle}>
       <header
+        ref={headerRef}
         data-testid="interlace-editor-header"
         style={{
           display: "flex",
@@ -1798,7 +1814,8 @@ export const InterlaceEditor = forwardRef<
               display: "grid",
               gap: SPACE[4],
               position: "sticky",
-              top: SPACE[4],
+              // Below a pinned header, not under it.
+              top: stickyHeader ? headerHeight + SPACE[2] : SPACE[4],
               minWidth: 0,
             }}
           >

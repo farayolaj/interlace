@@ -2088,6 +2088,36 @@ describe("InterlaceEditor layout options and handle", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps the pinned video column below a pinned header", () => {
+    const offsetHeight = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockReturnValue(52);
+    // Wide layout: report a 1400px-wide editor to the size observers.
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly callback: (entries: unknown[]) => void) {}
+        observe(target: Element) {
+          this.callback([{ target, contentRect: { width: 1400 } }]);
+        }
+        disconnect() {}
+      },
+    );
+    render(
+      <InterlaceEditor
+        {...baseProps()}
+        document={makeDocument()}
+        stickyHeader
+      />,
+    );
+    const column = screen.getByTestId("interlace-editor-layout-wide")
+      .firstElementChild as HTMLElement;
+    expect(column.style.position).toBe("sticky");
+    expect(column.style.top).toBe("60px"); // 52px header + 8px gap
+    offsetHeight.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
   it("can pin the header", () => {
     render(
       <InterlaceEditor
