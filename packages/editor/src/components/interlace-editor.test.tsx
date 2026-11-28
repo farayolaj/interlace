@@ -2118,6 +2118,27 @@ describe("InterlaceEditor layout options and handle", () => {
     vi.unstubAllGlobals();
   });
 
+  it("can hide its Save button and still save through the handle", () => {
+    const ref = createRef<InterlaceEditorHandle>();
+    const props = baseProps();
+    render(
+      <InterlaceEditor
+        {...props}
+        ref={ref}
+        document={makeDocument()}
+        showSaveButton={false}
+      />,
+    );
+    expect(screen.queryByTestId("interlace-editor-save")).toBeNull();
+    expect(
+      screen.getByTestId("interlace-editor-open-preview"),
+    ).toBeInTheDocument();
+    act(() => {
+      expect(ref.current!.save()).toBe(true);
+    });
+    expect(props.onSave).toHaveBeenCalledTimes(1);
+  });
+
   it("can pin the header", () => {
     render(
       <InterlaceEditor

@@ -277,6 +277,12 @@ export interface InterlaceEditorProps {
    * `<button className="interlace-btn interlace-btn--secondary">`.
    */
   headerActions?: React.ReactNode;
+  /**
+   * Shows the built-in Save button. Defaults to true. Hosts that hide it
+   * save through the ref handle's `save()` from their own button (the
+   * editor still validates and lists blocking issues).
+   */
+  showSaveButton?: boolean;
 }
 
 /**
@@ -560,6 +566,7 @@ export const InterlaceEditor = forwardRef<
     showReplaceVideoButton = true,
     hideEmptyInspector = false,
     headerActions,
+    showSaveButton = true,
   }: InterlaceEditorProps,
   ref,
 ) {
@@ -1732,13 +1739,15 @@ export const InterlaceEditor = forwardRef<
           >
             {strings.previewLabel}
           </Button>
-          <Button
-            variant="primary"
-            onClick={handleSave}
-            data-testid="interlace-editor-save"
-          >
-            {strings.saveLabel}
-          </Button>
+          {showSaveButton ? (
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              data-testid="interlace-editor-save"
+            >
+              {strings.saveLabel}
+            </Button>
+          ) : null}
         </div>
       </header>
 
